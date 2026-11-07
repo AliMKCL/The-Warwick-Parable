@@ -8,9 +8,9 @@ Read this first when picking up the work. Newest entries at the top.
 | --- | --- | --- |
 | 1. Setup | 1 h | Done |
 | 2. Walking skeleton and look test | 4 h | Done |
-| 3. Generation loop | 5 h | Done, awaiting a real-model run on the MacBook |
-| 4. Profile and story (4 rules) | 3.5 h | Next |
-| 5. Look pass (lighting only) | 1.5 h | |
+| 3. Generation loop | 5 h | Done |
+| 4. Profile and story (4 rules) | 3.5 h | Done |
+| 5. Look pass (lighting only) | 1.5 h | Next |
 | 6. Dossier ending and demo prep | 2 h | |
 | Buffer | 3 h | |
 
@@ -22,6 +22,18 @@ Read this first when picking up the work. Newest entries at the top.
 - **Engine boundary:** `core/` may not import Three.js, browser APIs or Node built-ins; `npm run typecheck` enforces it.
 
 ## Log
+
+### Phase 4: profile and story (done)
+- `core/profile`: four hidden traits (hesitation, curiosity, compliance, impulsivity), starting at 0.5, moved only by clear evidence (time to press the button, inspections, stares, standing still, door hesitation, how fast the player leaves, following or ignoring the narrator), capped per room, every change logged with its reason for the dossier.
+- The profile shapes the next rooms: room type weights, number of exits (hesitant players get three, impulsive ones fewer), which rule runs, and the prompt ("Who the player seems to be").
+- `core/rules`: four room rules chosen against the player's tendencies, never repeating back to back, none in the first or last room:
+  - lights dim when the player stands still, and come back when they move;
+  - exits stay locked until the player inspects 2 or 3 things;
+  - a 25 to 40 s countdown, after which all exits but one lock (the one they ignored);
+  - the narrator recommends a door, sometimes lying; following or ignoring it moves compliance.
+- The model writes each rule's lines, plants story threads and pays them off in later rooms; the prompt shows the room number out of 6 and the story stage.
+- Adapter: lights fade, doors lock with red and green indicator lights and rattle when tried, a countdown at the top, traits and the latest evidence in the debug panel.
+- Tests: 28 unit tests; browser test sees three rules working.
 
 ### Phase 3: generation loop (done)
 - The model writes each room: title, mood, props and every text on them, inspect text, door labels, the line said when the player hesitates at each door, the entry line, and one fact for the story memory. Prompts are Markdown in `data/prompts/`, the world and narrator voice in `data/themes/office.md`.

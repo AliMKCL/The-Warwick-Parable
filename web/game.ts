@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { gameData } from '../core/data';
-import type { CoreMessage, GameEvent } from '../core/protocol';
+import type { CoreMessage, GameEvent, ProfileSnapshot, RuleEffect } from '../core/protocol';
 import { createCore } from '../core/run/core';
 import type { LlmClient } from '../core/llm/client';
 import type { RoomSpec } from '../core/room/types';
@@ -35,6 +35,8 @@ export class Game {
   readonly hud = new Hud();
   core: ReturnType<typeof createCore> = createCore(gameData);
   private genStatus = '';
+  profile?: ProfileSnapshot;
+  private moving = true;
   private post?: Post;
   private materials = new MaterialLibrary(gameData.materials);
   room?: RoomView;
@@ -101,9 +103,15 @@ export class Game {
         this.send({ type: 'pressed', roomId, objectId: h.info.id, t });
         break;
       }
-      case 'door':
-        this.openDoor(h.info.id);
+      case 'door': {
+        const view = this.room.doors.find((d) => d.door.id === h.info.id);
+        if (view?.locked) {
+          this.send({ type: 'door_tried', roomId, doorId: h.info.id, t });
+          view.pivot.rotation.y = 0.03; // a rattle
+          setTimeout(() => (view.pivot.rotation.y = 0), 90);
+        } else this.openDoor(h.info.id);
         break;
+      }
       case 'locked':
         break;
     }
@@ -123,8 +131,19 @@ export class Game {
   private handle(m: CoreMessage) {
     if (m.type === 'load_room') void this.loadRoom(m.spec);
     else if (m.type === 'narrator_line') this.hud.narrate(m.lineId, m.text, m.final);
+    else if (m.type === 'rule_effect') this.applyEffect(m.effect);
+    else if (m.type === 'profile') this.profile = m.profile;
     else if (m.type === 'gen_status')
       this.genStatus = `model ${m.model} · ` + m.doors.map((d) => `${d.door}:${d.status}${d.ms ? ` ${(d.ms / 1000).toFixed(1)}s` : ''}`).join(' ');
+  }
+
+  /** Show a rule's effect. Core decides; this only draws it. */
+  applyEffect(e: RuleEffect) {
+    const room = this.room;
+    if (!room) return;
+    if (e.kind === 'lights') room.setLights(e.level, e.seconds);
+    else if (e.kind === 'doors') room.setLocked(e.locked);
+    else if (e.kind === 'timer') this.hud.timer(e.seconds, e.label);
   }
 
   private async loadRoom(spec: RoomSpec) {
@@ -143,6 +162,8 @@ export class Game {
     const s = spec.layout.spawn;
     this.player.placeAt(s.x, s.z, s.yaw);
     this.hovered = undefined;
+    this.moving = true;
+    this.hud.timer(null, '');
     this.renderer.compile(this.scene, this.player.camera);
     this.send({ type: 'room_entered', roomId: spec.id, t: this.time });
     this.hud.waiting(false);
@@ -157,6 +178,7 @@ export class Game {
       room.update(dt, t);
       this.updateHover(room);
       this.trackIdle(room);
+      this.trackMotion(room);
     }
     this.frames++;
     if (t - this.fpsTime >= 1) {
@@ -203,8 +225,24 @@ export class Game {
     if (this.busy || this.hud.inspecting || !h) this.hud.setPrompt(null);
     else if (h.info.kind === 'inspect') this.hud.setPrompt('E', `Inspect ${h.info.name.toLowerCase()}`);
     else if (h.info.kind === 'button') this.hud.setPrompt('E', 'Press');
-    else if (h.info.kind === 'door') this.hud.setPrompt('E', `Open ${h.info.name}`);
+    else if (h.info.kind === 'door')
+      room.doors.find((d) => d.door.id === h.info.id)?.locked
+        ? this.hud.setPrompt('E', `${h.info.name[0]!.toUpperCase()}${h.info.name.slice(1)} is locked`)
+        : this.hud.setPrompt('E', `Open ${h.info.name}`);
     else this.hud.setPrompt(null, 'The way you came. It will not open.');
+  }
+
+  /** Tell core when the player stops walking (after 1.5 s) and when they start again. */
+  private trackMotion(room: RoomView) {
+    if (this.busy) return;
+    const standing = this.player.standingFor;
+    if (this.moving && standing >= 1.5) {
+      this.moving = false;
+      this.send({ type: 'motion', roomId: room.spec.id, moving: false, t: round(this.time - standing) });
+    } else if (!this.moving && standing < 0.05) {
+      this.moving = true;
+      this.send({ type: 'motion', roomId: room.spec.id, moving: true, t: this.time });
+    }
   }
 
   private trackIdle(room: RoomView) {
@@ -240,7 +278,9 @@ export class Game {
       r ? `"${r.title}"` : '',
       this.genStatus,
       `pos ${p.x.toFixed(1)}, ${p.z.toFixed(1)}  yaw ${this.player.yaw.toFixed(2)}`,
-      `events ${this.core.run()?.events.length ?? 0}`,
+      `events ${this.core.run()?.events.length ?? 0}${r?.rule ? ` · rule ${r.rule.id}` : ''}`,
+      this.profile ? Object.entries(this.profile.traits).map(([k, v]) => `${k.slice(0, 4)} ${v.toFixed(2)}`).join('  ') : '',
+      this.profile?.evidence.at(-1) ? `last: ${this.profile.evidence.at(-1)!.trait} ${this.profile.evidence.at(-1)!.delta > 0 ? '+' : ''}${this.profile.evidence.at(-1)!.delta} ${this.profile.evidence.at(-1)!.reason}` : '',
     ].join('\n');
   }
 }

@@ -7,7 +7,10 @@ import { placeAssignments } from '../room/place';
 import { templateAssignments } from '../room/templates';
 import type { Door, GameData, Layout, RoomSpec } from '../room/types';
 import { createRng, deriveSeed, pick } from '../util/random';
-import type { GameEvent } from '../protocol';
+import type { GameEvent, ProfileSnapshot, RuleEffect } from '../protocol';
+import { Profile } from '../profile/profile';
+import { chooseRule, RuleRuntime, templateRuleLines, type RoomRule, type RuleId } from '../rules/rules';
+import { RUN_LENGTH } from '../director/prompts';
 
 const timers = globalThis as unknown as {
   setTimeout(fn: () => void, ms: number): unknown;
@@ -31,6 +34,8 @@ interface Plan {
   error?: string;
 }
 
+type RuleSpec = NonNullable<RoomSpec['rule']>;
+
 export interface RunOptions {
   llm?: LlmClient;
   /** How long a door waits for an unfinished room before falling back to templates. */
@@ -42,6 +47,12 @@ export interface RunOptions {
    */
   observeMs?: number;
   onStatus?: (plans: { door: string; status: GenStatus; ms?: number; error?: string }[]) => void;
+  /** A room rule changed the world. */
+  onEffect?: (effect: RuleEffect) => void;
+  /** A room rule wants the narrator to speak. */
+  onSay?: (text: string) => void;
+  /** The hidden profile changed. */
+  onProfile?: (profile: ProfileSnapshot) => void;
   now?: () => number;
 }
 
@@ -61,6 +72,10 @@ export class Run {
   private observeTimer: unknown;
   /** Set when the model server can't be reached; later rooms skip straight to templates. */
   modelOff = false;
+  readonly profile: Profile;
+  /** Story threads the model has planted, and whether a later room paid them off. */
+  readonly threads: { id: string; text: string; room: number; resolvedIn?: number }[] = [];
+  private rule?: RuleRuntime;
 
   constructor(
     readonly seed: number,
@@ -68,6 +83,7 @@ export class Run {
     private readonly opts: RunOptions = {},
   ) {
     if (!opts.llm) this.modelOff = true;
+    this.profile = new Profile(data);
   }
 
   get current(): RoomSpec | undefined {
@@ -86,6 +102,10 @@ export class Run {
 
   record(event: GameEvent): void {
     this.events.push(event);
+    const before = this.profile.evidence.length;
+    this.profile.observe(event, this.current, this.events);
+    this.rule?.onEvent(event);
+    if (this.profile.evidence.length !== before) this.opts.onProfile?.(this.profile.snapshot());
     if (event.type === 'door_hovered') {
       this.prioritise(event.doorId);
       this.stopObserving();
@@ -114,14 +134,45 @@ export class Run {
     return spec;
   }
 
-  /** What the player did in a room, as sentences. */
+  /** What the player did in a room, as sentences, plus what the profile noticed there. */
   describe(room: RoomSpec): string[] {
-    return describeVisit(room, this.events, this.data);
+    const noticed = [...new Set(this.profile.evidence.filter((e) => e.room === room.index).map((e) => e.reason))];
+    const lines = describeVisit(room, this.events, this.data);
+    if (noticed.length) lines.push(`Noticed: ${noticed.join('; ')}.`);
+    return lines;
   }
 
   /** One line per earlier room, for the story memory. */
   story(): string[] {
-    return this.rooms.map((r) => `Room ${r.index} "${r.title}"${r.fact ? `: ${r.fact}` : ''}`);
+    return this.rooms.map((r) => {
+      const resolved = r.thread?.resolves ? this.threads.find((t) => t.id === r.thread!.resolves) : undefined;
+      return `Room ${r.index} "${r.title}"${r.fact ? `: ${r.fact}` : ''}${resolved ? ` (paid off thread: ${resolved.text})` : ''}`;
+    });
+  }
+
+  /** True once the player has reached the last room of the run. */
+  get finished(): boolean {
+    return (this.current?.index ?? 0) >= RUN_LENGTH - 1;
+  }
+
+  /**
+   * Start the current room's rule. Called once the room is on screen and the
+   * narrator has introduced it; `t` is the run clock at that moment.
+   */
+  startRule(t: number) {
+    this.rule?.stop();
+    this.rule = undefined;
+    const room = this.current;
+    if (!room?.rule) return;
+    this.rule = new RuleRuntime(room.rule as RoomRule, {
+      room,
+      profile: this.profile,
+      emit: (e) => this.opts.onEffect?.(e),
+      say: (text) => text && this.opts.onSay?.(text),
+      rng: createRng(deriveSeed(room.seed, 'rule')),
+      data: this.data,
+    });
+    this.rule.start(t, this.events);
   }
 
   plansStatus() {
@@ -131,7 +182,12 @@ export class Run {
   // ---------- internals ----------
 
   private enter(room: RoomSpec) {
+    this.rule?.stop();
+    this.rule = undefined;
     this.rooms.push(room);
+    if (room.thread?.plant) this.threads.push({ id: `t${this.threads.length + 1}`, text: room.thread.plant, room: room.index });
+    const resolved = this.threads.find((t) => t.id === room.thread?.resolves);
+    if (resolved && resolved.resolvedIn === undefined) resolved.resolvedIn = room.index;
     this.plans = room.layout.doors
       .filter((d) => !d.entrance)
       .map((d) => this.plan(room, d));
@@ -151,17 +207,40 @@ export class Run {
     const index = from.index + 1;
     const seed = deriveSeed(this.seed, `room-${index}-${from.id}-${door.id}`);
     const rng = createRng(seed);
-    const archetype = pick(rng, ARCHETYPES.filter((a) => a !== from.layout.archetype)) as Archetype;
+    const { archetype, exits } = this.dials(from, rng);
     const layout = generateLayout({
       archetype,
       entranceSide: OPPOSITE[door.side],
-      exits: 1 + Math.floor(rng() * 3),
+      exits,
       rng,
       doorLabels: this.data.templates.doorLabels,
     });
     let resolve!: (s: RoomSpec) => void;
     const done = new Promise<RoomSpec>((r) => (resolve = r));
     return { doorId: door.id, index, seed, layout, entranceLabel: door.label, status: 'queued', done, resolve };
+  }
+
+  /**
+   * The profile shapes the space: hesitant players get more doors and long
+   * corridors, curious ones get rooms full of things, impulsive ones get
+   * fewer choices.
+   */
+  private dials(from: RoomSpec, rng: ReturnType<typeof createRng>): { archetype: Archetype; exits: number } {
+    const t = this.profile.traits;
+    const w: Record<Archetype, number> = { waiting_room: 1, corridor: 1, open_office: 1, hub: 1 };
+    if (t.hesitation > 0.6) { w.corridor += 1.5; w.hub += 1; }
+    if (t.curiosity > 0.6) { w.open_office += 1.5; w.hub += 0.5; }
+    if (t.impulsivity > 0.6) { w.corridor += 1; w.waiting_room += 0.5; }
+    const options = ARCHETYPES.filter((a) => a !== from.layout.archetype);
+    const total = options.reduce((a, k) => a + w[k], 0);
+    let r = rng() * total;
+    let archetype = options[0]!;
+    for (const k of options) if ((r -= w[k]) <= 0) { archetype = k; break; }
+    let exits = 1 + Math.floor(rng() * 3);
+    if (t.hesitation > 0.62) exits = 3;
+    else if (t.impulsivity > 0.62) exits = Math.min(exits, 2);
+    if (from.index + 1 >= RUN_LENGTH - 1) exits = 1; // the last room has one way on
+    return { archetype, exits };
   }
 
   private prioritise(doorId: string) {
@@ -186,15 +265,16 @@ export class Run {
     plan.status = 'generating';
     this.emitStatus();
     const rng = createRng(plan.seed);
+    const rule = plan.index >= RUN_LENGTH - 1 ? undefined : chooseRule(this.profile, createRng(deriveSeed(plan.seed, 'pick-rule')), plan.index, this.current?.rule?.id as RuleId | undefined);
     let spec: RoomSpec;
     if (this.modelOff) {
-      spec = this.templateSpec(plan, rng);
+      spec = this.templateSpec(plan, rng, { rule });
     } else {
-      spec = await this.modelSpec(plan, rng).catch((err: unknown) => {
+      spec = await this.modelSpec(plan, rng, rule).catch((err: unknown) => {
         const e = err as LlmError;
         plan.error = e.message;
         if (e instanceof LlmError && e.kind === 'unreachable') this.modelOff = true;
-        return this.templateSpec(plan, createRng(plan.seed));
+        return this.templateSpec(plan, createRng(plan.seed), { rule });
       });
     }
     if (plan.status === 'generating') {
@@ -207,7 +287,7 @@ export class Run {
     void this.pump();
   }
 
-  private async modelSpec(plan: Plan, rng: ReturnType<typeof createRng>): Promise<RoomSpec> {
+  private async modelSpec(plan: Plan, rng: ReturnType<typeof createRng>, rule?: Omit<RoomRule, 'line' | 'doneLine'>): Promise<RoomSpec> {
     const Abort = (globalThis as unknown as { AbortController?: new () => { abort(): void; signal: unknown } }).AbortController;
     const controller = Abort ? new Abort() : undefined;
     plan.abort = controller;
@@ -220,6 +300,9 @@ export class Run {
         entranceLabel: plan.entranceLabel,
         story: this.story(),
         behaviour: this.behaviourLog(),
+        profile: this.profile.readout(),
+        rule,
+        threads: this.threads.filter((t) => t.resolvedIn === undefined).map(({ id, text }) => ({ id, text })),
         data: this.data,
       },
       rng,
@@ -245,19 +328,29 @@ export class Run {
       title: c.title || layout.archetype,
       fact: c.fact,
       genMs: Math.round(this.now() - started),
+      rule: rule && {
+        ...rule,
+        params: rule.id === 'narrator_suggests' ? { ...rule.params, door: c.suggest_door ?? '' } : rule.params,
+        line: c.rule_line,
+        doneLine: c.rule_done_line || this.data.templates.rules[rule.id].done[0]!,
+      },
+      thread: {
+        plant: c.thread_plant?.trim() || undefined,
+        resolves: c.thread_resolve && c.thread_resolve !== 'none' ? c.thread_resolve : undefined,
+      },
     };
   }
 
   private templateSpec(
     plan: Pick<Plan, 'index' | 'seed' | 'layout' | 'entranceLabel'>,
     rng: ReturnType<typeof createRng>,
-    o: { first?: boolean; ambience?: string } = {},
+    o: { first?: boolean; ambience?: string; rule?: Omit<RoomRule, 'line' | 'doneLine'> } = {},
   ): RoomSpec {
     const { layout } = plan;
     const t = this.data.templates;
     const assignments = templateAssignments(layout, this.data, rng, { index: plan.index, forceCenter: o.first ? 'button_pedestal' : undefined });
     const { props } = placeAssignments(layout, assignments, this.data);
-    return {
+    const spec: RoomSpec = {
       id: `room-${plan.index}-${plan.seed.toString(36)}`,
       index: plan.index,
       seed: plan.seed,
@@ -271,6 +364,13 @@ export class Run {
       source: 'template',
       title: o.first ? 'The waiting room' : layout.archetype.replace('_', ' '),
     };
+    if (o.rule) {
+      const exits = layout.doors.filter((d) => !d.entrance);
+      const params = o.rule.id === 'narrator_suggests' ? { ...o.rule.params, door: pick(rng, exits).id } : o.rule.params;
+      const rule = { ...o.rule, params };
+      spec.rule = { ...rule, ...templateRuleLines(rule, spec, this.data, rng) } as RuleSpec;
+    }
+    return spec;
   }
 
   /** Behaviour across the whole run so far, room by room. */

@@ -13,6 +13,8 @@ export class Player {
   private bob = 0;
   /** Seconds since the player last moved or looked around. */
   stillFor = 0;
+  /** Seconds since the player last walked (looking around doesn't count). */
+  standingFor = 0;
   enabled = false;
 
   constructor() {
@@ -35,6 +37,7 @@ export class Player {
     this.yaw = yaw;
     this.pitch = 0;
     this.stillFor = 0;
+    this.standingFor = 0;
     this.sync();
   }
 
@@ -58,9 +61,11 @@ export class Player {
       if (!this.blocked(this.position.x, this.position.z + mz, walkable, colliders)) this.position.z += mz;
       this.bob += dt * 8.5;
       this.stillFor = 0;
+      this.standingFor = 0;
     } else {
       this.bob *= 0.9;
       this.stillFor += dt;
+      this.standingFor += dt;
     }
     this.sync();
   }

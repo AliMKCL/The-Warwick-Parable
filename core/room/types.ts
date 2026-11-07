@@ -160,6 +160,10 @@ export interface RoomSpec {
   fact?: string;
   /** How long generation took, for the debug overlay. */
   genMs?: number;
+  /** The mechanic running in this room, if any (see core/rules). */
+  rule?: { id: 'lights_dim_on_idle' | 'inspect_to_unlock' | 'exit_timer' | 'narrator_suggests'; params: Record<string, number | string>; line: string; doneLine: string };
+  /** A story thread this room opens, and the id of one it pays off. */
+  thread?: { plant?: string; resolves?: string };
 }
 
 export interface GameData {
@@ -192,4 +196,5 @@ export interface TextTemplates {
   narratorEnter: Record<string, string[]>;
   narratorDoor: string[];
   narratorPress: string[];
+  rules: Record<'lights_dim_on_idle' | 'inspect_to_unlock' | 'exit_timer' | 'narrator_suggests', { line: string[]; done: string[]; tried?: string[] }>;
 }

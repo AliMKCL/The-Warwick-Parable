@@ -14,7 +14,7 @@ test('walk through generated rooms', async ({ page }) => {
   page.on('console', (m) => m.type() === 'error' && !m.location().url.includes('/llm') && errors.push(m.text()));
 
   await page.setViewportSize({ width: 960, height: 540 });
-  await page.goto(`/?seed=20261107&debug=1&dpr=1${process.env.EXPECT_MODEL ? '&observe=1' : ''}`);
+  await page.goto(`/?seed=20261107&debug=1&dpr=1&post=0${process.env.EXPECT_MODEL ? '&observe=1' : ''}`);
   await page.screenshot({ path: 'artifacts/p3-start-screen.png' });
   await page.evaluate(() => (window as any).__WHACK__.begin());
   await waitForRoom(page, 0);
@@ -56,6 +56,8 @@ test('walk through generated rooms', async ({ page }) => {
     if (process.env.EXPECT_MODEL) await page.waitForFunction(() => (window as any).__WHACK__.state().gen?.some((g: any) => g.status === 'ready'), null, { timeout: 60_000 });
     const st = await W(page);
     const exit = st.room.doors.find((d: any) => !d.entrance);
+    // Room rules may lock doors; that is covered by rules.spec.ts, so open them here.
+    await page.evaluate(() => (window as any).__WHACK__.effect({ kind: 'doors', locked: [] }));
     await page.evaluate((id) => (window as any).__WHACK__.useDoor(id), exit.id);
     await page.waitForTimeout(400);
     const hovered = (await W(page)).hovered;

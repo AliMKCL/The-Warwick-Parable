@@ -11,6 +11,8 @@ export class Hud {
   private hideTimer = 0;
   private waitTimer = 0;
   private waitingEl = this.el('waiting');
+  private timerEl = this.el('timer');
+  private timerTick = 0;
   /** Line currently on screen, and finished lines waiting their turn. */
   private current?: { id: string; shownAt: number; done: boolean; text: string };
   private queue: string[] = [];
@@ -82,6 +84,25 @@ export class Hud {
       this.subtitle.classList.remove('show');
       this.current = undefined;
     }
+  }
+
+  /** Countdown at the top of the screen; null hides it. */
+  timer(seconds: number | null, label: string) {
+    clearInterval(this.timerTick);
+    if (seconds === null) {
+      this.timerEl.classList.remove('show');
+      return;
+    }
+    const end = performance.now() + seconds * 1000;
+    const draw = () => {
+      const left = Math.max(0, Math.ceil((end - performance.now()) / 1000));
+      this.timerEl.innerHTML = `<span>${escapeHtml(label)}</span>0:${String(left).padStart(2, '0')}`;
+      this.timerEl.classList.toggle('urgent', left <= 10);
+      if (left <= 0) clearInterval(this.timerTick);
+    };
+    draw();
+    this.timerEl.classList.add('show');
+    this.timerTick = window.setInterval(draw, 250);
   }
 
   /** After a moment in the dark between rooms, admit that something is being prepared. */

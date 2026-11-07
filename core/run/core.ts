@@ -21,11 +21,17 @@ export function createCore(data: GameData, opts: CoreOptions = {}): CorePort & {
 
   const emit = (m: CoreMessage) => listeners.forEach((l) => l(m));
   const say = (text: string) => emit({ type: 'narrator_line', lineId: `l${++lineCount}`, text, final: true });
+  const now = () => Date.now();
+  /** Resolves once the current room's entry line has been said; the room's rule starts after it. */
+  let introduced: Promise<void> = Promise.resolve();
   const runOpts = (): RunOptions => ({
     llm: opts.llm,
     waitMs: opts.waitMs,
     observeMs: opts.observeMs,
     onStatus: (doors) => emit({ type: 'gen_status', doors, model: run?.modelOff ? 'off' : 'on' }),
+    onEffect: (effect) => emit({ type: 'rule_effect', effect }),
+    onSay: say,
+    onProfile: (profile) => emit({ type: 'profile', profile }),
   });
 
   /** A live, streamed reaction to the door the player just chose. Returns when the line is finished. */
@@ -76,12 +82,23 @@ export function createCore(data: GameData, opts: CoreOptions = {}): CorePort & {
         const room = run.start();
         emit({ type: 'load_room', spec: room });
         say(room.narrator.onEnter);
+        emit({ type: 'profile', profile: run.profile.snapshot() });
         return;
       }
       if (!run) return;
       const r = run;
       r.record(event);
-      if (event.type === 'door_chosen') {
+      if (event.type === 'room_entered' && event.roomId === r.current?.id && r.current.rule) {
+        const received = now();
+        const roomId = event.roomId;
+        void introduced.then(() =>
+          setTimeout(() => {
+            if (r.current?.id === roomId) r.startRule(event.t + (now() - received) / 1000);
+          }, 900),
+        );
+      } else if (event.type === 'door_chosen') {
+        let markIntroduced!: () => void;
+        introduced = new Promise<void>((res) => (markIntroduced = res));
         void (async () => {
           // React live only when the next room is already built, so the
           // reaction never delays the room itself.
@@ -91,6 +108,8 @@ export function createCore(data: GameData, opts: CoreOptions = {}): CorePort & {
           emit({ type: 'load_room', spec: room });
           await Promise.race([reaction, new Promise<void>((res) => setTimeout(() => res(), 7000))]);
           say(room.narrator.onEnter);
+          // Give the entry line time to be read before the rule speaks.
+          setTimeout(() => markIntroduced(), Math.min(6000, 1200 + room.narrator.onEnter.length * 35));
         })();
       } else if (event.type === 'pressed') {
         const lines = data.templates.narratorPress;

@@ -32,7 +32,12 @@ export function fakeLlm(o: {
         ambience: 'warm',
         slots: slots.map((s) => ({ ...s, text: 'YOU HESITATED', inspect: 'It knows you waited.' })),
         doors: doors.map((d, i) => ({ door: d, label: `door ${i}`, line: 'Go on.' })),
+        suggest_door: /recommends one exit/.test(prompt) ? doors[0] : undefined,
+        rule_line: /# This room's rule\nNone/.test(prompt) ? '' : 'There is a rule here.',
+        rule_done_line: /# This room's rule\nNone/.test(prompt) ? '' : 'The rule is satisfied.',
         narrator_enter: 'You took your time. The building noticed.',
+        thread_plant: 'Someone else has your badge.',
+        thread_resolve: /^- (t\d+):/m.exec(prompt)?.[1] ?? 'none',
         fact: 'The building keeps a record of every pause.',
       };
       void user;

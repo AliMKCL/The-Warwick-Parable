@@ -156,5 +156,50 @@
     "Thank you. That was either very brave or very careless.",
     "You pressed it. Of course you did.",
     "Noted. Everything is noted."
-  ]
+  ],
+  "rules": {
+    "lights_dim_on_idle": {
+      "line": [
+        "Standing still saves electricity. The building appreciates it.",
+        "If you stop moving, so do the lights. Fair is fair."
+      ],
+      "done": [
+        ""
+      ]
+    },
+    "inspect_to_unlock": {
+      "line": [
+        "The doors are locked. The room would like a little attention first.",
+        "Nothing opens until you've looked around. Humour it."
+      ],
+      "done": [
+        "Thank you for your attention. The doors are open.",
+        "There. Was that so hard?"
+      ],
+      "tried": [
+        "Locked. Look around first.",
+        "Not yet. The room isn't finished with you.",
+        "Pulling harder won't help."
+      ]
+    },
+    "exit_timer": {
+      "line": [
+        "The doors close in {seconds} seconds. No pressure.",
+        "You have {seconds} seconds. Choose, for once."
+      ],
+      "done": [
+        "Time's up. One door left. Decision made for you.",
+        "Too slow. I've chosen for you."
+      ]
+    },
+    "narrator_suggests": {
+      "line": [
+        "Take the door marked {door}. Trust me.",
+        "If I were you, and I'm not, I'd take {door}."
+      ],
+      "done": [
+        ""
+      ]
+    }
+  }
 }

@@ -24,7 +24,12 @@ function roomContent(prompt) {
       inspect: pick(['It has your handwriting on it.', 'Someone filed this under your name.', 'It was here before you were.']),
     })),
     doors: doors.map((d, i) => ({ door: d, label: pick(['STAFF', 'ARCHIVE', 'YOU', 'LATER', 'EXIT']) + (i ? '' : ''), line: 'That one? Bold.' })),
+    suggest_door: /recommends one exit/.test(prompt) ? doors[0] : undefined,
+    rule_line: /# This room's rule\nNone/.test(prompt) ? '' : pick(['The doors are shy today. Look around.', 'Stand still and see what happens.', 'Clock is ticking.', 'Take the first door. Trust me.']),
+    rule_done_line: /# This room's rule\nNone/.test(prompt) ? '' : 'There. Happy now?',
     narrator_enter: waited ? `You waited ${waited} seconds back there. This room waited longer.` : 'Another room, built just for you.',
+    thread_plant: pick(['', 'A badge with your photo, but not your name.', 'A meeting scheduled for you, in a room that does not exist yet.']),
+    thread_resolve: /^- (t\d+):/m.exec(prompt)?.[1] ?? 'none',
     fact: `Room ${n} keeps a copy of everything you read.`,
   };
 }

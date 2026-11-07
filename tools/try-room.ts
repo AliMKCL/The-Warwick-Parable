@@ -66,6 +66,9 @@ async function main() {
   const err = core.run()!.rooms.length && status.find((p) => p.error)?.error;
   if (err) console.log(`  model problem: ${err}`);
   printRoom(room);
+  console.log('\nPlayer profile after the first room (strongest first):');
+  for (const l of core.run()!.profile.readout()) console.log(`  ${l}`);
+  for (const e of core.run()!.profile.evidence) console.log(`    ${e.delta > 0 ? '+' : ''}${e.delta} ${e.trait}: ${e.reason}`);
   const reaction = msgs.filter((m): m is Extract<CoreMessage, { type: 'narrator_line' }> => m.type === 'narrator_line' && m.final);
   console.log('\nNarrator, in order:');
   for (const l of reaction) console.log(`  “${l.text}”`);
@@ -76,6 +79,8 @@ function printRoom(r: RoomSpec) {
   const L = r.layout;
   console.log(`\n"${r.title}" · ${L.archetype} ${L.width}x${L.depth} · ${r.ambience}`);
   if (r.fact) console.log(`Fact: ${r.fact}`);
+  if (r.rule) console.log(`Rule: ${r.rule.id} ${JSON.stringify(r.rule.params)}\n  says: “${r.rule.line}”${r.rule.doneLine ? `\n  then: “${r.rule.doneLine}”` : ''}`);
+  if (r.thread?.plant) console.log(`New story thread: ${r.thread.plant}`);
   console.log('\nDoors:');
   for (const d of L.doors) console.log(`  ${d.entrance ? 'in ' : d.id + ' '} "${d.label}"${d.entrance ? '' : ` → if you hesitate: “${r.narrator.doors[d.id] ?? ''}”`}`);
   console.log('\nThings with text:');

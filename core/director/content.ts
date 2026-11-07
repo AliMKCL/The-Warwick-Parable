@@ -4,7 +4,8 @@ import { placeInSlot } from '../room/geometry';
 import type { Assignment } from '../room/place';
 import type { GameData, Layout, Side, Slot } from '../room/types';
 import { pick, type Rng } from '../util/random';
-import { fill, storyStage } from './prompts';
+import { describeRule, type RoomRule } from '../rules/rules';
+import { fill, RUN_LENGTH, storyStage } from './prompts';
 import { roomContentSchema, type ModelRoomContent } from './schema';
 
 export interface ContentContext {
@@ -15,6 +16,12 @@ export interface ContentContext {
   story: string[];
   /** What the player has done, newest room last. */
   behaviour: string[];
+  /** Trait readout, strongest first. */
+  profile: string[];
+  /** The mechanic this room will run, if any. */
+  rule?: Omit<RoomRule, 'line' | 'doneLine'>;
+  /** Unresolved story threads. */
+  threads: { id: string; text: string }[];
   data: GameData;
 }
 
@@ -67,7 +74,11 @@ export function buildRoomMessages(ctx: ContentContext, slots: Slot[]): { message
   const exits = layout.doors.filter((d) => !d.entrance);
   const user = fill(p.roomUser, {
     index: ctx.index,
+    total: RUN_LENGTH - 1,
     stage: storyStage(ctx.index),
+    profile: ctx.profile.map((s) => `- ${s}`).join('\n'),
+    rule: ctx.rule ? describeRule(ctx.rule) : 'None. Leave "rule_line" and "rule_done_line" empty.',
+    threads: ctx.threads.length ? ctx.threads.map((t) => `- ${t.id}: ${t.text}`).join('\n') : '- None yet.',
     archetype: layout.archetype.replace('_', ' '),
     width: layout.width,
     depth: layout.depth,
@@ -89,6 +100,8 @@ export function buildRoomMessages(ctx: ContentContext, slots: Slot[]): { message
     ambiences: Object.keys(data.ambience),
     minSlots: Math.min(3, slots.length),
     maxSlots: slots.length,
+    threadIds: ctx.threads.map((t) => t.id),
+    suggest: ctx.rule?.id === 'narrator_suggests',
   });
   return { messages: [{ role: 'system', content: system }, { role: 'user', content: user }], schema, propIds };
 }
@@ -150,6 +163,8 @@ function checkContent(c: ModelRoomContent, ctx: ContentContext, slots: Slot[]): 
   const named = new Set((c.doors ?? []).map((d) => d.door));
   const missing = exits.filter((id) => !named.has(id));
   if (missing.length) problems.push(`doors missing: ${missing.join(', ')}`);
+  if (ctx.rule && !c.rule_line?.trim()) problems.push('"rule_line" is empty but this room has a rule');
+  if (ctx.rule?.id === 'narrator_suggests' && !exits.includes(c.suggest_door ?? '')) problems.push('"suggest_door" must be one of the exit ids');
   const slotIds = new Set(slots.map((s) => s.id));
   const unknown = (c.slots ?? []).filter((s) => !slotIds.has(s.slot)).map((s) => s.slot);
   if (unknown.length) problems.push(`unknown slots: ${unknown.join(', ')}`);

@@ -16,6 +16,9 @@ export interface DoorView {
   target: number;
   /** Sign of the hinge rotation that swings the door away from the room. */
   swing: number;
+  locked: boolean;
+  /** Small status light by the door: red when locked, green when open. */
+  indicator?: THREE.MeshStandardMaterial;
 }
 
 export interface RoomView {
@@ -29,6 +32,10 @@ export interface RoomView {
   exposure: number;
   update(dt: number, t: number): void;
   isWalkable(cx: number, cz: number): boolean;
+  /** Fade all the room's lights to a level (0 dark, 1 normal) over some seconds. */
+  setLights(level: number, seconds: number): void;
+  lightLevel(): number;
+  setLocked(doorIds: string[]): void;
   dispose(): void;
 }
 
@@ -135,10 +142,19 @@ export function buildRoom(spec: RoomSpec, data: GameData, materials: MaterialLib
   const hemi = new THREE.HemisphereLight(amb.sky, amb.ground, amb.hemi * 0.55);
   group.add(hemi);
 
-  // ---- flicker ----
+  // ---- flicker and dimming ----
   let flickerLeft = 0;
+  let flickerK = 1;
   const baseLight = perLight;
   const basePanel = mats.panel.emissiveIntensity;
+  const baseHemi = hemi.intensity;
+  let level = 1, levelFrom = 1, levelTo = 1, levelT = 1, levelDur = 0;
+  const applyLights = () => {
+    const k = level * flickerK;
+    mats.panel.emissiveIntensity = basePanel * Math.max(0.05, k);
+    points.forEach((l) => (l.intensity = baseLight * k));
+    hemi.intensity = baseHemi * (0.25 + 0.75 * level);
+  };
 
   return {
     spec,
@@ -150,7 +166,28 @@ export function buildRoom(spec: RoomSpec, data: GameData, materials: MaterialLib
     background: new THREE.Color(amb.fog),
     exposure: amb.exposure,
     isWalkable: (cx, cz) => isFloor(layout, cx, cz),
+    setLights(to, seconds) {
+      levelFrom = level;
+      levelTo = to;
+      levelT = 0;
+      levelDur = Math.max(0.01, seconds);
+    },
+    lightLevel: () => level,
+    setLocked(ids) {
+      for (const d of doors) {
+        if (d.door.entrance) continue;
+        d.locked = ids.includes(d.door.id);
+        d.indicator?.color.set(d.locked ? '#b3261e' : '#2f8f4e');
+        d.indicator?.emissive.set(d.locked ? '#ff3b30' : '#34c759');
+      }
+    },
     update(dt) {
+      if (levelT < 1) {
+        levelT = Math.min(1, levelT + dt / levelDur);
+        const e = levelT * levelT * (3 - 2 * levelT);
+        level = levelFrom + (levelTo - levelFrom) * e;
+        applyLights();
+      }
       for (const d of doors) {
         d.open += (d.target - d.open) * Math.min(1, dt * 7);
         d.pivot.rotation.y = d.swing * d.open * 1.75;
@@ -158,13 +195,9 @@ export function buildRoom(spec: RoomSpec, data: GameData, materials: MaterialLib
       if (flickerLeft <= 0 && Math.random() < amb.flicker * dt * 2.5) flickerLeft = 0.08 + Math.random() * 0.25;
       if (flickerLeft > 0) {
         flickerLeft -= dt;
-        const k = Math.random() < 0.5 ? 0.25 : 0.9;
-        mats.panel.emissiveIntensity = basePanel * k;
-        points.forEach((l) => (l.intensity = baseLight * k));
-        if (flickerLeft <= 0) {
-          mats.panel.emissiveIntensity = basePanel;
-          points.forEach((l) => (l.intensity = baseLight));
-        }
+        flickerK = Math.random() < 0.5 ? 0.25 : 0.9;
+        if (flickerLeft <= 0) flickerK = 1;
+        applyLights();
       }
     },
     dispose() {
@@ -234,12 +267,22 @@ export function buildRoom(spec: RoomSpec, data: GameData, materials: MaterialLib
       root.add(plaque);
     }
 
+    let indicator: THREE.MeshStandardMaterial | undefined;
+    if (!door.entrance) {
+      indicator = new THREE.MeshStandardMaterial({ color: '#2f8f4e', emissive: '#34c759', emissiveIntensity: 1.4, roughness: 0.4 });
+      const lampGeo = new THREE.BoxGeometry(0.06, 0.06, 0.02);
+      owned.push(indicator, lampGeo);
+      const lamp = new THREE.Mesh(lampGeo, indicator);
+      lamp.position.set(0.62, 1.15, 0.012);
+      root.add(lamp);
+    }
+
     const info: InteractInfo = door.entrance
       ? { kind: 'locked', id: door.id, name: 'The way you came' }
       : { kind: 'door', id: door.id, name: door.label ? `door “${door.label}”` : 'door' };
     pivot.userData.interact = info;
     group.add(root);
-    return { door, pivot, open: 0, target: 0, swing: 1 };
+    return { door, pivot, open: 0, target: 0, swing: 1, locked: false, indicator };
   }
 }
 

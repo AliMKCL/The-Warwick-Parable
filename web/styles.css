@@ -75,3 +75,13 @@ html, body, #app { margin: 0; width: 100%; height: 100%; overflow: hidden; }
 }
 #waiting.show { opacity: 1; animation: breathe 2.4s ease-in-out infinite; }
 @keyframes breathe { 50% { opacity: 0.35; } }
+
+#timer {
+  position: fixed; left: 50%; top: 22px; transform: translateX(-50%);
+  padding: 6px 16px; border-radius: 6px; background: rgba(8,9,9,0.6);
+  font: 600 26px/1.1 ui-monospace, Menlo, monospace; color: #f4f2ea; letter-spacing: 0.04em; text-align: center;
+  opacity: 0; transition: opacity 0.3s ease; pointer-events: none;
+}
+#timer span { display: block; font: 600 10px/1.6 Inter, system-ui, sans-serif; letter-spacing: 0.18em; text-transform: uppercase; opacity: 0.6; }
+#timer.show { opacity: 1; }
+#timer.urgent { color: #ff8a7a; }

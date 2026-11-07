@@ -18,6 +18,9 @@ The room's floor plan already exists. You decide what is in it and what everythi
 - Signs and labels: 1 to 5 words. Posters: up to 12 words. Screens, whiteboards, notes: up to 3 short lines. Inspect text: 1 or 2 sentences.
 - Use \n for line breaks inside screen, whiteboard and note text.
 - Door labels: 1 to 3 words, uppercase.
+- Lean into the player's strongest traits. A hesitant player gets rooms that comment on waiting; a curious one gets things worth reading; a defiant one gets instructions they will want to break; an impulsive one gets temptations; a compliant one gets orders.
+- If the room has a rule, write "rule_line" (and "rule_done_line" when the rule asks for it) in the narrator's voice, and make the room's text fit the rule. With no rule, leave both empty.
+- Story threads: you may plant one new mystery in "thread_plant" (one sentence, or empty). From the escalation stage on, pay off an open thread by setting "thread_resolve" to its id and letting this room's text reveal something about it; otherwise use "none".
 - No violence, gore, slurs or real people.
 
 # Props

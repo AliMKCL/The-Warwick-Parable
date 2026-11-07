@@ -100,6 +100,11 @@ Object.assign(window, {
         hovered: game.hovered?.info,
         events: game.core.run()?.events.map((e) => e.type) ?? [],
         source: r?.source,
+        rule: r?.rule,
+        profile: game.profile?.traits,
+        evidence: game.profile?.evidence.length ?? 0,
+        locked: game.room?.doors.filter((d) => d.locked).map((d) => d.door.id) ?? [],
+        lights: game.room?.lightLevel(),
         title: r?.title,
         gen: game.core.run()?.plansStatus(),
         frame: game.renderer.info.render.frame,
@@ -111,6 +116,8 @@ Object.assign(window, {
       game.player.pitch = Math.atan2(ty - 1.62, Math.hypot(tx - x, tz - z));
     },
     interact: () => game.interact(),
+    /** Show a rule effect directly (for checking visuals). */
+    effect: (e: unknown) => game.applyEffect(e as never),
     /** Walk up to an exit and open it. */
     useDoor(id: string) {
       const d = game.room?.spec.layout.doors.find((x) => x.id === id);
