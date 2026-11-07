@@ -22,6 +22,10 @@ export function fakeLlm(o: {
       if (o.delayMs) await new Promise((r) => setTimeout(r, o.delayMs));
       if ((req.signal as AbortSignal | undefined)?.aborted) throw new LlmError('Request cancelled', 'aborted');
       if (o.mode === 'down') throw new LlmError('Cannot reach the model server', 'unreachable');
+      if (req.schemaName === 'verdict') {
+        const v = { name: 'The Patient Applicant', summary: 'You waited. A lot.', hesitation: 'You waited 31 s.', curiosity: 'You read things.', compliance: 'You did as told.', impulsivity: 'Not much.', closing: 'Goodbye.' };
+        return { value: v as T, raw: JSON.stringify(v), timings: { totalMs: 3 } };
+      }
       const bad = o.mode === 'always-bad' || (o.mode === 'bad-then-good' && n === 1);
       if (bad) return { value: { title: 'x', slots: [] } as T, raw: '{"title":"x","slots":[]}', timings: { totalMs: 1 } };
       const prompt = req.messages[1]!.content;

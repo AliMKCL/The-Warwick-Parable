@@ -1,3 +1,4 @@
+import { buildDossier, writeVerdict } from '../director/dossier';
 import { fill } from '../director/prompts';
 import type { LlmClient } from '../llm/client';
 import type { CoreMessage, CorePort, GameEvent } from '../protocol';
@@ -8,6 +9,8 @@ export interface CoreOptions {
   llm?: LlmClient;
   waitMs?: number;
   observeMs?: number;
+  /** Rooms in a run, counting the first (default 7). */
+  runLength?: number;
 }
 
 /**
@@ -28,6 +31,7 @@ export function createCore(data: GameData, opts: CoreOptions = {}): CorePort & {
     llm: opts.llm,
     waitMs: opts.waitMs,
     observeMs: opts.observeMs,
+    runLength: opts.runLength,
     onStatus: (doors) => emit({ type: 'gen_status', doors, model: run?.modelOff ? 'off' : 'on' }),
     onEffect: (effect) => emit({ type: 'rule_effect', effect }),
     onSay: say,
@@ -96,6 +100,12 @@ export function createCore(data: GameData, opts: CoreOptions = {}): CorePort & {
             if (r.current?.id === roomId) r.startRule(event.t + (now() - received) / 1000);
           }, 900),
         );
+      } else if (event.type === 'door_chosen' && r.finished) {
+        // The final exit: write the player's file.
+        void (async () => {
+          const { verdict, source } = await writeVerdict(r, data, opts.llm);
+          emit({ type: 'run_ended', dossier: buildDossier(r, verdict, source) });
+        })();
       } else if (event.type === 'door_chosen') {
         let markIntroduced!: () => void;
         introduced = new Promise<void>((res) => (markIntroduced = res));

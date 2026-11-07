@@ -53,6 +53,8 @@ export interface RunOptions {
   onSay?: (text: string) => void;
   /** The hidden profile changed. */
   onProfile?: (profile: ProfileSnapshot) => void;
+  /** Rooms in the run, counting the first (default 7). */
+  runLength?: number;
   now?: () => number;
 }
 
@@ -76,6 +78,8 @@ export class Run {
   /** Story threads the model has planted, and whether a later room paid them off. */
   readonly threads: { id: string; text: string; room: number; resolvedIn?: number }[] = [];
   private rule?: RuleRuntime;
+  /** Trait scores at the moment the player entered each room. */
+  readonly traitHistory: Record<'hesitation' | 'curiosity' | 'compliance' | 'impulsivity', number>[] = [];
 
   constructor(
     readonly seed: number,
@@ -150,9 +154,14 @@ export class Run {
     });
   }
 
+  /** Index of the final room. */
+  get last(): number {
+    return Math.max(2, (this.opts.runLength ?? RUN_LENGTH) - 1);
+  }
+
   /** True once the player has reached the last room of the run. */
   get finished(): boolean {
-    return (this.current?.index ?? 0) >= RUN_LENGTH - 1;
+    return (this.current?.index ?? 0) >= this.last;
   }
 
   /**
@@ -185,12 +194,12 @@ export class Run {
     this.rule?.stop();
     this.rule = undefined;
     this.rooms.push(room);
+    this.traitHistory.push({ ...this.profile.traits });
     if (room.thread?.plant) this.threads.push({ id: `t${this.threads.length + 1}`, text: room.thread.plant, room: room.index });
     const resolved = this.threads.find((t) => t.id === room.thread?.resolves);
     if (resolved && resolved.resolvedIn === undefined) resolved.resolvedIn = room.index;
-    this.plans = room.layout.doors
-      .filter((d) => !d.entrance)
-      .map((d) => this.plan(room, d));
+    // The final room's exit leads to the player's file, not to another room.
+    this.plans = room.index >= this.last ? [] : room.layout.doors.filter((d) => !d.entrance).map((d) => this.plan(room, d));
     this.emitStatus();
     timers.clearTimeout(this.observeTimer);
     this.observing = true;
@@ -239,7 +248,7 @@ export class Run {
     let exits = 1 + Math.floor(rng() * 3);
     if (t.hesitation > 0.62) exits = 3;
     else if (t.impulsivity > 0.62) exits = Math.min(exits, 2);
-    if (from.index + 1 >= RUN_LENGTH - 1) exits = 1; // the last room has one way on
+    if (from.index + 1 >= this.last) exits = 1; // the last room has one way on
     return { archetype, exits };
   }
 
@@ -265,7 +274,7 @@ export class Run {
     plan.status = 'generating';
     this.emitStatus();
     const rng = createRng(plan.seed);
-    const rule = plan.index >= RUN_LENGTH - 1 ? undefined : chooseRule(this.profile, createRng(deriveSeed(plan.seed, 'pick-rule')), plan.index, this.current?.rule?.id as RuleId | undefined);
+    const rule = plan.index >= this.last ? undefined : chooseRule(this.profile, createRng(deriveSeed(plan.seed, 'pick-rule')), plan.index, this.current?.rule?.id as RuleId | undefined);
     let spec: RoomSpec;
     if (this.modelOff) {
       spec = this.templateSpec(plan, rng, { rule });
@@ -292,6 +301,8 @@ export class Run {
     const controller = Abort ? new Abort() : undefined;
     plan.abort = controller;
     const started = this.now();
+    const behaviour = this.behaviourLog();
+    const profile = this.profile.readout();
     const gen = await generateRoomContent(
       this.opts.llm!,
       {
@@ -299,10 +310,11 @@ export class Run {
         layout: plan.layout,
         entranceLabel: plan.entranceLabel,
         story: this.story(),
-        behaviour: this.behaviourLog(),
-        profile: this.profile.readout(),
+        behaviour,
+        profile,
         rule,
         threads: this.threads.filter((t) => t.resolvedIn === undefined).map(({ id, text }) => ({ id, text })),
+        runLength: this.last + 1,
         data: this.data,
       },
       rng,
@@ -334,6 +346,7 @@ export class Run {
         line: c.rule_line,
         doneLine: c.rule_done_line || this.data.templates.rules[rule.id].done[0]!,
       },
+      provenance: { behaviour, profile, story: this.story(), repaired: gen.repaired },
       thread: {
         plant: c.thread_plant?.trim() || undefined,
         resolves: c.thread_resolve && c.thread_resolve !== 'none' ? c.thread_resolve : undefined,
@@ -363,6 +376,7 @@ export class Run {
       },
       source: 'template',
       title: o.first ? 'The waiting room' : layout.archetype.replace('_', ' '),
+      provenance: o.first ? undefined : { behaviour: this.behaviourLog(), profile: this.profile.readout(), story: this.story(), error: (plan as Partial<Plan>).error },
     };
     if (o.rule) {
       const exits = layout.doors.filter((d) => !d.entrance);

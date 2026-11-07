@@ -12,6 +12,8 @@ import type { InteractInfo } from './room/buildProp';
 import { MaterialLibrary } from './room/materials';
 import { Hud } from './ui/hud';
 import { Sound } from './audio/sound';
+import { showDossier } from './ui/dossier';
+import type { Dossier } from '../core/protocol';
 
 export interface GameOptions {
   seed: number;
@@ -23,6 +25,8 @@ export interface GameOptions {
   /** Debug: draw every room with this ambience. */
   forceAmbience?: string;
   mute?: boolean;
+  /** Rooms per run, counting the first (default 7). */
+  runLength?: number;
 }
 
 const REACH = 2.6;
@@ -75,7 +79,7 @@ export class Game {
   /** Start a run. With no model (or an unreachable one), rooms are filled from templates. */
   begin(llm?: LlmClient) {
     this.sound.start();
-    this.core = createCore(gameData, { llm, observeMs: this.opts.observeMs });
+    this.core = createCore(gameData, { llm, observeMs: this.opts.observeMs, runLength: this.opts.runLength });
     this.core.onMessage((m) => this.handle(m));
     this.startedAt = performance.now();
     this.send({ type: 'run_started', seed: this.opts.seed, t: 0 });
@@ -136,7 +140,7 @@ export class Game {
     this.sound.doorOpen();
     await wait(380);
     await this.hud.fade(true);
-    this.hud.waiting(true);
+    this.hud.waiting(true, this.core.run()?.finished ? 'the building is preparing your file' : undefined);
     this.send({ type: 'door_chosen', roomId: this.room.spec.id, doorId, t: this.time });
   }
 
@@ -145,9 +149,24 @@ export class Game {
     else if (m.type === 'narrator_line') this.hud.narrate(m.lineId, m.text, m.final);
     else if (m.type === 'rule_effect') this.applyEffect(m.effect);
     else if (m.type === 'profile') this.profile = m.profile;
+    else if (m.type === 'run_ended') void this.endRun(m.dossier);
     else if (m.type === 'gen_status')
       this.genStatus = `model ${m.model} · ` + m.doors.map((d) => `${d.door}:${d.status}${d.ms ? ` ${(d.ms / 1000).toFixed(1)}s` : ''}`).join(' ');
   }
+
+  dossier?: Dossier;
+
+  private async endRun(d: Dossier) {
+    this.dossier = d;
+    this.ended = true;
+    this.player.enabled = false;
+    this.hud.waiting(false);
+    this.hud.timer(null, '');
+    this.sound.setAmbience('silence');
+    if (document.pointerLockElement) document.exitPointerLock();
+    showDossier(document.getElementById('dossier')!, d);
+  }
+  ended = false;
 
   /** Show a rule's effect. Core decides; this only draws it. */
   applyEffect(e: RuleEffect) {

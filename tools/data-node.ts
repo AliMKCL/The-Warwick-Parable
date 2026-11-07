@@ -16,6 +16,8 @@ export function loadGameData(): GameData {
       roomUser: md('prompts/room-user.md'),
       narratorSystem: md('prompts/narrator-system.md'),
       narratorUser: md('prompts/narrator-user.md'),
+      dossierSystem: md('prompts/dossier-system.md'),
+      dossierUser: md('prompts/dossier-user.md'),
     },
   };
 }

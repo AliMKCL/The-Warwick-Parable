@@ -61,7 +61,7 @@ describe('room generator', () => {
 
 describe('run without a model', () => {
   it('starts in the waiting room with the button, and every later room is valid and new', async () => {
-    const run = new Run(1234, gameData, { observeMs: 0 });
+    const run = new Run(1234, gameData, { observeMs: 0, runLength: 60 });
     const first = run.start();
     expect(first.layout.archetype).toBe('waiting_room');
     expect(first.props.some((p) => p.recipe === 'button_pedestal')).toBe(true);

@@ -11,7 +11,7 @@ Read this first when picking up the work. Newest entries at the top.
 | 3. Generation loop | 5 h | Done |
 | 4. Profile and story (4 rules) | 3.5 h | Done |
 | 5. Look pass (lighting and sound) | 1.5 h | Done |
-| 6. Dossier ending and demo prep | 2 h | Next |
+| 6. Dossier ending and demo prep | 2 h | Done |
 | Buffer | 3 h | |
 
 ## Decisions
@@ -22,6 +22,12 @@ Read this first when picking up the work. Newest entries at the top.
 - **Engine boundary:** `core/` may not import Three.js, browser APIs or Node built-ins; `npm run typecheck` enforces it.
 
 ## Log
+
+### Phase 6: ending and demo prep (done)
+- A run lasts 7 rooms by default (`?rooms=5` for a shorter demo). The final room has one exit, which leads to the player's file instead of another room.
+- The dossier: a verdict written by the model (name, summary, one line per trait, closing line; template fallback), each trait's score with the moments that moved it most, the path through the building, story threads and whether they were explained, and stats.
+- "How this world was built": a chart of the traits as the player entered each room, and a room-by-room table of layout, seed, model or template, generation time, rule and exactly what the model was told about the player.
+- `docs/demo.md`: checklist, a five-minute walkthrough, talking points and what to do if something goes wrong.
 
 ### Phase 5: look and sound (done)
 - Each mood (cold, warm, sickly, dim) has its own colour grade: tint, contrast, vignette and grain, set in `data/ambience.json`.

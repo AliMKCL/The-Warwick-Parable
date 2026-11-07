@@ -1,5 +1,7 @@
 import ambience from '../data/ambience.json';
 import materials from '../data/materials.json';
+import dossierSystem from '../data/prompts/dossier-system.md?raw';
+import dossierUser from '../data/prompts/dossier-user.md?raw';
 import narratorSystem from '../data/prompts/narrator-system.md?raw';
 import narratorUser from '../data/prompts/narrator-user.md?raw';
 import roomSystem from '../data/prompts/room-system.md?raw';
@@ -15,5 +17,5 @@ export const gameData: GameData = {
   materials: materials as GameData['materials'],
   ambience: ambience as unknown as GameData['ambience'],
   templates: templates as unknown as GameData['templates'],
-  prompts: { world, roomSystem, roomUser, narratorSystem, narratorUser },
+  prompts: { world, roomSystem, roomUser, narratorSystem, narratorUser, dossierSystem, dossierUser },
 };

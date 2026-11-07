@@ -5,7 +5,7 @@ import type { Assignment } from '../room/place';
 import type { GameData, Layout, Side, Slot } from '../room/types';
 import { pick, type Rng } from '../util/random';
 import { describeRule, type RoomRule } from '../rules/rules';
-import { fill, RUN_LENGTH, storyStage } from './prompts';
+import { fill, storyStage } from './prompts';
 import { roomContentSchema, type ModelRoomContent } from './schema';
 
 export interface ContentContext {
@@ -22,6 +22,8 @@ export interface ContentContext {
   rule?: Omit<RoomRule, 'line' | 'doneLine'>;
   /** Unresolved story threads. */
   threads: { id: string; text: string }[];
+  /** Rooms in this run, counting the first. */
+  runLength: number;
   data: GameData;
 }
 
@@ -74,8 +76,8 @@ export function buildRoomMessages(ctx: ContentContext, slots: Slot[]): { message
   const exits = layout.doors.filter((d) => !d.entrance);
   const user = fill(p.roomUser, {
     index: ctx.index,
-    total: RUN_LENGTH - 1,
-    stage: storyStage(ctx.index),
+    total: ctx.runLength - 1,
+    stage: storyStage(ctx.index, ctx.runLength - 1),
     profile: ctx.profile.map((s) => `- ${s}`).join('\n'),
     rule: ctx.rule ? describeRule(ctx.rule) : 'None. Leave "rule_line" and "rule_done_line" empty.',
     threads: ctx.threads.length ? ctx.threads.map((t) => `- ${t.id}: ${t.text}`).join('\n') : '- None yet.',

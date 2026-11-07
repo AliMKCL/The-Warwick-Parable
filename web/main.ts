@@ -12,6 +12,7 @@ import { Loop } from './render/loop';
  *   ?observe=8  seconds to watch the player before generating the next rooms
  *   ?ambience=warm  draw every room in one mood (cold, warm, sickly, dim)
  *   ?mute=1     start with sound off (M toggles it)
+ *   ?rooms=5    rooms per run, counting the first (default 7)
  */
 const params = new URLSearchParams(location.search);
 const seed = Number(params.get('seed')) || Math.floor(Math.random() * 1e9);
@@ -23,6 +24,7 @@ const game = new Game(canvas, {
   debug: params.get('debug') === '1',
   observeMs: params.has('observe') ? Number(params.get('observe')) * 1000 : undefined,
   forceAmbience: params.get('ambience') ?? undefined,
+  runLength: Number(params.get('rooms')) || undefined,
   mute: params.get('mute') === '1',
 });
 
@@ -45,8 +47,8 @@ document.addEventListener('pointerlockchange', () => {
     started = true;
     void modelReady.then((ok) => game.begin(ok ? llm : undefined));
   }
-  game.player.enabled = locked && !game.hud.inspecting;
-  game.hud.start.hidden = locked;
+  game.player.enabled = locked && !game.hud.inspecting && !game.ended;
+  game.hud.start.hidden = locked || game.ended;
   startButton.textContent = 'Click to continue';
 });
 document.addEventListener('mousemove', (e) => {
@@ -110,6 +112,8 @@ Object.assign(window, {
         evidence: game.profile?.evidence.length ?? 0,
         locked: game.room?.doors.filter((d) => d.locked).map((d) => d.door.id) ?? [],
         lights: game.room?.lightLevel(),
+        ended: game.ended,
+        dossier: game.dossier,
         title: r?.title,
         gen: game.core.run()?.plansStatus(),
         frame: game.renderer.info.render.frame,

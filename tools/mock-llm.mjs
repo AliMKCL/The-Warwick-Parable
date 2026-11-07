@@ -52,7 +52,17 @@ http.createServer((req, res) => {
       return res.end(JSON.stringify({ message: { content: '' }, done: true, eval_count: words.length }) + '\n');
     }
     await new Promise((r) => setTimeout(r, DELAY));
-    const content = JSON.stringify(roomContent(prompt));
+    const content = b.format?.properties?.summary
+      ? JSON.stringify({
+          name: 'The Patient Applicant',
+          summary: 'You waited before every door and read everything twice. The building found this reassuring.',
+          hesitation: 'You stood still long enough for the lights to give up.',
+          curiosity: 'You read the memos. Nobody reads the memos.',
+          compliance: 'You did roughly what you were told.',
+          impulsivity: 'You pressed the button once, after due consideration.',
+          closing: 'Your file is complete. Please wait to be called.',
+        })
+      : JSON.stringify(roomContent(prompt));
     res.end(JSON.stringify({ message: { content }, prompt_eval_count: 1800, eval_count: 420, eval_duration: 6e9 }));
   });
 }).listen(PORT, () => console.log(`Mock model server on http://127.0.0.1:${PORT}`));

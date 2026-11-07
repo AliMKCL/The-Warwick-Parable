@@ -53,7 +53,47 @@ export type CoreMessage =
   | { type: 'gen_status'; model: 'on' | 'off'; doors: { door: string; status: string; ms?: number; error?: string }[] }
   | { type: 'rule_effect'; effect: RuleEffect }
   | { type: 'profile'; profile: ProfileSnapshot }
-  | { type: 'run_ended'; dossier: unknown /* Dossier, defined in Phase 6 */ };
+  | { type: 'run_ended'; dossier: Dossier };
+
+/** Everything the ending screen shows. */
+export interface Dossier {
+  seed: number;
+  seconds: number;
+  verdict: Verdict;
+  verdictSource: 'model' | 'template';
+  traits: Record<TraitName, number>;
+  /** The strongest moments behind each trait. */
+  moments: Record<TraitName, Evidence[]>;
+  rooms: {
+    index: number;
+    title: string;
+    archetype: string;
+    ambience: string;
+    source: 'model' | 'template';
+    genMs?: number;
+    rule?: string;
+    fact?: string;
+    /** Trait scores when the player walked in. */
+    traitsAtEntry: Record<TraitName, number>;
+    /** What the model was told about the player for this room. */
+    behaviour: string[];
+    profile: string[];
+    seed: number;
+    size: string;
+  }[];
+  threads: { text: string; room: number; resolvedIn?: number }[];
+  stats: { inspected: number; pressed: number; stoodStill: number; doorsTried: number };
+}
+
+export interface Verdict {
+  name: string;
+  summary: string;
+  hesitation: string;
+  curiosity: string;
+  compliance: string;
+  impulsivity: string;
+  closing: string;
+}
 
 /** The adapter-facing surface of core. In the browser it is called directly; for Godot it sits behind a WebSocket. */
 export interface CorePort {

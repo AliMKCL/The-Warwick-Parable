@@ -166,6 +166,8 @@ export interface RoomSpec {
   rule?: { id: 'lights_dim_on_idle' | 'inspect_to_unlock' | 'exit_timer' | 'narrator_suggests'; params: Record<string, number | string>; line: string; doneLine: string };
   /** A story thread this room opens, and the id of one it pays off. */
   thread?: { plant?: string; resolves?: string };
+  /** What the model was given to write this room, for the "how this world was built" view. */
+  provenance?: { behaviour: string[]; profile: string[]; story: string[]; repaired?: boolean; error?: string };
 }
 
 export interface GameData {
@@ -183,6 +185,8 @@ export interface Prompts {
   roomUser: string;
   narratorSystem: string;
   narratorUser: string;
+  dossierSystem: string;
+  dossierUser: string;
 }
 
 export interface TextTemplates {

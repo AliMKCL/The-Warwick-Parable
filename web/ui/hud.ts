@@ -111,8 +111,9 @@ export class Hud {
   }
 
   /** After a moment in the dark between rooms, admit that something is being prepared. */
-  waiting(on: boolean) {
+  waiting(on: boolean, text = 'the building is preparing something') {
     clearTimeout(this.waitTimer);
+    if (on) this.waitingEl.textContent = text;
     if (on) this.waitTimer = window.setTimeout(() => this.waitingEl.classList.add('show'), 1600);
     else this.waitingEl.classList.remove('show');
   }
