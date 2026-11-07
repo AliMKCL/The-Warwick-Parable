@@ -11,6 +11,7 @@ import { buildRoom, type RoomView } from './room/buildRoom';
 import type { InteractInfo } from './room/buildProp';
 import { MaterialLibrary } from './room/materials';
 import { Hud } from './ui/hud';
+import { Sound } from './audio/sound';
 
 export interface GameOptions {
   seed: number;
@@ -19,6 +20,9 @@ export interface GameOptions {
   debug: boolean;
   /** Seconds to watch the player before generating the next rooms (see Run). */
   observeMs?: number;
+  /** Debug: draw every room with this ambience. */
+  forceAmbience?: string;
+  mute?: boolean;
 }
 
 const REACH = 2.6;
@@ -33,6 +37,7 @@ export class Game {
   readonly scene = new THREE.Scene();
   readonly player = new Player();
   readonly hud = new Hud();
+  readonly sound: Sound;
   core: ReturnType<typeof createCore> = createCore(gameData);
   private genStatus = '';
   profile?: ProfileSnapshot;
@@ -53,6 +58,8 @@ export class Game {
     private canvas: HTMLCanvasElement,
     private opts: GameOptions,
   ) {
+    this.sound = new Sound(opts.mute);
+    this.hud.onTimerSecond = (left) => left <= 10 && this.sound.tick(left <= 5);
     this.renderer = createRenderer(canvas);
     this.renderer.info.autoReset = false;
     if (opts.post) this.post = createPost(this.renderer, this.scene, this.player.camera);
@@ -67,6 +74,7 @@ export class Game {
 
   /** Start a run. With no model (or an unreachable one), rooms are filled from templates. */
   begin(llm?: LlmClient) {
+    this.sound.start();
     this.core = createCore(gameData, { llm, observeMs: this.opts.observeMs });
     this.core.onMessage((m) => this.handle(m));
     this.startedAt = performance.now();
@@ -90,12 +98,14 @@ export class Game {
     const t = this.time;
     switch (h.info.kind) {
       case 'inspect':
+        this.sound.rustle();
         this.hud.showInspect(h.info.name, h.info.text ?? '');
         this.player.enabled = false;
         this.send({ type: 'inspected', roomId, objectId: h.info.id, t });
         break;
       case 'button': {
         const knob = h.object.children.find((c) => (c as THREE.Mesh).material && ((c as THREE.Mesh).material as THREE.Material).name === 'red_button');
+        this.sound.button();
         if (knob) {
           knob.position.y -= 0.025;
           setTimeout(() => (knob.position.y += 0.025), 220);
@@ -107,6 +117,7 @@ export class Game {
         const view = this.room.doors.find((d) => d.door.id === h.info.id);
         if (view?.locked) {
           this.send({ type: 'door_tried', roomId, doorId: h.info.id, t });
+          this.sound.rattle();
           view.pivot.rotation.y = 0.03; // a rattle
           setTimeout(() => (view.pivot.rotation.y = 0), 90);
         } else this.openDoor(h.info.id);
@@ -122,6 +133,7 @@ export class Game {
     if (!view || !this.room) return;
     this.busy = true;
     view.target = 1;
+    this.sound.doorOpen();
     await wait(380);
     await this.hud.fade(true);
     this.hud.waiting(true);
@@ -153,12 +165,16 @@ export class Game {
       this.scene.remove(this.room.group);
       this.room.dispose();
     }
+    if (this.opts.forceAmbience) spec = { ...spec, ambience: this.opts.forceAmbience };
     const view = buildRoom(spec, gameData, this.materials);
     this.room = view;
     this.scene.add(view.group);
     this.scene.fog = view.fog;
     this.scene.background = view.background;
     this.renderer.toneMappingExposure = view.exposure;
+    if (view.grade) this.post?.setGrade(view.grade);
+    this.sound.setAmbience(view.sound);
+    this.sound.setLightLevel(1);
     const s = spec.layout.spawn;
     this.player.placeAt(s.x, s.z, s.yaw);
     this.hovered = undefined;
@@ -176,6 +192,9 @@ export class Game {
     if (room) {
       this.player.update(dt, room.isWalkable, room.colliders);
       room.update(dt, t);
+      if (this.player.stepped) this.sound.footstep();
+      if (room.consumeFlicker()) this.sound.buzz();
+      this.sound.setLightLevel(room.lightLevel());
       this.updateHover(room);
       this.trackIdle(room);
       this.trackMotion(room);

@@ -8,12 +8,16 @@ import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js'
 
 /** Vignette, film grain and a faint colour fringe at the edges: the "slightly wrong" finish. */
 const FinishShader = {
-  uniforms: { tDiffuse: { value: null }, time: { value: 0 }, vignette: { value: 0.32 }, grain: { value: 0.022 } },
+  uniforms: {
+    tDiffuse: { value: null }, time: { value: 0 }, vignette: { value: 0.32 }, grain: { value: 0.022 },
+    tint: { value: new THREE.Vector3(1, 1, 1) }, contrast: { value: 1 },
+  },
   vertexShader: /* glsl */ `
     varying vec2 vUv;
     void main() { vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
   fragmentShader: /* glsl */ `
     uniform sampler2D tDiffuse; uniform float time; uniform float vignette; uniform float grain;
+    uniform vec3 tint; uniform float contrast;
     varying vec2 vUv;
     float rand(vec2 co) { return fract(sin(dot(co, vec2(12.9898, 78.233))) * 43758.5453); }
     void main() {
@@ -23,14 +27,20 @@ const FinishShader = {
       vec4 c = texture2D(tDiffuse, vUv);
       c.r = texture2D(tDiffuse, vUv + off).r;
       c.b = texture2D(tDiffuse, vUv - off).b;
+      // Grade in linear light: tint, then contrast around middle grey.
+      c.rgb *= tint;
+      c.rgb = pow(max(c.rgb, 0.0) / 0.18, vec3(contrast)) * 0.18;
       c.rgb *= 1.0 - vignette * smoothstep(0.08, 0.55, r2 * 1.6);
       c.rgb += (rand(vUv * 1000.0 + time) - 0.5) * grain;
       gl_FragColor = c;
     }`,
 };
 
+export interface Grade { tint: [number, number, number]; contrast: number; vignette: number; grain: number }
+
 export interface Post {
   composer: EffectComposer;
+  setGrade(g: Grade): void;
   setScene(scene: THREE.Scene): void;
   setSize(w: number, h: number, dpr: number): void;
   render(t: number): void;
@@ -52,6 +62,13 @@ export function createPost(renderer: THREE.WebGLRenderer, scene: THREE.Scene, ca
   composer.addPass(new OutputPass());
   return {
     composer,
+    setGrade(g) {
+      const u = finish.uniforms;
+      (u.tint!.value as THREE.Vector3).set(...g.tint);
+      u.contrast!.value = g.contrast;
+      u.vignette!.value = g.vignette;
+      u.grain!.value = g.grain;
+    },
     setScene(s) {
       renderPass.scene = s;
       ao.scene = s;

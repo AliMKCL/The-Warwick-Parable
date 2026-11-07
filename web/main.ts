@@ -10,6 +10,8 @@ import { Loop } from './render/loop';
  *   ?dpr=2      render at full Retina resolution (default 1.5)
  *   ?debug=1    show frame rate, room info and generation status
  *   ?observe=8  seconds to watch the player before generating the next rooms
+ *   ?ambience=warm  draw every room in one mood (cold, warm, sickly, dim)
+ *   ?mute=1     start with sound off (M toggles it)
  */
 const params = new URLSearchParams(location.search);
 const seed = Number(params.get('seed')) || Math.floor(Math.random() * 1e9);
@@ -20,6 +22,8 @@ const game = new Game(canvas, {
   maxDpr: Number(params.get('dpr')) || 1.5,
   debug: params.get('debug') === '1',
   observeMs: params.has('observe') ? Number(params.get('observe')) * 1000 : undefined,
+  forceAmbience: params.get('ambience') ?? undefined,
+  mute: params.get('mute') === '1',
 });
 
 const loop = new Loop(
@@ -53,6 +57,7 @@ document.addEventListener('mousedown', (e) => {
 });
 addEventListener('keydown', (e) => {
   if (e.code === 'KeyE' && (document.pointerLockElement === canvas || testMode)) game.interact();
+  if (e.code === 'KeyM') game.sound.toggleMute();
 });
 
 // ---- model server status on the start screen ----
@@ -116,6 +121,14 @@ Object.assign(window, {
       game.player.pitch = Math.atan2(ty - 1.62, Math.hypot(tx - x, tz - z));
     },
     interact: () => game.interact(),
+    /** Play every sound once; returns the audio state. */
+    soundCheck() {
+      const s = game.sound;
+      s.start();
+      for (const bed of ['fluorescent_hum', 'distant_office', 'silence']) s.setAmbience(bed);
+      s.footstep(); s.doorOpen(); s.rattle(); s.button(); s.rustle(); s.buzz(); s.tick(true);
+      return (s as unknown as { ctx?: AudioContext }).ctx?.state ?? 'none';
+    },
     /** Show a rule effect directly (for checking visuals). */
     effect: (e: unknown) => game.applyEffect(e as never),
     /** Walk up to an exit and open it. */

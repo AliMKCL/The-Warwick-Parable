@@ -15,6 +15,8 @@ export class Player {
   stillFor = 0;
   /** Seconds since the player last walked (looking around doesn't count). */
   standingFor = 0;
+  /** Set for one frame each time a foot lands. */
+  stepped = false;
   enabled = false;
 
   constructor() {
@@ -59,10 +61,13 @@ export class Player {
       // Resolve each axis separately so the player slides along walls.
       if (!this.blocked(this.position.x + mx, this.position.z, walkable, colliders)) this.position.x += mx;
       if (!this.blocked(this.position.x, this.position.z + mz, walkable, colliders)) this.position.z += mz;
+      const before = Math.floor(this.bob / Math.PI);
       this.bob += dt * 8.5;
+      this.stepped = Math.floor(this.bob / Math.PI) !== before;
       this.stillFor = 0;
       this.standingFor = 0;
     } else {
+      this.stepped = false;
       this.bob *= 0.9;
       this.stillFor += dt;
       this.standingFor += dt;

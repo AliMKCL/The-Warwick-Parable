@@ -30,6 +30,10 @@ export interface RoomView {
   fog: THREE.FogExp2;
   background: THREE.Color;
   exposure: number;
+  grade?: { tint: [number, number, number]; contrast: number; vignette: number; grain: number };
+  sound: string;
+  /** True once after the lights flickered (for the buzz sound). */
+  consumeFlicker(): boolean;
   update(dt: number, t: number): void;
   isWalkable(cx: number, cz: number): boolean;
   /** Fade all the room's lights to a level (0 dark, 1 normal) over some seconds. */
@@ -145,6 +149,7 @@ export function buildRoom(spec: RoomSpec, data: GameData, materials: MaterialLib
   // ---- flicker and dimming ----
   let flickerLeft = 0;
   let flickerK = 1;
+  let flickered = false;
   const baseLight = perLight;
   const basePanel = mats.panel.emissiveIntensity;
   const baseHemi = hemi.intensity;
@@ -165,6 +170,13 @@ export function buildRoom(spec: RoomSpec, data: GameData, materials: MaterialLib
     fog: new THREE.FogExp2(amb.fog, amb.fogDensity),
     background: new THREE.Color(amb.fog),
     exposure: amb.exposure,
+    grade: amb.grade,
+    sound: amb.sound,
+    consumeFlicker() {
+      const f = flickered;
+      flickered = false;
+      return f;
+    },
     isWalkable: (cx, cz) => isFloor(layout, cx, cz),
     setLights(to, seconds) {
       levelFrom = level;
@@ -192,7 +204,10 @@ export function buildRoom(spec: RoomSpec, data: GameData, materials: MaterialLib
         d.open += (d.target - d.open) * Math.min(1, dt * 7);
         d.pivot.rotation.y = d.swing * d.open * 1.75;
       }
-      if (flickerLeft <= 0 && Math.random() < amb.flicker * dt * 2.5) flickerLeft = 0.08 + Math.random() * 0.25;
+      if (flickerLeft <= 0 && Math.random() < amb.flicker * dt * 2.5) {
+        flickerLeft = 0.08 + Math.random() * 0.25;
+        flickered = true;
+      }
       if (flickerLeft > 0) {
         flickerLeft -= dt;
         flickerK = Math.random() < 0.5 ? 0.25 : 0.9;

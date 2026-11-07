@@ -12,51 +12,91 @@
     "wall": "#ecebe6",
     "floor": "#8f918c",
     "ceiling": "#efeeea",
-    "sound": "fluorescent_hum"
+    "sound": "fluorescent_hum",
+    "grade": {
+      "tint": [
+        0.97,
+        1.0,
+        1.04
+      ],
+      "contrast": 1.04,
+      "vignette": 0.3,
+      "grain": 0.02
+    }
   },
   "warm": {
-    "light": "#fff0d8",
-    "intensity": 0.95,
-    "sky": "#fff4e2",
-    "ground": "#c9bca8",
+    "light": "#ffebcf",
+    "intensity": 0.9,
+    "sky": "#fff0da",
+    "ground": "#b9a68c",
     "hemi": 0.95,
-    "fog": "#e6dccd",
+    "fog": "#e6d8c4",
     "fogDensity": 0.012,
-    "exposure": 0.92,
+    "exposure": 0.95,
     "flicker": 0.02,
-    "wall": "#ece3d3",
-    "floor": "#8e7d68",
-    "ceiling": "#f1ebdf",
-    "sound": "distant_office"
+    "wall": "#ede4d4",
+    "floor": "#86786a",
+    "ceiling": "#f2eadc",
+    "sound": "distant_office",
+    "grade": {
+      "tint": [
+        1.03,
+        1.0,
+        0.94
+      ],
+      "contrast": 1.02,
+      "vignette": 0.34,
+      "grain": 0.02
+    }
   },
   "sickly": {
-    "light": "#e7f2cf",
+    "light": "#e5f2c8",
     "intensity": 0.85,
     "sky": "#eef5da",
-    "ground": "#b5b99f",
+    "ground": "#b0b597",
     "hemi": 0.85,
-    "fog": "#d6dcc2",
+    "fog": "#d3dabd",
     "fogDensity": 0.017,
-    "exposure": 0.87,
+    "exposure": 0.88,
     "flicker": 0.3,
-    "wall": "#dfe2cc",
-    "floor": "#7d8370",
-    "ceiling": "#e6e8d6",
-    "sound": "fluorescent_hum"
+    "wall": "#dfe2c9",
+    "floor": "#7a8068",
+    "ceiling": "#e6e8d4",
+    "sound": "fluorescent_hum",
+    "grade": {
+      "tint": [
+        0.98,
+        1.05,
+        0.9
+      ],
+      "contrast": 1.08,
+      "vignette": 0.42,
+      "grain": 0.03
+    }
   },
   "dim": {
     "light": "#e3eaf5",
-    "intensity": 0.5,
+    "intensity": 0.45,
     "sky": "#d9e0ea",
-    "ground": "#80827f",
-    "hemi": 0.45,
-    "fog": "#9fa5aa",
+    "ground": "#7c7e7b",
+    "hemi": 0.4,
+    "fog": "#8f969c",
     "fogDensity": 0.024,
-    "exposure": 0.87,
+    "exposure": 0.9,
     "flicker": 0.15,
-    "wall": "#d9d8d3",
-    "floor": "#6f716d",
-    "ceiling": "#d7d6d1",
-    "sound": "silence"
+    "wall": "#d6d5d0",
+    "floor": "#6c6e6a",
+    "ceiling": "#d4d3ce",
+    "sound": "silence",
+    "grade": {
+      "tint": [
+        0.92,
+        0.97,
+        1.06
+      ],
+      "contrast": 1.12,
+      "vignette": 0.52,
+      "grain": 0.03
+    }
   }
 }

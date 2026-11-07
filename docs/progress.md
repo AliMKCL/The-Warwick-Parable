@@ -10,8 +10,8 @@ Read this first when picking up the work. Newest entries at the top.
 | 2. Walking skeleton and look test | 4 h | Done |
 | 3. Generation loop | 5 h | Done |
 | 4. Profile and story (4 rules) | 3.5 h | Done |
-| 5. Look pass (lighting only) | 1.5 h | Next |
-| 6. Dossier ending and demo prep | 2 h | |
+| 5. Look pass (lighting and sound) | 1.5 h | Done |
+| 6. Dossier ending and demo prep | 2 h | Next |
 | Buffer | 3 h | |
 
 ## Decisions
@@ -22,6 +22,12 @@ Read this first when picking up the work. Newest entries at the top.
 - **Engine boundary:** `core/` may not import Three.js, browser APIs or Node built-ins; `npm run typecheck` enforces it.
 
 ## Log
+
+### Phase 5: look and sound (done)
+- Each mood (cold, warm, sickly, dim) has its own colour grade: tint, contrast, vignette and grain, set in `data/ambience.json`.
+- Walls get a faint plaster texture.
+- Sound, all synthesised in the browser (no files): fluorescent hum, distant office, or near-silence per mood, crossfading between rooms; the hum drops when the lights dim; footsteps, door latch and swing, locked-door rattle, button click, paper rustle when inspecting, buzz on light flicker, countdown ticks in the last 10 seconds. M toggles sound; `?mute=1` starts muted.
+- Debug: `?ambience=warm` draws every room in one mood.
 
 ### Phase 4: profile and story (done)
 - `core/profile`: four hidden traits (hesitation, curiosity, compliance, impulsivity), starting at 0.5, moved only by clear evidence (time to press the button, inspections, stares, standing still, door hesitation, how fast the player leaves, following or ignoring the narrator), capped per room, every change logged with its reason for the dossier.

@@ -13,7 +13,7 @@ import type { GameData } from './room/types';
 export const gameData: GameData = {
   props: props as GameData['props'],
   materials: materials as GameData['materials'],
-  ambience: ambience as GameData['ambience'],
+  ambience: ambience as unknown as GameData['ambience'],
   templates: templates as unknown as GameData['templates'],
   prompts: { world, roomSystem, roomUser, narratorSystem, narratorUser },
 };

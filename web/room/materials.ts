@@ -29,7 +29,7 @@ export class MaterialLibrary {
 /** Per-room surface materials, tinted by the ambience preset. Disposed with the room. */
 export function surfaceMaterials(a: AmbiencePreset) {
   return {
-    wall: new THREE.MeshStandardMaterial({ color: a.wall, roughness: 0.94 }),
+    wall: new THREE.MeshStandardMaterial({ color: a.wall, roughness: 0.94, map: wallTexture() }),
     floor: new THREE.MeshStandardMaterial({ color: a.floor, roughness: 0.92, map: carpetTexture() }),
     ceiling: new THREE.MeshStandardMaterial({ color: a.ceiling, roughness: 0.96, map: ceilingTexture() }),
     trim: new THREE.MeshStandardMaterial({ color: '#5b5d5a', roughness: 0.7 }),
@@ -66,6 +66,34 @@ function carpetTexture(): THREE.Texture {
   carpet.colorSpace = THREE.SRGBColorSpace;
   carpet.anisotropy = 4;
   return carpet;
+}
+
+let wallTex: THREE.Texture | undefined;
+/** Faint painted-plaster mottling so walls don't read as flat colour. One tile per metre. */
+function wallTexture(): THREE.Texture {
+  if (wallTex) return wallTex;
+  const c = document.createElement('canvas');
+  c.width = c.height = 256;
+  const g = c.getContext('2d')!;
+  g.fillStyle = '#ffffff';
+  g.fillRect(0, 0, 256, 256);
+  let seed = 11;
+  const rand = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
+  for (let i = 0; i < 260; i++) {
+    const r = 10 + rand() * 30;
+    g.fillStyle = `rgba(0,0,0,${0.0025 + rand() * 0.004})`;
+    // Draw each blob wrapped around the edges so tiles join without seams.
+    const x = rand() * 256, y = rand() * 256;
+    for (const dx of [-256, 0, 256]) for (const dy of [-256, 0, 256]) {
+      g.beginPath();
+      g.arc(x + dx, y + dy, r, 0, Math.PI * 2);
+      g.fill();
+    }
+  }
+  wallTex = new THREE.CanvasTexture(c);
+  wallTex.wrapS = wallTex.wrapT = THREE.RepeatWrapping;
+  wallTex.colorSpace = THREE.SRGBColorSpace;
+  return wallTex;
 }
 
 let ceiling: THREE.Texture | undefined;

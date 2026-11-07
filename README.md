@@ -30,11 +30,12 @@ the name LM Studio shows, in `.env.local`.
 
 ## Controls and options
 
-WASD to move, mouse to look, **E** or click to interact, Esc to pause.
+WASD to move, mouse to look, **E** or click to interact, **M** for sound, Esc to pause. Best with headphones.
 
 Add to the URL: `?seed=123` to replay a run, `?debug=1` for frame rate and room info,
 `?post=0` to turn off post-processing, `?dpr=2` for full Retina resolution,
-`?observe=8` seconds to watch the player before generating the next rooms.
+`?observe=8` seconds to watch the player before generating the next rooms,
+`?ambience=warm` to see every room in one mood, `?mute=1` to start muted.
 
 Writing is in plain files: the world and narrator voice in `data/themes/office.md`,
 the prompts in `data/prompts/`, fallback text in `data/templates.json`.

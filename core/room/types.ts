@@ -79,6 +79,8 @@ export interface AmbiencePreset {
   floor: string;
   ceiling: string;
   sound: string;
+  /** Colour grade applied after rendering. */
+  grade?: { tint: [number, number, number]; contrast: number; vignette: number; grain: number };
 }
 
 // ---------- Layout (made by the generator, no model) ----------

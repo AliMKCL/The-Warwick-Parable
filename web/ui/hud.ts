@@ -13,6 +13,8 @@ export class Hud {
   private waitingEl = this.el('waiting');
   private timerEl = this.el('timer');
   private timerTick = 0;
+  /** Called once per second of a countdown with the seconds left. */
+  onTimerSecond?: (left: number) => void;
   /** Line currently on screen, and finished lines waiting their turn. */
   private current?: { id: string; shownAt: number; done: boolean; text: string };
   private queue: string[] = [];
@@ -94,8 +96,11 @@ export class Hud {
       return;
     }
     const end = performance.now() + seconds * 1000;
+    let lastLeft = -1;
     const draw = () => {
       const left = Math.max(0, Math.ceil((end - performance.now()) / 1000));
+      if (left !== lastLeft && lastLeft !== -1) this.onTimerSecond?.(left);
+      lastLeft = left;
       this.timerEl.innerHTML = `<span>${escapeHtml(label)}</span>0:${String(left).padStart(2, '0')}`;
       this.timerEl.classList.toggle('urgent', left <= 10);
       if (left <= 0) clearInterval(this.timerTick);
