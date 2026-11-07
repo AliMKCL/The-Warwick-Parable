@@ -7,8 +7,8 @@ Read this first when picking up the work. Newest entries at the top.
 | Phase | Budget | Status |
 | --- | --- | --- |
 | 1. Setup | 1 h | Done |
-| 2. Walking skeleton and look test | 4 h | Next |
-| 3. Generation loop | 5 h | |
+| 2. Walking skeleton and look test | 4 h | Done, awaiting look test on the MacBook |
+| 3. Generation loop | 5 h | Next |
 | 4. Profile and story (4 rules) | 3.5 h | |
 | 5. Look pass (lighting only) | 1.5 h | |
 | 6. Dossier ending and demo prep | 2 h | |
@@ -22,6 +22,14 @@ Read this first when picking up the work. Newest entries at the top.
 - **Engine boundary:** `core/` may not import Three.js, browser APIs or Node built-ins; `npm run typecheck` enforces it.
 
 ## Log
+
+### Phase 2: walking skeleton (done)
+- `core/room`: room data model, 4 archetypes (waiting room, corridor, open office, hub), seeded layout generator that rotates each room so its entrance matches the door the player came through, slot-based prop placement that drops anything blocking a door or an exit, and a validator.
+- `core/run`: a run creates each room only when the player walks through a door. Text comes from `data/templates.json` for now (the model takes over in Phase 3).
+- `data/props.json`: 23 props as recipes of simple shapes. `data/materials.json`, `data/ambience.json` (cold, warm, sickly, dim).
+- `web/`: room builder (merged walls, floors and ceilings, doors that swing open, light panels, flicker), canvas-drawn text on signs, posters, screens, whiteboards and notes, first-person controls with collision, look-and-press interaction, narrator subtitles, fades, start and pause screen, post-processing (ambient occlusion, bloom, vignette, grain).
+- Tests: 1,200 generated rooms checked for playability; a browser test presses the button, inspects a prop and walks through 5 doors.
+- URL options: `?seed=123`, `?debug=1`, `?post=0`, `?dpr=2`.
 
 ### Phase 1: setup (done)
 - Project structure, Vite + TypeScript + Three.js 0.187, Vitest, Playwright.

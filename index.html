@@ -10,14 +10,23 @@
   <body>
     <main id="app">
       <canvas id="game-canvas" aria-label="Game view"></canvas>
-      <section id="status-panel" aria-live="polite">
-        <h1>whack</h1>
-        <p class="sub">Phase 1 · setup check</p>
-        <ul>
-          <li><span>Renderer</span><strong id="status-renderer">starting…</strong></li>
-          <li><span>Model server</span><strong id="status-llm">checking…</strong></li>
-        </ul>
+      <div id="reticle" aria-hidden="true"></div>
+      <div id="prompt" aria-live="polite"></div>
+      <div id="subtitle" aria-live="polite"></div>
+      <section id="inspect" hidden>
+        <h2 id="inspect-title"></h2>
+        <p id="inspect-text"></p>
+        <small>E or click to close</small>
       </section>
+      <div id="fade"></div>
+      <section id="start">
+        <h1>whack</h1>
+        <p>No room exists until you reach it.</p>
+        <button id="start-button" type="button">Click to begin</button>
+        <small>WASD to move · mouse to look · E to interact · Esc to pause</small>
+        <small id="status-llm" class="status">Model: checking…</small>
+      </section>
+      <pre id="debug" hidden></pre>
     </main>
     <script type="module" src="/web/main.ts"></script>
   </body>

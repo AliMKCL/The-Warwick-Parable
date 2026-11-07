@@ -1,0 +1,62 @@
+{
+  "cold": {
+    "light": "#eef4ff",
+    "intensity": 1.0,
+    "sky": "#f2f5ff",
+    "ground": "#c3c5c1",
+    "hemi": 1.0,
+    "fog": "#dde2e3",
+    "fogDensity": 0.012,
+    "exposure": 0.92,
+    "flicker": 0.04,
+    "wall": "#ecebe6",
+    "floor": "#8f918c",
+    "ceiling": "#efeeea",
+    "sound": "fluorescent_hum"
+  },
+  "warm": {
+    "light": "#fff0d8",
+    "intensity": 0.95,
+    "sky": "#fff4e2",
+    "ground": "#c9bca8",
+    "hemi": 0.95,
+    "fog": "#e6dccd",
+    "fogDensity": 0.012,
+    "exposure": 0.92,
+    "flicker": 0.02,
+    "wall": "#ece3d3",
+    "floor": "#8e7d68",
+    "ceiling": "#f1ebdf",
+    "sound": "distant_office"
+  },
+  "sickly": {
+    "light": "#e7f2cf",
+    "intensity": 0.85,
+    "sky": "#eef5da",
+    "ground": "#b5b99f",
+    "hemi": 0.85,
+    "fog": "#d6dcc2",
+    "fogDensity": 0.017,
+    "exposure": 0.87,
+    "flicker": 0.3,
+    "wall": "#dfe2cc",
+    "floor": "#7d8370",
+    "ceiling": "#e6e8d6",
+    "sound": "fluorescent_hum"
+  },
+  "dim": {
+    "light": "#e3eaf5",
+    "intensity": 0.5,
+    "sky": "#d9e0ea",
+    "ground": "#80827f",
+    "hemi": 0.45,
+    "fog": "#9fa5aa",
+    "fogDensity": 0.024,
+    "exposure": 0.87,
+    "flicker": 0.15,
+    "wall": "#d9d8d3",
+    "floor": "#6f716d",
+    "ceiling": "#d7d6d1",
+    "sound": "silence"
+  }
+}

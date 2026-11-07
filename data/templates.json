@@ -1,0 +1,160 @@
+{
+  "//": "Fallback text, used only when the model is unavailable. Picked by seed, so every room still differs.",
+  "signs": [
+    "PLEASE REMAIN CALM",
+    "THANK YOU FOR WAITING",
+    "AUTHORISED PERSONNEL ONLY",
+    "DO NOT HESITATE",
+    "YOU ARE HERE",
+    "QUIET PLEASE",
+    "THIS WAY",
+    "KEEP MOVING",
+    "PLEASE TAKE A NUMBER",
+    "NO LOITERING"
+  ],
+  "posters": [
+    "TEAMWORK\nmakes the dream\nwork for us",
+    "EFFICIENCY\nIS KINDNESS",
+    "SMILE\nyou are being\nevaluated",
+    "HAVE YOU\nCONSIDERED\nSTAYING?",
+    "EVERY CHOICE\nIS RECORDED",
+    "TRUST\nTHE PROCESS",
+    "WELLNESS\nWEEK\nCANCELLED"
+  ],
+  "screens": [
+    "SESSION ACTIVE\n\nPlease continue.",
+    "LOGGING...\n\nsubject present",
+    "NO NEW MESSAGES\n\n(there were never\nany messages)",
+    "ERROR 0\n\nNothing is wrong.",
+    "WAITING FOR INPUT",
+    "SCREENSAVER\n\nplease look away"
+  ],
+  "whiteboards": [
+    "Q3 GOALS\n- retain subject\n- observe\n- ???",
+    "DO NOT ERASE",
+    "Meeting moved\nto room {next}\n(there is no room {next})",
+    "Agenda:\n1. You\n2. Your choices\n3. Consequences"
+  ],
+  "papers": [
+    "MEMO\nTo: you\nRe: your progress\nKeep going.",
+    "LOST\nOne sense of\ndirection.\nIf found, keep it.",
+    "REMINDER\nAll doors lead\nsomewhere.",
+    "Fire drill at 3pm.\nThere is no 3pm."
+  ],
+  "labels": [
+    "ARCHIVE",
+    "A-Z",
+    "PRESS",
+    "MISC",
+    "2019-?",
+    "DO NOT OPEN",
+    "FRAGILE",
+    "YOURS"
+  ],
+  "inspect": {
+    "desk_office": [
+      "A memo addressed to you, dated tomorrow.",
+      "The desk is spotless. Someone cleaned it very recently.",
+      "A sticky note: 'they always look here'."
+    ],
+    "terminal_desk": [
+      "The screen is warm. Whoever was here just left.",
+      "The cursor blinks, waiting for someone else."
+    ],
+    "filing_cabinet": [
+      "Every drawer is labelled with today's date.",
+      "Locked. Of course it is locked."
+    ],
+    "water_cooler": [
+      "The water is perfectly still.",
+      "The cups are gone. You'll have to stay thirsty."
+    ],
+    "plant_dead": [
+      "Nobody watered it. Nobody was told to.",
+      "It died waiting, too."
+    ],
+    "copier": [
+      "Out of paper. It has copied something many times.",
+      "A single warm copy in the tray. It's blank."
+    ],
+    "trash_bin": [
+      "Empty, except for a crumpled map of this room.",
+      "Someone threw away a door key. It's not for any door here."
+    ],
+    "vending_machine": [
+      "Every slot is sold out.",
+      "One item left. It costs exactly what you don't have."
+    ],
+    "box_stack": [
+      "Labelled 'yours'. They are empty.",
+      "Packed in a hurry. Someone left before you came."
+    ],
+    "table_round": [
+      "A meeting agenda. Item one is your name.",
+      "Four chairs' worth of dents in the carpet, and no chairs."
+    ],
+    "bookshelf": [
+      "The binders are all labelled 'Procedures'. All empty.",
+      "Every spine is blank."
+    ],
+    "clock_wall": [
+      "The second hand is not moving.",
+      "It's later than you think."
+    ],
+    "button_pedestal": [
+      "A red button. It is clearly meant to be pressed.",
+      "There is no label explaining what it does."
+    ],
+    "default": [
+      "Nothing remarkable. That's suspicious in itself.",
+      "You look closely. It looks back, in a way."
+    ]
+  },
+  "doorLabels": [
+    "A",
+    "B",
+    "C",
+    "STAFF",
+    "ARCHIVE",
+    "EXIT",
+    "1",
+    "2",
+    "3",
+    "THIS WAY",
+    "NOT THIS WAY",
+    "RECORDS"
+  ],
+  "narratorFirst": [
+    "This is where it begins. There is a button. You know what buttons are for.",
+    "Welcome. Please make yourself comfortable. Not too comfortable."
+  ],
+  "narratorEnter": {
+    "waiting_room": [
+      "Another waiting room. You seem to collect them.",
+      "Have a seat. Or don't. I'll be watching either way."
+    ],
+    "corridor": [
+      "A corridor. It goes somewhere. Most of them do.",
+      "Long, isn't it? Take your time. You will anyway."
+    ],
+    "open_office": [
+      "Someone works here. Not right now, obviously.",
+      "An office. Try not to get lost between the desks."
+    ],
+    "hub": [
+      "Several ways out. Choose carefully. Or don't.",
+      "So many doors. You must feel very important."
+    ]
+  },
+  "narratorDoor": [
+    "That one? Interesting.",
+    "I wouldn't. But I'm not you.",
+    "Go on, then.",
+    "That door has been waiting for you."
+  ],
+  "narratorPress": [
+    "Thank you. That was either very brave or very careless.",
+    "You pressed it. Of course you did.",
+    "Noted. Everything is noted."
+  ]
+}

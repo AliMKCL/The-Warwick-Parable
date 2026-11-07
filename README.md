@@ -28,6 +28,13 @@ Using LM Studio instead of Ollama: start its local server, then set
 `LLM_PROVIDER=openai`, `LLM_BASE_URL=http://127.0.0.1:1234` and `LLM_MODEL` to
 the name LM Studio shows, in `.env.local`.
 
+## Controls and options
+
+WASD to move, mouse to look, **E** or click to interact, Esc to pause.
+
+Add to the URL: `?seed=123` to replay a run, `?debug=1` for frame rate and room info,
+`?post=0` to turn off post-processing, `?dpr=2` for full Retina resolution.
+
 ## Scripts
 
 | Command | What it does |

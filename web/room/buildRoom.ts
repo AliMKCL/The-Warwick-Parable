@@ -1,0 +1,291 @@
+import * as THREE from 'three';
+import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
+import { DIR, footprintRect, isFloor, OPPOSITE, yawForFacing } from '../../core/room/geometry';
+import type { Door, GameData, RoomSpec, Side } from '../../core/room/types';
+import { buildProp, type InteractInfo } from './buildProp';
+import { MaterialLibrary, surfaceMaterials } from './materials';
+import { textMaterial } from './textTexture';
+
+export interface Rect { minX: number; maxX: number; minZ: number; maxZ: number }
+
+export interface DoorView {
+  door: Door;
+  pivot: THREE.Object3D;
+  /** 0 closed, 1 open. */
+  open: number;
+  target: number;
+  /** Sign of the hinge rotation that swings the door away from the room. */
+  swing: number;
+}
+
+export interface RoomView {
+  spec: RoomSpec;
+  group: THREE.Group;
+  colliders: Rect[];
+  interactables: THREE.Object3D[];
+  doors: DoorView[];
+  fog: THREE.FogExp2;
+  background: THREE.Color;
+  exposure: number;
+  update(dt: number, t: number): void;
+  isWalkable(cx: number, cz: number): boolean;
+  dispose(): void;
+}
+
+const DOOR_W = 0.9, DOOR_H = 2.1;
+
+/** Turns a RoomSpec into Three.js objects. Everything the room owns is disposed with it. */
+export function buildRoom(spec: RoomSpec, data: GameData, materials: MaterialLibrary): RoomView {
+  const { layout } = spec;
+  const H = layout.ceiling;
+  const amb = data.ambience[spec.ambience] ?? Object.values(data.ambience)[0]!;
+  const mats = surfaceMaterials(amb);
+  const owned: { dispose(): void }[] = Object.values(mats);
+  const group = new THREE.Group();
+  group.name = spec.id;
+
+  const doorAt = new Map(layout.doors.map((d) => [`${d.cx},${d.cz},${d.side}`, d]));
+  const wallQuads: THREE.BufferGeometry[] = [];
+  const trimPieces: THREE.BufferGeometry[] = [];
+  const floorQuads: THREE.BufferGeometry[] = [];
+  const ceilQuads: THREE.BufferGeometry[] = [];
+  const doors: DoorView[] = [];
+  const interactables: THREE.Object3D[] = [];
+
+  for (let cz = 0; cz < layout.depth; cz++) {
+    for (let cx = 0; cx < layout.width; cx++) {
+      if (!isFloor(layout, cx, cz)) continue;
+      floorQuads.push(quad(1, 1).rotateX(-Math.PI / 2).translate(cx + 0.5, 0, cz + 0.5));
+      ceilQuads.push(quad(1, 1).rotateX(Math.PI / 2).translate(cx + 0.5, H, cz + 0.5));
+      for (const side of ['n', 's', 'e', 'w'] as Side[]) {
+        const [dx, dz] = DIR[side];
+        if (isFloor(layout, cx + dx, cz + dz)) continue;
+        const frame = wallFrame(cx, cz, side);
+        const door = doorAt.get(`${cx},${cz},${side}`);
+        if (door) {
+          // Wall above the door, then the door itself.
+          wallQuads.push(place(quad(1, H - DOOR_H - 0.06).translate(0, (H + DOOR_H + 0.06) / 2, 0), frame));
+          wallQuads.push(place(quad(0.05, DOOR_H + 0.06).translate(-0.475, (DOOR_H + 0.06) / 2, 0), frame));
+          wallQuads.push(place(quad(0.05, DOOR_H + 0.06).translate(0.475, (DOOR_H + 0.06) / 2, 0), frame));
+          doors.push(buildDoor(door, frame));
+        } else {
+          wallQuads.push(place(quad(1, H).translate(0, H / 2, 0), frame));
+          trimPieces.push(place(new THREE.BoxGeometry(1, 0.09, 0.014).translate(0, 0.045, 0.007), frame));
+        }
+      }
+    }
+  }
+
+  const walls = mergedMesh(wallQuads, mats.wall);
+  const floor = mergedMesh(floorQuads, mats.floor, 2);
+  const ceiling = mergedMesh(ceilQuads, mats.ceiling, 2);
+  const trim = mergedMesh(trimPieces, mats.trim);
+  walls.receiveShadow = floor.receiveShadow = ceiling.receiveShadow = true;
+  walls.castShadow = true;
+  group.add(walls, floor, ceiling, trim);
+
+  // ---- props ----
+  const colliders: Rect[] = [];
+  const recipes = new Map(data.props.map((p) => [p.id, p]));
+  for (const placed of spec.props) {
+    const recipe = recipes.get(placed.recipe);
+    if (!recipe) continue;
+    const { object, owned: o } = buildProp(placed, recipe, materials);
+    owned.push(...o);
+    group.add(object);
+    if (object.userData.interact) interactables.push(object);
+    if (recipe.solid && !recipe.fits.every((f) => f === 'wall_mounted')) {
+      colliders.push(footprintRect(placed.x, placed.z, placed.rotY, recipe.size[0], recipe.size[2]));
+    }
+  }
+  for (const d of doors) interactables.push(d.pivot);
+
+  // ---- lights ----
+  const panels: THREE.Mesh[] = [];
+  const panelGeo = new THREE.PlaneGeometry(1.2, 0.6);
+  owned.push(panelGeo);
+  const panelCells: [number, number][] = [];
+  for (let cz = 1; cz < layout.depth; cz += 3)
+    for (let cx = 1; cx < layout.width; cx += 3) if (isFloor(layout, cx, cz)) panelCells.push([cx, cz]);
+  if (!panelCells.length) panelCells.push([Math.floor(layout.width / 2), Math.floor(layout.depth / 2)]);
+  for (const [cx, cz] of panelCells) {
+    const p = new THREE.Mesh(panelGeo, mats.panel);
+    p.rotation.x = Math.PI / 2;
+    p.position.set(cx + 0.5, H - 0.004, cz + 0.5);
+    group.add(p);
+    panels.push(p);
+  }
+  const lightCells = spread(panelCells, Math.min(4, panelCells.length));
+  const area = layout.width * layout.depth;
+  const perLight = ((3.5 + area * 0.06) * amb.intensity) / Math.sqrt(lightCells.length);
+  const points = lightCells.map(([cx, cz], i) => {
+    const l = new THREE.PointLight(amb.light, perLight, 0, 2);
+    l.position.set(cx + 0.5, H - 0.3, cz + 0.5);
+    if (i === 0) {
+      l.castShadow = true;
+      l.shadow.mapSize.set(1024, 1024);
+      l.shadow.bias = -0.002;
+      l.shadow.radius = 4;
+      l.shadow.camera.near = 0.1;
+      l.shadow.camera.far = 20;
+    }
+    group.add(l);
+    return l;
+  });
+  const hemi = new THREE.HemisphereLight(amb.sky, amb.ground, amb.hemi * 0.55);
+  group.add(hemi);
+
+  // ---- flicker ----
+  let flickerLeft = 0;
+  const baseLight = perLight;
+  const basePanel = mats.panel.emissiveIntensity;
+
+  return {
+    spec,
+    group,
+    colliders,
+    interactables,
+    doors,
+    fog: new THREE.FogExp2(amb.fog, amb.fogDensity),
+    background: new THREE.Color(amb.fog),
+    exposure: amb.exposure,
+    isWalkable: (cx, cz) => isFloor(layout, cx, cz),
+    update(dt) {
+      for (const d of doors) {
+        d.open += (d.target - d.open) * Math.min(1, dt * 7);
+        d.pivot.rotation.y = d.swing * d.open * 1.75;
+      }
+      if (flickerLeft <= 0 && Math.random() < amb.flicker * dt * 2.5) flickerLeft = 0.08 + Math.random() * 0.25;
+      if (flickerLeft > 0) {
+        flickerLeft -= dt;
+        const k = Math.random() < 0.5 ? 0.25 : 0.9;
+        mats.panel.emissiveIntensity = basePanel * k;
+        points.forEach((l) => (l.intensity = baseLight * k));
+        if (flickerLeft <= 0) {
+          mats.panel.emissiveIntensity = basePanel;
+          points.forEach((l) => (l.intensity = baseLight));
+        }
+      }
+    },
+    dispose() {
+      for (const o of owned) o.dispose();
+      for (const l of points) l.dispose();
+      hemi.dispose();
+    },
+  };
+
+  // ---------- helpers (closures over owned) ----------
+
+  function mergedMesh(parts: THREE.BufferGeometry[], mat: THREE.Material, uvScale?: number): THREE.Mesh {
+    const geo = parts.length ? mergeGeometries(parts)! : new THREE.BufferGeometry();
+    parts.forEach((p) => p.dispose());
+    if (uvScale) worldUVs(geo, uvScale);
+    owned.push(geo);
+    return new THREE.Mesh(geo, mat);
+  }
+
+  function buildDoor(door: Door, frame: THREE.Matrix4): DoorView {
+    const root = new THREE.Group();
+    root.applyMatrix4(frame);
+    const frameMat = materials.get('door_frame');
+    const leafMat = materials.get(door.entrance ? 'door_paint' : 'door_paint');
+    for (const [w, h, x, y] of [
+      [0.06, DOOR_H + 0.06, -0.48, (DOOR_H + 0.06) / 2],
+      [0.06, DOOR_H + 0.06, 0.48, (DOOR_H + 0.06) / 2],
+      [1.02, 0.07, 0, DOOR_H + 0.035],
+    ] as const) {
+      const g = new THREE.BoxGeometry(w, h, 0.16);
+      owned.push(g);
+      const m = new THREE.Mesh(g, frameMat);
+      m.position.set(x, y, 0);
+      m.castShadow = true;
+      root.add(m);
+    }
+    // The leaf hangs from a hinge at local x = -0.45 and swings outward (-z).
+    const pivot = new THREE.Group();
+    pivot.position.set(-0.45, 0, -0.02);
+    const leafGeo = new THREE.BoxGeometry(DOOR_W, DOOR_H, 0.045);
+    owned.push(leafGeo);
+    const leaf = new THREE.Mesh(leafGeo, leafMat);
+    leaf.position.set(DOOR_W / 2, DOOR_H / 2, 0);
+    leaf.castShadow = leaf.receiveShadow = true;
+    const handle = new THREE.Mesh(new THREE.CylinderGeometry(0.02, 0.02, 0.14, 12), materials.get('metal_light'));
+    owned.push(handle.geometry);
+    handle.rotation.z = Math.PI / 2;
+    handle.position.set(DOOR_W - 0.1, 1.0, 0.045);
+    pivot.add(leaf, handle);
+    root.add(pivot);
+
+    // Beyond the door: a dark passage, so an open door shows depth, not the void.
+    const passageGeo = new THREE.BoxGeometry(1.0, DOOR_H + 0.06, 2.2);
+    owned.push(passageGeo);
+    const passage = new THREE.Mesh(passageGeo, new THREE.MeshBasicMaterial({ color: '#0a0a0a', side: THREE.BackSide }));
+    owned.push(passage.material as THREE.Material);
+    passage.position.set(0, (DOOR_H + 0.06) / 2, -1.12);
+    root.add(passage);
+
+    if (!door.entrance && door.label) {
+      const mat = textMaterial(door.label, 'sign', [0.56, 0.17]);
+      owned.push(mat.map!, mat);
+      const plaqueGeo = new THREE.PlaneGeometry(0.56, 0.17);
+      owned.push(plaqueGeo);
+      const plaque = new THREE.Mesh(plaqueGeo, mat);
+      plaque.position.set(0, DOOR_H + 0.25, 0.006);
+      root.add(plaque);
+    }
+
+    const info: InteractInfo = door.entrance
+      ? { kind: 'locked', id: door.id, name: 'The way you came' }
+      : { kind: 'door', id: door.id, name: door.label ? `door “${door.label}”` : 'door' };
+    pivot.userData.interact = info;
+    group.add(root);
+    return { door, pivot, open: 0, target: 0, swing: 1 };
+  }
+}
+
+/** A plane of the given size, facing +z, centred at the origin. */
+function quad(w: number, h: number): THREE.BufferGeometry {
+  return new THREE.PlaneGeometry(w, h);
+}
+
+/** Matrix taking local wall space (x along the wall, +z into the room) to the wall on `side` of the cell. */
+function wallFrame(cx: number, cz: number, side: Side): THREE.Matrix4 {
+  const inward = OPPOSITE[side];
+  const [dx, dz] = DIR[side];
+  const x = cx + 0.5 + dx * 0.5, z = cz + 0.5 + dz * 0.5;
+  return new THREE.Matrix4().makeRotationY(yawForFacing(inward)).setPosition(x, 0, z);
+}
+
+function place(geo: THREE.BufferGeometry, m: THREE.Matrix4): THREE.BufferGeometry {
+  return geo.applyMatrix4(m);
+}
+
+/** Replace UVs with world-space ones so tiled textures line up across merged quads. */
+function worldUVs(geo: THREE.BufferGeometry, scale: number) {
+  const pos = geo.getAttribute('position');
+  if (!pos) return;
+  const uv = new Float32Array(pos.count * 2);
+  for (let i = 0; i < pos.count; i++) {
+    uv[i * 2] = pos.getX(i) * scale;
+    uv[i * 2 + 1] = pos.getZ(i) * scale;
+  }
+  geo.setAttribute('uv', new THREE.BufferAttribute(uv, 2));
+}
+
+/** Pick n cells spread out across the room (farthest-point sampling). */
+function spread(cells: [number, number][], n: number): [number, number][] {
+  if (cells.length <= n) return cells;
+  const cx = cells.reduce((a, c) => a + c[0], 0) / cells.length;
+  const cz = cells.reduce((a, c) => a + c[1], 0) / cells.length;
+  const first = [...cells].sort((a, b) => Math.hypot(a[0] - cx, a[1] - cz) - Math.hypot(b[0] - cx, b[1] - cz))[0]!;
+  const out = [first];
+  while (out.length < n) {
+    let best = cells[0]!, bestD = -1;
+    for (const c of cells) {
+      const d = Math.min(...out.map((o) => Math.hypot(o[0] - c[0], o[1] - c[1])));
+      if (d > bestD) { bestD = d; best = c; }
+    }
+    out.push(best);
+  }
+  return out;
+}
