@@ -100,6 +100,15 @@ npm run try:voice               # ElevenLabs sample line → voice-sample.mp3 (-
   and use `post=0` in URLs for speed (about 1 fps with post-processing). kenney.nl and other asset sites are blocked.
 - Package-lock includes the darwin-arm64 optional binaries, so Ali's `npm install` works.
 
+## Generation speed
+- `LLM_PARALLEL` (env, default 1) → `concurrency` in Run: rooms behind all doors are generated at once.
+  Must match the server (Ollama `OLLAMA_NUM_PARALLEL` via `launchctl setenv`, or LM Studio "Max Concurrent
+  Predictions"); higher than the server just queues there and loses lingered-door-first ordering.
+- LM Studio path: provider `openai`, `noThinking` is set automatically for localhost servers
+  (`chat_template_kwargs.enable_thinking=false`), and JSON is also accepted from `reasoning_content`.
+- Setup walkthrough for Ali: `docs/speed.md`. Ali chose parallel generation + LM Studio/MLX; he did not want
+  shorter observation, fewer slots, or the transition corridor.
+
 ## Decisions worth keeping
 - No hand-written rooms, ever (track theme). Fallbacks are generated too (layout generator + templates).
 - Props are JSON recipes, not downloaded models; any recipe could later be swapped for a CC0 .glb.

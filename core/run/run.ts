@@ -55,6 +55,13 @@ export interface RunOptions {
   onProfile?: (profile: ProfileSnapshot) => void;
   /** Rooms in the run, counting the first (default 7). */
   runLength?: number;
+  /**
+   * How many rooms to generate at the same time (default 1). Set it to the
+   * number of parallel requests the model server allows (OLLAMA_NUM_PARALLEL,
+   * or LM Studio's Max Concurrent Predictions). Higher than the server allows
+   * just queues there, and loses the lingered-at-door-first ordering.
+   */
+  concurrency?: number;
   now?: () => number;
 }
 
@@ -68,7 +75,8 @@ export class Run {
   readonly rooms: RoomSpec[] = [];
   readonly events: GameEvent[] = [];
   private plans: Plan[] = [];
-  private working = false;
+  /** Rooms being generated right now. */
+  private active = 0;
   /** False while the player is being observed in a freshly entered room. */
   private observing = false;
   private observeTimer: unknown;
@@ -209,7 +217,7 @@ export class Run {
   private stopObserving() {
     timers.clearTimeout(this.observeTimer);
     this.observing = false;
-    void this.pump();
+    this.pump();
   }
 
   private plan(from: RoomSpec, door: Door): Plan {
@@ -265,12 +273,19 @@ export class Run {
     }
   }
 
-  /** Works through queued plans one at a time, so the model never runs two room requests at once. */
-  private async pump() {
-    if (this.working || this.observing) return;
-    const plan = this.plans.find((p) => p.status === 'queued');
-    if (!plan) return;
-    this.working = true;
+  /** Starts queued plans, in priority order, up to `concurrency` at a time. */
+  private pump() {
+    if (this.observing) return;
+    const limit = Math.max(1, this.opts.concurrency ?? 1);
+    while (this.active < limit) {
+      const plan = this.plans.find((p) => p.status === 'queued');
+      if (!plan) return;
+      void this.generate(plan);
+    }
+  }
+
+  private async generate(plan: Plan) {
+    this.active++;
     plan.status = 'generating';
     this.emitStatus();
     const rng = createRng(plan.seed);
@@ -291,9 +306,9 @@ export class Run {
       plan.spec = spec;
       plan.resolve(spec);
     }
-    this.working = false;
+    this.active--;
     this.emitStatus();
-    void this.pump();
+    this.pump();
   }
 
   private async modelSpec(plan: Plan, rng: ReturnType<typeof createRng>, rule?: Omit<RoomRule, 'line' | 'doneLine'>): Promise<RoomSpec> {

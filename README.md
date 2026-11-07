@@ -70,4 +70,5 @@ the prompts in `data/prompts/`, fallback text in `data/templates.json`.
 | `docs/` | Progress log | |
 
 See `docs/progress.md` for what is done and what is next, `docs/voice.md` for the narrator voice,
+`docs/speed.md` to cut the wait between rooms,
 and `CLAUDE.md` for the full project context (written for AI coding sessions, useful for people too).

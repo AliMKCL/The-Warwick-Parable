@@ -11,6 +11,8 @@ export interface CoreOptions {
   observeMs?: number;
   /** Rooms in a run, counting the first (default 7). */
   runLength?: number;
+  /** Rooms generated at the same time (see RunOptions.concurrency). */
+  concurrency?: number;
 }
 
 /**
@@ -32,6 +34,7 @@ export function createCore(data: GameData, opts: CoreOptions = {}): CorePort & {
     waitMs: opts.waitMs,
     observeMs: opts.observeMs,
     runLength: opts.runLength,
+    concurrency: opts.concurrency,
     onStatus: (doors) => emit({ type: 'gen_status', doors, model: run?.modelOff ? 'off' : 'on' }),
     onEffect: (effect) => emit({ type: 'rule_effect', effect }),
     onSay: say,

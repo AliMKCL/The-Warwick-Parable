@@ -11,6 +11,12 @@ export interface LlmConfig {
   baseUrl: string;
   model: string;
   apiKey?: string;
+  /**
+   * Ask an OpenAI-compatible server to skip the model's thinking phase
+   * (chat_template_kwargs.enable_thinking = false). Only for local servers
+   * such as LM Studio; cloud APIs may reject the extra field.
+   */
+  noThinking?: boolean;
 }
 
 /** Minimal readable stream, as returned by fetch in browsers and Node 22+. */

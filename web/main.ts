@@ -25,6 +25,7 @@ const game = new Game(canvas, {
   observeMs: params.has('observe') ? Number(params.get('observe')) * 1000 : undefined,
   forceAmbience: params.get('ambience') ?? undefined,
   runLength: Number(params.get('rooms')) || undefined,
+  concurrency: __LLM_PARALLEL__,
   mute: params.get('mute') === '1',
 });
 
@@ -69,7 +70,7 @@ voiceStatus.className = `status ${__TTS__.enabled ? 'ok' : ''}`;
 
 // ---- model server status on the start screen ----
 const llm = createLlmClient(
-  { provider: __LLM_PROVIDER__, baseUrl: '/llm', model: __LLM_MODEL__ },
+  { provider: __LLM_PROVIDER__, baseUrl: '/llm', model: __LLM_MODEL__, noThinking: __LLM_NO_THINKING__ },
   { fetch: (url, init) => fetch(url, init as RequestInit), now: () => performance.now() },
 );
 const status = document.getElementById('status-llm')!;

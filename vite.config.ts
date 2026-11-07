@@ -18,6 +18,8 @@ export default defineConfig(({ mode }) => {
     define: {
       __LLM_PROVIDER__: JSON.stringify(provider),
       __LLM_MODEL__: JSON.stringify(model),
+      __LLM_PARALLEL__: JSON.stringify(Math.max(1, Number(env.LLM_PARALLEL) || 1)),
+      __LLM_NO_THINKING__: JSON.stringify(provider === 'openai' && /127\.0\.0\.1|localhost/.test(baseUrl)),
       __TTS__: JSON.stringify({
         enabled: !!ttsKey,
         voice: ttsVoice,

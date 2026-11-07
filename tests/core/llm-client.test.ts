@@ -78,3 +78,12 @@ describe('extractJson', () => {
     expect(() => extractJson('no json here')).toThrow();
   });
 });
+
+describe('local OpenAI-compatible servers', () => {
+  it('asks to skip thinking and accepts JSON that arrived as reasoning', async () => {
+    const { fetch, calls } = mockFetch(() => ({ json: { choices: [{ message: { content: '', reasoning_content: '{"a": 3}' } }] } }));
+    const client = createLlmClient({ provider: 'openai', baseUrl: 'http://127.0.0.1:1234', model: 'm', noThinking: true }, { fetch, now });
+    expect((await client.completeJson<{ a: number }>(req)).value.a).toBe(3);
+    expect(calls[0]?.body.chat_template_kwargs).toEqual({ enable_thinking: false });
+  });
+});
