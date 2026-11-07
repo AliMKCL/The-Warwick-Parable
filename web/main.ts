@@ -8,7 +8,8 @@ import { Loop } from './render/loop';
  *   ?seed=123   replay a specific run
  *   ?post=0     turn off post-processing (if the frame rate is low)
  *   ?dpr=2      render at full Retina resolution (default 1.5)
- *   ?debug=1    show frame rate and room info
+ *   ?debug=1    show frame rate, room info and generation status
+ *   ?observe=8  seconds to watch the player before generating the next rooms
  */
 const params = new URLSearchParams(location.search);
 const seed = Number(params.get('seed')) || Math.floor(Math.random() * 1e9);
@@ -18,6 +19,7 @@ const game = new Game(canvas, {
   post: params.get('post') !== '0',
   maxDpr: Number(params.get('dpr')) || 1.5,
   debug: params.get('debug') === '1',
+  observeMs: params.has('observe') ? Number(params.get('observe')) * 1000 : undefined,
 });
 
 const loop = new Loop(
@@ -28,6 +30,7 @@ loop.start();
 
 // ---- start, pause and pointer lock ----
 let started = false;
+let modelReady: Promise<boolean>;
 const startButton = document.getElementById('start-button')!;
 startButton.addEventListener('click', () => {
   canvas.requestPointerLock();
@@ -36,7 +39,7 @@ document.addEventListener('pointerlockchange', () => {
   const locked = document.pointerLockElement === canvas;
   if (locked && !started) {
     started = true;
-    game.begin();
+    void modelReady.then((ok) => game.begin(ok ? llm : undefined));
   }
   game.player.enabled = locked && !game.hud.inspecting;
   game.hud.start.hidden = locked;
@@ -55,28 +58,35 @@ addEventListener('keydown', (e) => {
 // ---- model server status on the start screen ----
 const llm = createLlmClient(
   { provider: __LLM_PROVIDER__, baseUrl: '/llm', model: __LLM_MODEL__ },
-  { fetch: (url, init) => fetch(url, init), now: () => performance.now() },
+  { fetch: (url, init) => fetch(url, init as RequestInit), now: () => performance.now() },
 );
 const status = document.getElementById('status-llm')!;
-llm.ping().then((r) => {
+modelReady = llm.ping().then((r) => {
   status.textContent = !r.ok
     ? 'Model: not reachable (rooms will use templates)'
     : r.hasModel
       ? `Model: ${__LLM_MODEL__} ready`
       : `Model: server up, ${__LLM_MODEL__} not installed`;
   status.className = `status ${r.ok && r.hasModel ? 'ok' : 'bad'}`;
+  if (r.ok && r.hasModel) warmUp();
+  return r.ok && r.hasModel;
 });
+
+/** Load the model into memory while the start screen is up, so the first room isn't slowed by it. */
+function warmUp() {
+  void llm.streamText({ messages: [{ role: 'user', content: 'Say OK.' }], maxTokens: 2 }, () => {}).catch(() => {});
+}
 
 // ---- test hooks: let automated checks drive the game without a mouse ----
 let testMode = false;
 Object.assign(window, {
   __WHACK__: {
     seed,
-    begin() {
+    async begin() {
       testMode = true;
       started = true;
       game.hud.start.hidden = true;
-      game.begin();
+      game.begin((await modelReady) ? llm : undefined);
       game.player.enabled = true;
     },
     state() {
@@ -89,6 +99,9 @@ Object.assign(window, {
         player: { x: game.player.position.x, z: game.player.position.z, yaw: game.player.yaw },
         hovered: game.hovered?.info,
         events: game.core.run()?.events.map((e) => e.type) ?? [],
+        source: r?.source,
+        title: r?.title,
+        gen: game.core.run()?.plansStatus(),
         frame: game.renderer.info.render.frame,
       };
     },

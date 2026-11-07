@@ -14,7 +14,7 @@ function build(archetype: (typeof ARCHETYPES)[number], seed: number, side: Side,
   const rng = createRng(seed);
   const layout = generateLayout({ archetype, entranceSide: side, exits, rng, doorLabels: gameData.templates.doorLabels });
   const { props } = placeAssignments(layout, templateAssignments(layout, gameData, rng, { index: 1 }), gameData);
-  return { id: 'x', index: 1, seed, layout, props, ambience: 'cold', narrator: { onEnter: '', doors: {} }, source: 'template' };
+  return { id: 'x', index: 1, seed, layout, props, ambience: 'cold', narrator: { onEnter: '', doors: {} }, source: 'template', title: 'x' };
 }
 
 describe('room generator', () => {
@@ -59,25 +59,28 @@ describe('room generator', () => {
   });
 });
 
-describe('run', () => {
-  it('starts in the waiting room with the button, and every later room is valid and new', () => {
-    const run = new Run(1234, gameData);
+describe('run without a model', () => {
+  it('starts in the waiting room with the button, and every later room is valid and new', async () => {
+    const run = new Run(1234, gameData, { observeMs: 0 });
     const first = run.start();
     expect(first.layout.archetype).toBe('waiting_room');
     expect(first.props.some((p) => p.recipe === 'button_pedestal')).toBe(true);
     const rng = createRng(9);
     for (let i = 0; i < 40; i++) {
       const exits = run.current!.layout.doors.filter((d) => !d.entrance);
-      const room = run.next(exits[Math.floor(rng() * exits.length)]!.id);
+      const room = await run.next(exits[Math.floor(rng() * exits.length)]!.id);
       expect(validateRoom(room, gameData)).toEqual([]);
+      expect(room.source).toBe('template');
       expect(room.layout.archetype).not.toBe(run.rooms.at(-2)!.layout.archetype);
     }
     expect(new Set(run.rooms.map((r) => r.id)).size).toBe(41);
   });
 
-  it('is reproducible from its seed', () => {
-    const a = new Run(77, gameData), b = new Run(77, gameData);
+  it('lays out the same rooms from the same seed', async () => {
+    const a = new Run(77, gameData, { observeMs: 0 }), b = new Run(77, gameData, { observeMs: 0 });
     a.start(); b.start();
-    expect(a.next('d1')).toEqual(b.next('d1'));
+    const [ra, rb] = [await a.next('d1'), await b.next('d1')];
+    expect(ra.layout).toEqual(rb.layout);
+    expect(ra.props).toEqual(rb.props);
   });
 });

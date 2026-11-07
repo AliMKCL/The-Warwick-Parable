@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { gameData } from '../core/data';
 import type { CoreMessage, GameEvent } from '../core/protocol';
 import { createCore } from '../core/run/core';
+import type { LlmClient } from '../core/llm/client';
 import type { RoomSpec } from '../core/room/types';
 import { Player } from './player/player';
 import { createPost, type Post } from './render/post';
@@ -16,6 +17,8 @@ export interface GameOptions {
   post: boolean;
   maxDpr: number;
   debug: boolean;
+  /** Seconds to watch the player before generating the next rooms (see Run). */
+  observeMs?: number;
 }
 
 const REACH = 2.6;
@@ -30,7 +33,8 @@ export class Game {
   readonly scene = new THREE.Scene();
   readonly player = new Player();
   readonly hud = new Hud();
-  readonly core = createCore(gameData);
+  core: ReturnType<typeof createCore> = createCore(gameData);
+  private genStatus = '';
   private post?: Post;
   private materials = new MaterialLibrary(gameData.materials);
   room?: RoomView;
@@ -51,7 +55,6 @@ export class Game {
     this.renderer.info.autoReset = false;
     if (opts.post) this.post = createPost(this.renderer, this.scene, this.player.camera);
     this.raycaster.far = REACH;
-    this.core.onMessage((m) => this.handle(m));
     this.resize();
     addEventListener('resize', () => this.resize());
   }
@@ -60,7 +63,10 @@ export class Game {
     return (performance.now() - this.startedAt) / 1000;
   }
 
-  begin() {
+  /** Start a run. With no model (or an unreachable one), rooms are filled from templates. */
+  begin(llm?: LlmClient) {
+    this.core = createCore(gameData, { llm, observeMs: this.opts.observeMs });
+    this.core.onMessage((m) => this.handle(m));
     this.startedAt = performance.now();
     this.send({ type: 'run_started', seed: this.opts.seed, t: 0 });
   }
@@ -110,12 +116,15 @@ export class Game {
     view.target = 1;
     await wait(380);
     await this.hud.fade(true);
+    this.hud.waiting(true);
     this.send({ type: 'door_chosen', roomId: this.room.spec.id, doorId, t: this.time });
   }
 
   private handle(m: CoreMessage) {
     if (m.type === 'load_room') void this.loadRoom(m.spec);
-    else if (m.type === 'narrator_line') this.hud.say(m.text);
+    else if (m.type === 'narrator_line') this.hud.narrate(m.lineId, m.text, m.final);
+    else if (m.type === 'gen_status')
+      this.genStatus = `model ${m.model} · ` + m.doors.map((d) => `${d.door}:${d.status}${d.ms ? ` ${(d.ms / 1000).toFixed(1)}s` : ''}`).join(' ');
   }
 
   private async loadRoom(spec: RoomSpec) {
@@ -136,6 +145,7 @@ export class Game {
     this.hovered = undefined;
     this.renderer.compile(this.scene, this.player.camera);
     this.send({ type: 'room_entered', roomId: spec.id, t: this.time });
+    this.hud.waiting(false);
     await this.hud.fade(false);
     this.busy = false;
   }
@@ -226,7 +236,9 @@ export class Game {
     const p = this.player.position;
     el.textContent = [
       `fps ${this.fps.toFixed(0)}  calls ${this.renderer.info.render.calls}  tris ${this.renderer.info.render.triangles}`,
-      r ? `room ${r.index} ${r.layout.archetype} ${r.layout.width}x${r.layout.depth} · ${r.ambience} · ${r.source}` : 'no room',
+      r ? `room ${r.index} ${r.layout.archetype} ${r.layout.width}x${r.layout.depth} · ${r.ambience} · ${r.source}${r.genMs ? ` ${(r.genMs / 1000).toFixed(1)}s` : ''}` : 'no room',
+      r ? `"${r.title}"` : '',
+      this.genStatus,
       `pos ${p.x.toFixed(1)}, ${p.z.toFixed(1)}  yaw ${this.player.yaw.toFixed(2)}`,
       `events ${this.core.run()?.events.length ?? 0}`,
     ].join('\n');

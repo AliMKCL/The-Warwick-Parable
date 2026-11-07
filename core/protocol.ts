@@ -23,6 +23,7 @@ export type GameEvent =
 export type CoreMessage =
   | { type: 'load_room'; spec: RoomSpec }
   | { type: 'narrator_line'; lineId: string; text: string; final: boolean }
+  | { type: 'gen_status'; model: 'on' | 'off'; doors: { door: string; status: string; ms?: number; error?: string }[] }
   | { type: 'rule_effect'; effect: unknown /* RuleEffect, defined in Phase 4 */ }
   | { type: 'run_ended'; dossier: unknown /* Dossier, defined in Phase 6 */ };
 

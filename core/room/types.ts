@@ -154,6 +154,12 @@ export interface RoomSpec {
   };
   /** Where the content came from: the model, or templates when the model was unavailable. */
   source: 'model' | 'template';
+  /** Short name for the room, used in the story memory and the dossier. */
+  title: string;
+  /** One fact this room establishes, for the story memory. */
+  fact?: string;
+  /** How long generation took, for the debug overlay. */
+  genMs?: number;
 }
 
 export interface GameData {
@@ -161,6 +167,16 @@ export interface GameData {
   materials: Record<string, MaterialDef>;
   ambience: Record<string, AmbiencePreset>;
   templates: TextTemplates;
+  prompts: Prompts;
+}
+
+/** Markdown prompt templates from data/prompts and data/themes, with {{placeholders}}. */
+export interface Prompts {
+  world: string;
+  roomSystem: string;
+  roomUser: string;
+  narratorSystem: string;
+  narratorUser: string;
 }
 
 export interface TextTemplates {

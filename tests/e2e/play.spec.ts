@@ -14,11 +14,11 @@ test('walk through generated rooms', async ({ page }) => {
   page.on('console', (m) => m.type() === 'error' && !m.location().url.includes('/llm') && errors.push(m.text()));
 
   await page.setViewportSize({ width: 960, height: 540 });
-  await page.goto('/?seed=20261107&debug=1&dpr=1');
-  await page.screenshot({ path: 'artifacts/p2-start-screen.png' });
+  await page.goto(`/?seed=20261107&debug=1&dpr=1${process.env.EXPECT_MODEL ? '&observe=1' : ''}`);
+  await page.screenshot({ path: 'artifacts/p3-start-screen.png' });
   await page.evaluate(() => (window as any).__WHACK__.begin());
   await waitForRoom(page, 0);
-  await page.screenshot({ path: 'artifacts/p2-room0-spawn.png' });
+  await page.screenshot({ path: 'artifacts/p3-room0-spawn.png' });
 
   // Press the button in the first room, then inspect something.
   const s0 = await W(page);
@@ -44,25 +44,28 @@ test('walk through generated rooms', async ({ page }) => {
     if ((await W(page)).hovered?.kind === 'inspect') {
       await page.evaluate(() => (window as any).__WHACK__.interact());
       await page.waitForTimeout(300);
-      await page.screenshot({ path: 'artifacts/p2-room0-inspect.png' });
+      await page.screenshot({ path: 'artifacts/p3-room0-inspect.png' });
       expect((await W(page)).events).toContain('inspected');
       await page.evaluate(() => (window as any).__WHACK__.interact()); // close the card
     }
   }
 
   // Walk to every exit in turn across several rooms.
-  for (let i = 0; i < 5; i++) {
+  for (let i = 0; i < (process.env.EXPECT_MODEL ? 3 : 5); i++) {
+    // Spend a moment in the room, as a player would, so generation can finish.
+    if (process.env.EXPECT_MODEL) await page.waitForFunction(() => (window as any).__WHACK__.state().gen?.some((g: any) => g.status === 'ready'), null, { timeout: 60_000 });
     const st = await W(page);
     const exit = st.room.doors.find((d: any) => !d.entrance);
     await page.evaluate((id) => (window as any).__WHACK__.useDoor(id), exit.id);
     await page.waitForTimeout(400);
     const hovered = (await W(page)).hovered;
     expect(hovered?.kind, `room ${i} door hover`).toBe('door');
-    if (i === 0) await page.screenshot({ path: 'artifacts/p2-room0-door.png' });
+    if (i === 0) await page.screenshot({ path: 'artifacts/p3-room0-door.png' });
     await page.evaluate(() => (window as any).__WHACK__.interact());
     await waitForRoom(page, i + 1);
     const now = await W(page);
-    await page.screenshot({ path: `artifacts/p2-room${i + 1}-${now.room.archetype}.png` });
+    if (process.env.EXPECT_MODEL) expect(now.source, `room ${i + 1} source`).toBe('model');
+    await page.screenshot({ path: `artifacts/p3-room${i + 1}-${now.room.archetype}.png` });
   }
 
   const final = await W(page);

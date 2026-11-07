@@ -10,7 +10,7 @@ import { llmConfigFromEnv, loadProjectEnv } from './env';
 
 loadProjectEnv();
 const config = llmConfigFromEnv();
-const client = createLlmClient(config, { fetch: globalThis.fetch, now: () => performance.now() });
+const client = createLlmClient(config, { fetch: (url, init) => fetch(url, init as RequestInit), now: () => performance.now() });
 
 const PROPS = ['desk_office', 'chair_office', 'filing_cabinet', 'water_cooler', 'plant_dead', 'sign_wall'] as const;
 

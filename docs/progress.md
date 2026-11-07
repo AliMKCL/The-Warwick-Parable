@@ -7,9 +7,9 @@ Read this first when picking up the work. Newest entries at the top.
 | Phase | Budget | Status |
 | --- | --- | --- |
 | 1. Setup | 1 h | Done |
-| 2. Walking skeleton and look test | 4 h | Done, awaiting look test on the MacBook |
-| 3. Generation loop | 5 h | Next |
-| 4. Profile and story (4 rules) | 3.5 h | |
+| 2. Walking skeleton and look test | 4 h | Done |
+| 3. Generation loop | 5 h | Done, awaiting a real-model run on the MacBook |
+| 4. Profile and story (4 rules) | 3.5 h | Next |
 | 5. Look pass (lighting only) | 1.5 h | |
 | 6. Dossier ending and demo prep | 2 h | |
 | Buffer | 3 h | |
@@ -22,6 +22,15 @@ Read this first when picking up the work. Newest entries at the top.
 - **Engine boundary:** `core/` may not import Three.js, browser APIs or Node built-ins; `npm run typecheck` enforces it.
 
 ## Log
+
+### Phase 3: generation loop (done)
+- The model writes each room: title, mood, props and every text on them, inspect text, door labels, the line said when the player hesitates at each door, the entry line, and one fact for the story memory. Prompts are Markdown in `data/prompts/`, the world and narrator voice in `data/themes/office.md`.
+- Output is held to a per-room JSON Schema (only real slot, door and prop IDs). Bad answers get one repair round; then templates take over. A server that can't be reached switches the run to templates.
+- Pipeline: on entering a room the player is watched for 8 s (or until they linger at a door), then the room behind each exit is generated one at a time, the lingered-at door first. Choosing a door cancels the others and waits up to 15 s, then falls back to templates.
+- Live reaction: when the next room is ready, the narrator streams a one-line reaction to the choice and the behaviour in the room just left.
+- What the model sees: story so far (titles and facts), and a plain account of what the player did (waits, presses, inspections, stares, standing still, door hesitations and choices).
+- Tools: `npm run try:room` runs this against the real model with a scripted player; `npm run mock:llm` is a fake Ollama for testing without a model.
+- Tests: fake model covers good, repaired, failing, unreachable and slow answers, door priority and the live reaction; browser test walks 3 model rooms.
 
 ### Phase 2: walking skeleton (done)
 - `core/room`: room data model, 4 archetypes (waiting room, corridor, open office, hub), seeded layout generator that rotates each room so its entrance matches the door the player came through, slot-based prop placement that drops anything blocking a door or an exit, and a validator.

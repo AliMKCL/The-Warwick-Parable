@@ -13,11 +13,16 @@ export interface LlmConfig {
   apiKey?: string;
 }
 
+/** Minimal readable stream, as returned by fetch in browsers and Node 22+. */
+export interface ByteStream {
+  getReader(): { read(): Promise<{ done: boolean; value?: Uint8Array }>; cancel(): Promise<void> };
+}
+
 /** The subset of fetch core needs. globalThis.fetch satisfies it in browsers and Node 22+. */
 export type HttpFetch = (
   url: string,
-  init: { method: string; headers: Record<string, string>; body?: string },
-) => Promise<{ ok: boolean; status: number; text(): Promise<string> }>;
+  init: { method: string; headers: Record<string, string>; body?: string; signal?: unknown },
+) => Promise<{ ok: boolean; status: number; text(): Promise<string>; body?: ByteStream | null }>;
 
 export interface LlmDeps {
   fetch: HttpFetch;
@@ -37,10 +42,21 @@ export interface JsonRequest {
   schemaName: string;
   maxTokens: number;
   temperature?: number;
+  /** An AbortSignal; lets core cancel work the player no longer needs. */
+  signal?: unknown;
+}
+
+export interface TextRequest {
+  messages: ChatMessage[];
+  maxTokens: number;
+  temperature?: number;
+  signal?: unknown;
 }
 
 export interface LlmTimings {
   totalMs: number;
+  /** Time until the first token arrived (streaming only). */
+  firstTokenMs?: number;
   promptTokens?: number;
   outputTokens?: number;
   /** Output tokens per second, when the server reports it. */

@@ -11,7 +11,9 @@
     "typecheck": "tsc -p tsconfig.json && tsc -p core/tsconfig.json && node tools/check-core-purity.mjs",
     "test": "vitest run",
     "test:e2e": "playwright test",
-    "check:llm": "tsx tools/check-llm.ts"
+    "check:llm": "tsx tools/check-llm.ts",
+    "try:room": "tsx tools/try-room.ts",
+    "mock:llm": "node tools/mock-llm.mjs"
   },
   "dependencies": {
     "three": "^0.187.0"

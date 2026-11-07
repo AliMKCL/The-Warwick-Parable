@@ -41,7 +41,14 @@ export function templateAssignments(
   layout: Layout,
   data: GameData,
   rng: Rng,
-  opts: { index: number; forceCenter?: string },
+  opts: {
+    index: number;
+    forceCenter?: string;
+    /** Slots already filled by the model. */
+    skip?: Set<string>;
+    /** Prefer props without text, so template text doesn't clash with the model's story. */
+    plainOnly?: boolean;
+  },
 ): Assignment[] {
   const t = data.templates;
   const counts = new Map<string, number>();
@@ -49,15 +56,21 @@ export function templateAssignments(
   const out: Assignment[] = [];
 
   for (const slot of layout.slots) {
+    if (opts.skip?.has(slot.id)) continue;
     if (slot.kind === 'center' && opts.forceCenter) {
       out.push(withText({ slot: slot.id, recipe: opts.forceCenter }, data, rng, opts.index));
       continue;
     }
     const isStructural = slot.tags.includes('desk') || slot.tags.includes('partition');
     if (!isStructural && rng() < 0.25) continue; // breathing room
-    const options = candidatesFor(slot, layout.archetype, data).filter(
+    let options = candidatesFor(slot, layout.archetype, data).filter(
       (p) => isStructural || (counts.get(p.id) ?? 0) < 2,
     );
+    if (opts.plainOnly) {
+      if (slot.kind === 'wall_mounted') continue;
+      const plain = options.filter((p) => !p.text);
+      if (plain.length) options = plain;
+    }
     if (!options.length) continue;
     const recipe = pick(rng, options);
     counts.set(recipe.id, (counts.get(recipe.id) ?? 0) + 1);

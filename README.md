@@ -33,7 +33,11 @@ the name LM Studio shows, in `.env.local`.
 WASD to move, mouse to look, **E** or click to interact, Esc to pause.
 
 Add to the URL: `?seed=123` to replay a run, `?debug=1` for frame rate and room info,
-`?post=0` to turn off post-processing, `?dpr=2` for full Retina resolution.
+`?post=0` to turn off post-processing, `?dpr=2` for full Retina resolution,
+`?observe=8` seconds to watch the player before generating the next rooms.
+
+Writing is in plain files: the world and narrator voice in `data/themes/office.md`,
+the prompts in `data/prompts/`, fallback text in `data/templates.json`.
 
 ## Scripts
 
@@ -41,6 +45,8 @@ Add to the URL: `?seed=123` to replay a run, `?debug=1` for frame rate and room 
 | --- | --- |
 | `npm run dev` | Game at http://127.0.0.1:5188 with hot reload |
 | `npm run check:llm` | Model server reachable, model installed, JSON output, speed |
+| `npm run try:room` | Plays the first room with a scripted player and prints the room the model writes next, with timings |
+| `npm run mock:llm` | Fake model server for testing without Ollama (set `LLM_BASE_URL=http://127.0.0.1:11999`) |
 | `npm test` | Core unit tests |
 | `npm run typecheck` | Type checks, plus a check that `core/` has no 3D or browser code |
 | `npm run build` | Production build into `dist/` |
