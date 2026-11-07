@@ -43,6 +43,11 @@ http.createServer((req, res) => {
     if (req.url.startsWith('/v1/text-to-speech/')) {
       // Fake ElevenLabs: half a second of silence as WAV, and a check that the key arrived.
       if (!req.headers['xi-api-key']) { res.statusCode = 401; return res.end('{"detail":"missing key"}'); }
+      // Behave like the free plan: library voices are refused through the API.
+      if (process.env.MOCK_REFUSE_VOICE && req.url.includes(process.env.MOCK_REFUSE_VOICE)) {
+        res.statusCode = 402;
+        return res.end('{"detail":{"status":"payment_required","message":"Free users cannot use library voices via the API."}}');
+      }
       ttsCalls++;
       const rate = 8000, n = rate / 2, wav = Buffer.alloc(44 + n);
       wav.write('RIFF', 0); wav.writeUInt32LE(36 + n, 4); wav.write('WAVEfmt ', 8); wav.writeUInt32LE(16, 16);

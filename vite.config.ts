@@ -11,7 +11,7 @@ export default defineConfig(({ mode }) => {
 
   // Narrator voice (optional). The key is added here, on the dev server, and never reaches the browser.
   const ttsKey = env.ELEVENLABS_API_KEY || '';
-  const ttsVoice = env.ELEVENLABS_VOICE_ID || 'qxePw1S1QmBgjlU3GIy5';
+  const ttsVoice = env.ELEVENLABS_VOICE_ID || 'JBFqnCBsd6RMkjVDRZzb';
   const ttsBase = env.ELEVENLABS_BASE_URL || 'https://api.elevenlabs.io';
 
   return {
@@ -20,6 +20,7 @@ export default defineConfig(({ mode }) => {
       __LLM_MODEL__: JSON.stringify(model),
       __TTS__: JSON.stringify({
         enabled: !!ttsKey,
+        voice: ttsVoice,
         model: env.ELEVENLABS_MODEL || 'eleven_flash_v2_5',
         maxChars: Number(env.ELEVENLABS_MAX_CHARS) || 6000,
       }),
@@ -41,7 +42,8 @@ export default defineConfig(({ mode }) => {
         '/tts': {
           target: ttsBase,
           changeOrigin: true,
-          rewrite: () => `/v1/text-to-speech/${ttsVoice}/stream?output_format=mp3_44100_128`,
+          // /tts/<voiceId> → ElevenLabs; the page picks the voice, the server adds the key.
+          rewrite: (path) => `/v1/text-to-speech/${path.split('/')[2] || ttsVoice}/stream?output_format=mp3_44100_128`,
           configure: (proxy) => {
             proxy.on('proxyReq', (req) => {
               req.removeHeader('origin');

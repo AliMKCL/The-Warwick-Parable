@@ -11,7 +11,7 @@ Without a key the game works exactly as before, subtitles only.
 3. Add to `.env.local`:
    ```
    ELEVENLABS_API_KEY=your-key
-   ELEVENLABS_VOICE_ID=qxePw1S1QmBgjlU3GIy5
+   ELEVENLABS_VOICE_ID=JBFqnCBsd6RMkjVDRZzb
    ELEVENLABS_MODEL=eleven_flash_v2_5
    ```
 4. Hear it: `npm run try:voice` writes `voice-sample.mp3` with a sample line. Open it.
@@ -26,8 +26,10 @@ The Stanley Parable narrator is a real actor's voice, so we don't clone or imita
 real person's voice needs their consent. Aim for the same qualities instead: an older British
 (RP) man, unhurried, dry, faintly amused, quietly judging you.
 
-- **Default: "Older Joe"** (`qxePw1S1QmBgjlU3GIy5`), an older British RP narrator from the voice library,
-  in the classic newsreader/documentary style.
+- **Default: "George"** (`JBFqnCBsd6RMkjVDRZzb`), a built-in British storyteller that works on every plan.
+- **"Older Joe"** (`qxePw1S1QmBgjlU3GIy5`) is closer in age and tone, but it's a voice-library voice: the free
+  plan refuses library voices through the API (error 402). If a voice is refused, the game switches to George
+  for the rest of the session and says so on the start/pause screen.
 - Other library voices worth auditioning: **George** (warm British storyteller), **Julian** (deep, mature
   British, `7p1Ofvcwsv7UBPoFNcpI`), **Alistair** (British narrator, `rvugSNzdY0NcpG2PKe4B`).
   Library voices must be added to **My Voices** in the app before the API can use them.
@@ -52,6 +54,8 @@ real person's voice needs their consent. Aim for the same qualities instead: an 
   runaway session can't drain the account. Reload to reset.
 
 ## Notes
+- After changing `.env.local`, restart `npm run dev`; the dev server reads it only at start.
+- If the narrator is silent, press Esc: the pause screen shows any voice error from ElevenLabs.
 - The voice needs internet. Offline, lines that fail are simply skipped and the subtitles carry on.
 - **M** mutes both the sound and the narrator. The background ducks while the narrator speaks.
 - The narrator's live reaction line is spoken after it finishes streaming, so it starts about half a

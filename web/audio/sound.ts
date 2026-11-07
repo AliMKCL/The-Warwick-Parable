@@ -33,6 +33,11 @@ export class Sound {
     for (let i = 0; i < len; i++) d[i] = Math.random() * 2 - 1;
   }
 
+  /** The audio context and output, once started (shared with the narrator's voice). */
+  output(): { ctx: AudioContext; out: AudioNode } | undefined {
+    return this.ctx && this.master ? { ctx: this.ctx, out: this.master } : undefined;
+  }
+
   toggleMute() {
     this.muted = !this.muted;
     if (this.master && this.ctx) this.master.gain.setTargetAtTime(this.muted ? 0 : 0.8, this.ctx.currentTime, 0.05);

@@ -3,17 +3,27 @@
  * proxy (which adds the API key). Lines are spoken one after another, cached
  * by text so repeats cost nothing, and capped per page load to protect credits.
  */
+/** ElevenLabs' built-in "George" (British storyteller): works on every plan, used if the chosen voice is refused. */
+export const FALLBACK_VOICE = 'JBFqnCBsd6RMkjVDRZzb';
+
 export class Voice {
-  private cache = new Map<string, Promise<string | null>>();
+  private cache = new Map<string, Promise<AudioBuffer | null>>();
   private queue: string[] = [];
-  private playing?: HTMLAudioElement;
+  private playing?: AudioBufferSourceNode;
+  private voiceId: string;
+  /** The game's AudioContext (unlocked by the start click), so Safari doesn't block playback. */
+  getContext?: () => { ctx: AudioContext; out: AudioNode } | undefined;
+  /** Shown on the start/pause screen when something goes wrong. */
+  onError?: (message: string) => void;
   private charsUsed = 0;
   muted = false;
   /** Called with true while the narrator is speaking (to duck the ambience). */
   onSpeaking?: (speaking: boolean) => void;
   lastError?: string;
 
-  constructor(private cfg: { enabled: boolean; model: string; maxChars: number }) {}
+  constructor(private cfg: { enabled: boolean; voice: string; model: string; maxChars: number }) {
+    this.voiceId = cfg.voice;
+  }
 
   get enabled() {
     return this.cfg.enabled;
@@ -37,14 +47,32 @@ export class Voice {
   /** Stop talking now (e.g. at the end of the run). */
   stop() {
     this.queue = [];
-    this.playing?.pause();
+    try { this.playing?.stop(); } catch { /* already stopped */ }
     this.playing = undefined;
     this.onSpeaking?.(false);
   }
 
   setMuted(m: boolean) {
     this.muted = m;
-    if (this.playing) this.playing.muted = m;
+  }
+
+  private request(text: string, voice: string) {
+    return fetch(`/tts/${voice}`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', accept: 'audio/mpeg' },
+      body: JSON.stringify({
+        text,
+        model_id: this.cfg.model,
+        // Steady, dry delivery: fairly stable, little added emotion, slightly unhurried.
+        voice_settings: { stability: 0.55, similarity_boost: 0.8, style: 0.15, use_speaker_boost: true, speed: 0.95 },
+      }),
+    });
+  }
+
+  private fail(message: string) {
+    this.lastError = message;
+    console.warn('[voice]', message);
+    this.onError?.(message);
   }
 
   private async next(): Promise<void> {
@@ -54,21 +82,21 @@ export class Voice {
       this.onSpeaking?.(false);
       return;
     }
-    const url = await this.audioFor(text);
-    if (!url) return this.next();
-    const audio = new Audio(url);
-    audio.muted = this.muted;
-    this.playing = audio;
+    const buffer = await this.audioFor(text);
+    const out = this.getContext?.();
+    if (!buffer || !out || this.muted) return this.next();
+    const src = out.ctx.createBufferSource();
+    src.buffer = buffer;
+    const gain = out.ctx.createGain();
+    gain.gain.value = 1.1;
+    src.connect(gain).connect(out.out);
+    this.playing = src;
     this.onSpeaking?.(true);
-    audio.onended = audio.onerror = () => void this.next();
-    try {
-      await audio.play();
-    } catch {
-      void this.next();
-    }
+    src.onended = () => void this.next();
+    src.start();
   }
 
-  private audioFor(text: string): Promise<string | null> {
+  private audioFor(text: string): Promise<AudioBuffer | null> {
     let p = this.cache.get(text);
     if (p) return p;
     if (this.charsUsed + text.length > this.cfg.maxChars) {
@@ -76,26 +104,25 @@ export class Voice {
       return Promise.resolve(null);
     }
     this.charsUsed += text.length;
-    p = fetch('/tts', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json', accept: 'audio/mpeg' },
-      body: JSON.stringify({
-        text,
-        model_id: this.cfg.model,
-        // Steady, dry delivery: fairly stable, little added emotion, slightly unhurried.
-        voice_settings: { stability: 0.55, similarity_boost: 0.8, style: 0.15, use_speaker_boost: true, speed: 0.95 },
-      }),
-    })
+    p = this.request(text, this.voiceId)
       .then(async (res) => {
+        // A plan that can't use this voice (e.g. a library voice on the free plan), or an unknown voice:
+        // switch to a built-in voice for the rest of the session and try again.
+        if ((res.status === 402 || res.status === 403 || res.status === 404) && this.voiceId !== FALLBACK_VOICE) {
+          this.fail(`voice ${this.voiceId} refused (${res.status}: ${(await res.text()).slice(0, 140)}); using the built-in George voice instead`);
+          this.voiceId = FALLBACK_VOICE;
+          res = await this.request(text, this.voiceId);
+        }
         if (!res.ok) {
-          this.lastError = `ElevenLabs answered ${res.status}: ${(await res.text()).slice(0, 160)}`;
-          console.warn('[voice]', this.lastError);
+          this.fail(`ElevenLabs answered ${res.status}: ${(await res.text()).slice(0, 160)}`);
           return null;
         }
-        return URL.createObjectURL(await res.blob());
+        const ctx = this.getContext?.()?.ctx;
+        if (!ctx) return null;
+        return await ctx.decodeAudioData(await res.arrayBuffer());
       })
       .catch((err) => {
-        this.lastError = String(err);
+        this.fail(String(err));
         return null;
       });
     this.cache.set(text, p);

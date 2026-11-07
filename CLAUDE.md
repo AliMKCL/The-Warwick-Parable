@@ -80,7 +80,9 @@ npm run try:voice               # ElevenLabs sample line → voice-sample.mp3 (-
 - Narrator voice: `web/audio/voice.ts` posts final narrator lines to `/tts`; the Vite proxy rewrites to
   ElevenLabs `/v1/text-to-speech/{ELEVENLABS_VOICE_ID}/stream` and adds `xi-api-key` server-side. Off when
   `ELEVENLABS_API_KEY` is empty. Cached by text, queued (max 2 waiting), capped by `ELEVENLABS_MAX_CHARS`,
-  ducks the ambience. Default voice "Older Joe" (`qxePw1S1QmBgjlU3GIy5`), model `eleven_flash_v2_5`.
+  ducks the ambience; plays through the shared Web Audio context (Safari-safe); on 402/403/404 falls back to
+  built-in George (`JBFqnCBsd6RMkjVDRZzb`). Ali uses voice `pqHfZKP75CvOlQylNhV4` (confirmed working with try:voice).
+  Free plan refuses voice-library voices via the API. Model `eleven_flash_v2_5`.
   Do not clone the Stanley Parable actor's voice (no consent); use a library voice or Voice Design. See `docs/voice.md`.
   E2E: `tests/e2e/voice.spec.ts` with `ELEVENLABS_API_KEY=test ELEVENLABS_BASE_URL=http://127.0.0.1:11999` and the mock running.
 - `window.__WHACK__` test hooks: begin, state, lookFrom, useDoor, interact, effect, soundCheck.

@@ -7,6 +7,8 @@ test('the narrator speaks through the /tts proxy', async ({ page }) => {
   test.setTimeout(120_000);
   const tts: string[] = [];
   page.on('request', (r) => r.url().includes('/tts') && tts.push(r.postData() ?? ''));
+  const played: string[] = [];
+  page.on('requestfinished', (r) => r.url().includes('/tts/') && played.push(r.url()));
   const errors: string[] = [];
   page.on('pageerror', (e) => errors.push(e.message));
   await page.setViewportSize({ width: 800, height: 450 });
@@ -21,6 +23,11 @@ test('the narrator speaks through the /tts proxy', async ({ page }) => {
   expect(body.model_id).toBe('eleven_flash_v2_5');
   expect(body).not.toHaveProperty('xi_api_key'); // the key is added by the dev server, never by the page
   const st = await page.evaluate(() => (window as any).__WHACK__.state());
-  expect(st.voice.error).toBeUndefined();
+  if (process.env.MOCK_REFUSE_VOICE) {
+    // The refused voice falls back to the built-in one.
+    await page.waitForTimeout(1500);
+    expect(tts.length).toBeGreaterThan(0);
+    expect((await page.evaluate(() => (window as any).__WHACK__.state())).voice.error).toMatch(/George/);
+  } else expect(st.voice.error).toBeUndefined();
   expect(errors).toEqual([]);
 });

@@ -67,6 +67,11 @@ export class Game {
     this.sound = new Sound(opts.mute);
     this.voice.setMuted(!!opts.mute);
     this.voice.onSpeaking = (on) => this.sound.duck(on);
+    this.voice.getContext = () => this.sound.output();
+    this.voice.onError = (msg) => {
+      const el = document.getElementById('status-voice');
+      if (el) { el.textContent = `Voice problem: ${msg}`; el.className = 'status bad'; }
+    };
     this.hud.onTimerSecond = (left) => left <= 10 && this.sound.tick(left <= 5);
     this.renderer = createRenderer(canvas);
     this.renderer.info.autoReset = false;
