@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#0d0e0e" />
+    <link rel="icon" href="data:," />
+    <title>whack</title>
+  </head>
+  <body>
+    <main id="app">
+      <canvas id="game-canvas" aria-label="Game view"></canvas>
+      <section id="status-panel" aria-live="polite">
+        <h1>whack</h1>
+        <p class="sub">Phase 1 · setup check</p>
+        <ul>
+          <li><span>Renderer</span><strong id="status-renderer">starting…</strong></li>
+          <li><span>Model server</span><strong id="status-llm">checking…</strong></li>
+        </ul>
+      </section>
+    </main>
+    <script type="module" src="/web/main.ts"></script>
+  </body>
+</html>

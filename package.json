@@ -1,0 +1,31 @@
+{
+  "name": "whack",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "A first-person game whose rooms are generated from how you play.",
+  "scripts": {
+    "dev": "vite",
+    "build": "npm run typecheck && vite build",
+    "preview": "vite preview",
+    "typecheck": "tsc -p tsconfig.json && tsc -p core/tsconfig.json && node tools/check-core-purity.mjs",
+    "test": "vitest run",
+    "test:e2e": "playwright test",
+    "check:llm": "tsx tools/check-llm.ts"
+  },
+  "dependencies": {
+    "three": "^0.187.0"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.65.0",
+    "@types/node": "^25.9.0",
+    "@types/three": "^0.187.0",
+    "tsx": "^4.23.15",
+    "typescript": "^6.0.3",
+    "vite": "^8.3.6",
+    "vitest": "^5.1.0"
+  },
+  "engines": {
+    "node": ">=22.12"
+  }
+}
