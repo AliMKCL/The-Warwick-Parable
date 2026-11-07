@@ -59,8 +59,13 @@ document.addEventListener('mousedown', (e) => {
 });
 addEventListener('keydown', (e) => {
   if (e.code === 'KeyE' && (document.pointerLockElement === canvas || testMode)) game.interact();
-  if (e.code === 'KeyM') game.sound.toggleMute();
+  if (e.code === 'KeyM') game.voice.setMuted(game.sound.toggleMute());
 });
+
+// ---- narrator voice status ----
+const voiceStatus = document.getElementById('status-voice')!;
+voiceStatus.textContent = __TTS__.enabled ? `Voice: ElevenLabs (${__TTS__.model})` : 'Voice: off (subtitles only)';
+voiceStatus.className = `status ${__TTS__.enabled ? 'ok' : ''}`;
 
 // ---- model server status on the start screen ----
 const llm = createLlmClient(
@@ -113,6 +118,7 @@ Object.assign(window, {
         locked: game.room?.doors.filter((d) => d.locked).map((d) => d.door.id) ?? [],
         lights: game.room?.lightLevel(),
         ended: game.ended,
+        voice: { enabled: game.voice.enabled, error: game.voice.lastError },
         dossier: game.dossier,
         title: r?.title,
         gen: game.core.run()?.plansStatus(),

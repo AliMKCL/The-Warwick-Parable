@@ -90,6 +90,12 @@ export class Sound {
     this.bed = { gain, name, stop: () => stops.forEach((s) => s()) };
   }
 
+  /** Lower the background while the narrator speaks. */
+  duck(on: boolean) {
+    if (!this.ctx || !this.bed) return;
+    this.bed.gain.gain.setTargetAtTime(this.humScale * (on ? 0.4 : 1), this.ctx.currentTime, 0.25);
+  }
+
   /** The hum follows the lights: dimmer room, quieter hum. */
   setLightLevel(level: number) {
     const target = 0.25 + 0.75 * level;

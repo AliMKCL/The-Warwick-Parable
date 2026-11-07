@@ -7,3 +7,4 @@ playwright-report/
 artifacts/
 .DS_Store
 *.log
+voice-sample.mp3

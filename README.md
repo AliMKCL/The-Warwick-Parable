@@ -51,6 +51,7 @@ the prompts in `data/prompts/`, fallback text in `data/templates.json`.
 | `npm run check:llm` | Model server reachable, model installed, JSON output, speed |
 | `npm run try:room` | Plays the first room with a scripted player and prints the room the model writes next, with timings |
 | `npm run mock:llm` | Fake model server for testing without Ollama (set `LLM_BASE_URL=http://127.0.0.1:11999`) |
+| `npm run try:voice` | Speak a sample narrator line with ElevenLabs into `voice-sample.mp3` (see `docs/voice.md`) |
 | `npm test` | Core unit tests |
 | `npm run typecheck` | Type checks, plus a check that `core/` has no 3D or browser code |
 | `npm run build` | Production build into `dist/` |
@@ -68,4 +69,5 @@ the prompts in `data/prompts/`, fallback text in `data/templates.json`.
 | `tests/` | Core unit tests and browser smoke tests | Core tests as is |
 | `docs/` | Progress log | |
 
-See `docs/progress.md` for what is done and what is next.
+See `docs/progress.md` for what is done and what is next, `docs/voice.md` for the narrator voice,
+and `CLAUDE.md` for the full project context (written for AI coding sessions, useful for people too).

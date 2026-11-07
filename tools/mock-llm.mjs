@@ -7,6 +7,7 @@ import http from 'node:http';
 const PORT = Number(process.env.MOCK_PORT || 11999);
 const DELAY = Number(process.env.MOCK_DELAY_MS ?? 1500);
 let n = 0;
+let ttsCalls = 0;
 const pick = (xs) => xs[Math.floor(Math.random() * xs.length)];
 
 function roomContent(prompt) {
@@ -39,6 +40,18 @@ http.createServer((req, res) => {
   req.on('data', (c) => (body += c));
   req.on('end', async () => {
     res.setHeader('content-type', 'application/json');
+    if (req.url.startsWith('/v1/text-to-speech/')) {
+      // Fake ElevenLabs: half a second of silence as WAV, and a check that the key arrived.
+      if (!req.headers['xi-api-key']) { res.statusCode = 401; return res.end('{"detail":"missing key"}'); }
+      ttsCalls++;
+      const rate = 8000, n = rate / 2, wav = Buffer.alloc(44 + n);
+      wav.write('RIFF', 0); wav.writeUInt32LE(36 + n, 4); wav.write('WAVEfmt ', 8); wav.writeUInt32LE(16, 16);
+      wav.writeUInt16LE(1, 20); wav.writeUInt16LE(1, 22); wav.writeUInt32LE(rate, 24); wav.writeUInt32LE(rate, 28);
+      wav.writeUInt16LE(1, 32); wav.writeUInt16LE(8, 34); wav.write('data', 36); wav.writeUInt32LE(n, 40); wav.fill(128, 44);
+      res.setHeader('content-type', 'audio/wav');
+      return res.end(wav);
+    }
+    if (req.url === '/tts-calls') return res.end(JSON.stringify({ ttsCalls }));
     if (req.url === '/api/tags') return res.end(JSON.stringify({ models: [{ name: process.env.LLM_MODEL || 'qwen3.6:35b-a3b' }] }));
     if (req.url !== '/api/chat') { res.statusCode = 404; return res.end('{}'); }
     const b = JSON.parse(body);

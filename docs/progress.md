@@ -23,6 +23,10 @@ Read this first when picking up the work. Newest entries at the top.
 
 ## Log
 
+### After Phase 6: context file and narrator voice
+- `CLAUDE.md`: everything a new Claude session needs (architecture, how to run and test, workflow, decisions).
+- Narrator voice with ElevenLabs, off unless `ELEVENLABS_API_KEY` is set; setup in `docs/voice.md`; `npm run try:voice` to audition voices.
+
 ### Phase 6: ending and demo prep (done)
 - A run lasts 7 rooms by default (`?rooms=5` for a shorter demo). The final room has one exit, which leads to the player's file instead of another room.
 - The dossier: a verdict written by the model (name, summary, one line per trait, closing line; template fallback), each trait's score with the moments that moved it most, the path through the building, story threads and whether they were explained, and stats.

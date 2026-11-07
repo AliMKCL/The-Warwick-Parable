@@ -13,7 +13,8 @@
     "test:e2e": "playwright test",
     "check:llm": "tsx tools/check-llm.ts",
     "try:room": "tsx tools/try-room.ts",
-    "mock:llm": "node tools/mock-llm.mjs"
+    "mock:llm": "node tools/mock-llm.mjs",
+    "try:voice": "tsx tools/try-voice.ts"
   },
   "dependencies": {
     "three": "^0.187.0"

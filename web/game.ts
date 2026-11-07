@@ -12,6 +12,7 @@ import type { InteractInfo } from './room/buildProp';
 import { MaterialLibrary } from './room/materials';
 import { Hud } from './ui/hud';
 import { Sound } from './audio/sound';
+import { Voice } from './audio/voice';
 import { showDossier } from './ui/dossier';
 import type { Dossier } from '../core/protocol';
 
@@ -42,6 +43,7 @@ export class Game {
   readonly player = new Player();
   readonly hud = new Hud();
   readonly sound: Sound;
+  readonly voice = new Voice(__TTS__);
   core: ReturnType<typeof createCore> = createCore(gameData);
   private genStatus = '';
   profile?: ProfileSnapshot;
@@ -63,6 +65,8 @@ export class Game {
     private opts: GameOptions,
   ) {
     this.sound = new Sound(opts.mute);
+    this.voice.setMuted(!!opts.mute);
+    this.voice.onSpeaking = (on) => this.sound.duck(on);
     this.hud.onTimerSecond = (left) => left <= 10 && this.sound.tick(left <= 5);
     this.renderer = createRenderer(canvas);
     this.renderer.info.autoReset = false;
@@ -146,7 +150,10 @@ export class Game {
 
   private handle(m: CoreMessage) {
     if (m.type === 'load_room') void this.loadRoom(m.spec);
-    else if (m.type === 'narrator_line') this.hud.narrate(m.lineId, m.text, m.final);
+    else if (m.type === 'narrator_line') {
+      this.hud.narrate(m.lineId, m.text, m.final);
+      if (m.final) this.voice.speak(m.text);
+    }
     else if (m.type === 'rule_effect') this.applyEffect(m.effect);
     else if (m.type === 'profile') this.profile = m.profile;
     else if (m.type === 'run_ended') void this.endRun(m.dossier);
@@ -163,6 +170,7 @@ export class Game {
     this.hud.waiting(false);
     this.hud.timer(null, '');
     this.sound.setAmbience('silence');
+    this.voice.stop();
     if (document.pointerLockElement) document.exitPointerLock();
     showDossier(document.getElementById('dossier')!, d);
   }
@@ -178,6 +186,9 @@ export class Game {
   }
 
   private async loadRoom(spec: RoomSpec) {
+    // Fetch the lines this room is about to say while it loads.
+    this.voice.prefetch(spec.narrator.onEnter);
+    if (spec.rule?.line) this.voice.prefetch(spec.rule.line);
     this.busy = true;
     await this.hud.fade(true);
     if (this.room) {
