@@ -26,6 +26,7 @@ vi.mock('../../web/ui/hud', () => ({ Hud: class {
   start = { hidden: false }; inspecting = false;
   fade = vi.fn(async () => {}); waiting = vi.fn();
   narrate() {} timer() {} clearNarration() {} setPrompt() {}
+  askOpen: unknown = null; ask() {} status() {} askAdjust() {} askPick() {} askAnswer() { return null; }
   showInspect() { this.inspecting = true; } hideInspect() { this.inspecting = false; }
 } }));
 

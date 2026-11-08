@@ -83,6 +83,7 @@ the prompts in `data/prompts/`, fallback text in `data/templates.json`.
 | `npm run mock:llm` | Fake model server for testing without Ollama (set `LLM_BASE_URL=http://127.0.0.1:11999`) |
 | `npm run try:voice` | Speak a sample narrator line with ElevenLabs into `voice-sample.mp3` (see `docs/voice.md`) |
 | `npm test` | Core unit tests |
+| `npm run bench` | Speed of the distance fields and path analysis, and how fast adaptive test selection pins down a profile |
 | `npm run typecheck` | Type checks, plus a check that `core/` has no 3D or browser code |
 | `npm run build` | Production build into `dist/` |
 | `npm run test:e2e` | Browser smoke test (run `npx playwright install chromium` once first) |

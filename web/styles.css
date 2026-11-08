@@ -154,6 +154,7 @@ html, body, #app { margin: 0; width: 100%; height: 100%; overflow: hidden; }
 #dossier .trait-head span { font: 600 12px ui-monospace, Menlo, monospace; text-transform: uppercase; letter-spacing: 0.1em; color: #6d6b63; }
 #dossier .bar { position: relative; height: 8px; margin: 8px 0 2px; border-radius: 4px; background: #dcd8cb; }
 #dossier .bar i { position: absolute; left: 50%; top: -3px; bottom: -3px; width: 1px; background: #9b978a; }
+#dossier .bar u { position: absolute; top: 0; bottom: 0; border-radius: 4px; opacity: 0.28; }
 #dossier .bar span { position: absolute; top: -4px; width: 16px; height: 16px; margin-left: -8px; border-radius: 50%; box-shadow: 0 0 0 3px #f3f0e6; }
 #dossier .ends { display: flex; justify-content: space-between; color: #8a877c; font-size: 11px; }
 #dossier .trait p { margin: 8px 0 6px; }

@@ -212,6 +212,8 @@ export interface RoomSpec {
   slot?: 'start' | 'test' | 'filler' | 'finale';
   /** The test this room holds (core/testrooms), even if a won gamble took its rule away. */
   test?: string;
+  /** Why the scheduler drew this test (core/testrooms/schedule.ts), for the dossier. */
+  selection?: SelectionNote;
   /** Set when the player arrived through a gamble's 50/50 door: what the coin decided. */
   gambleResult?: 'shortcut' | 'setback';
   /** A story thread this room opens, and the id of one it pays off. */
@@ -260,4 +262,19 @@ export interface TextTemplates {
   rules: Record<string, { line: string[]; done: string[]; tried?: string[] }>;
   /** Gamble rooms: the stakes said before the choice, and what the coin decided. */
   gamble: { timedLine: string[]; safeDoor: string[]; riskyDoor: string[]; shortcut: string[]; setback: string[]; shortcutEnd: string[] };
+}
+
+/** Why a test was drawn for a room. */
+export interface SelectionNote {
+  mode: 'adaptive' | 'weighted';
+  /** The trait the test was expected to teach the most about (adaptive). */
+  trait?: 'hesitation' | 'curiosity' | 'compliance' | 'impulsivity';
+  /** Expected information gain of the chosen test, in bits (adaptive). */
+  bits?: number;
+  /** How unsure the profile was about that trait when the test was picked (posterior sd). */
+  sd?: number;
+  /** The chance this test had of being drawn, 0–1. */
+  chance: number;
+  /** The other eligible tests, best first, with their expected bits. */
+  others: { test: string; bits: number }[];
 }

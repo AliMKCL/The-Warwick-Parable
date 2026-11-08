@@ -663,7 +663,10 @@ export class Game {
       this.lastTransfer,
       `pos ${p.x.toFixed(1)}, ${p.z.toFixed(1)}  yaw ${this.player.yaw.toFixed(2)}`,
       `events ${this.core.run()?.events.length ?? 0}${r?.rule ? ` · rule ${r.rule.id}` : ''}`,
-      this.profile ? Object.entries(this.profile.traits).map(([k, v]) => `${k.slice(0, 4)} ${v.toFixed(2)}`).join('  ') : '',
+      this.profile ? Object.entries(this.profile.traits).map(([k, v]) => `${k.slice(0, 4)} ${v.toFixed(2)}${this.profile!.sd ? `±${this.profile!.sd[k as keyof typeof this.profile.traits].toFixed(2)}` : ''}`).join('  ') : '',
+      r?.selection?.trait ? `test picked for ${r.selection.trait}: ${r.selection.bits} bits, ${Math.round(r.selection.chance * 100)}% chance` : '',
+      this.core.run()?.paths.at(-1) ? `last path: ${this.core.run()!.paths.at(-1)!.walked} m, ${Math.round(this.core.run()!.paths.at(-1)!.coverage * 100)}% floor, ${this.core.run()!.paths.at(-1)!.reversals} turn-backs` : '',
+      this.core.run()?.fields?.buildMs !== undefined ? `distance fields ${this.core.run()!.fields!.buildMs!.toFixed(2)} ms` : '',
       this.profile?.evidence.at(-1) ? `last: ${this.profile.evidence.at(-1)!.trait} ${this.profile.evidence.at(-1)!.delta > 0 ? '+' : ''}${this.profile.evidence.at(-1)!.delta} ${this.profile.evidence.at(-1)!.reason}` : '',
     ].join('\n');
   }
