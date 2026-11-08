@@ -38,6 +38,7 @@
   "skin": { "color": "#c99a7d", "roughness": 0.8 },
   "hair_dark": { "color": "#2e2621", "roughness": 0.9 },
   "shirt_blue": { "color": "#5d7aa6", "roughness": 0.9 },
+  "shirt_green": { "color": "#6f8a63", "roughness": 0.9 },
   "shirt_white": { "color": "#e6e4de", "roughness": 0.9 },
   "trousers_dark": { "color": "#33363b", "roughness": 0.9 },
   "folder_manila": { "color": "#d8bf86", "roughness": 0.85 },

@@ -261,7 +261,8 @@ export class Game {
     else if (e.kind === 'timer') this.hud.timer(e.seconds, e.label);
     else if (e.kind === 'smoke') room.smoke(e.from, e.level, e.seconds);
     else if (e.kind === 'display') room.setPropText(e.prop, e.text);
-    else if (e.kind === 'glance') room.glance(e.prop, e.at, e.seconds);
+    else if (e.kind === 'glance') room.glance(e.prop, e.at, e.seconds, this.player.position);
+    else if (e.kind === 'disable') room.disableProp(e.prop);
     else if (e.kind === 'hide') room.hideProp(e.prop);
     else if (e.kind === 'alarm') this.sound.alarm(e.on);
   }

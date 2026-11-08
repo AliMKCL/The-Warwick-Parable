@@ -51,8 +51,10 @@ export type RuleEffect =
   | { kind: 'smoke'; from: string; level: number; seconds: number }
   /** Redraw the text on a prop (e.g. a lift's floor indicator). */
   | { kind: 'display'; prop: string; text: string }
-  /** Turn a prop (a character) towards another prop for `seconds`, then back. */
+  /** Turn a prop (a character) towards another prop, or 'player', for `seconds`, then back. */
   | { kind: 'glance'; prop: string; at: string; seconds: number }
+  /** A prop can no longer be used (a printer that has been fixed). */
+  | { kind: 'disable'; prop: string }
   /** Remove a prop from the room (picked up). */
   | { kind: 'hide'; prop: string }
   /** The fire alarm bell, on or off. */

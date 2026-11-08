@@ -110,7 +110,7 @@ const BUILDERS: Record<TaskId, (p: TaskParams, rng: Rng, data: GameData) => Buil
     const ex = b.entrance(2);
     const board = b.door('n', 2, { label: t.boardLabel });
     const secret = b.door('e', 3, { label: t.secretLabel });
-    b.fixture({ id: 't_printer', recipe: 'printer_jammed', ...against('w', 8.5, W, D, 0.62), y: 0, surfaceText: 'PAPER JAM', holdSeconds: Number(p.helpSeconds) || 5 }, cells(0, 7, 1, 10));
+    b.fixture({ id: 't_printer', recipe: 'printer_jammed', ...against('w', 8.5, W, D, 0.62), y: 0, surfaceText: 'PAPER JAM', holdSeconds: Number(p.helpSeconds) || 8 }, cells(0, 7, 1, 10));
     b.fixture({ id: 't_colleague', recipe: 'colleague', x: 0.75, z: 9.55, face: 'e', y: 0 });
     b.zone({ id: 'colleague', x: 1.2, z: 9, r: 2.8 });
     b.zone({ id: 'far_end', x: 2.5, z: 2.5, r: 3 });
@@ -142,11 +142,12 @@ const BUILDERS: Record<TaskId, (p: TaskParams, rng: Rng, data: GameData) => Buil
     desks.forEach(([x, z], i) => {
       b.fixture({ id: `t_desk${i + 1}`, recipe: 'terminal_desk', x, z, face: 's', y: 0, surfaceText: SCREENS[i % SCREENS.length], inspectText: 'A spreadsheet, mid-edit. Column F is entirely question marks.' });
       if (crowd) {
-        b.fixture({ id: `t_worker${i + 1}`, recipe: 'worker_seated', x, z: z + 0.9, face: 'n', y: 0 });
+        b.fixture({ id: `t_worker${i + 1}`, recipe: ['worker_seated', 'worker_seated_b', 'worker_seated_c'][i % 3]!, x, z: z + 0.9, face: 'n', y: 0 });
         workers.push(`t_worker${i + 1}`);
       }
       b.reserve(cells(Math.floor(x) - 1, Math.floor(z) - 1, Math.floor(x) + 1, Math.floor(z) + 1));
     });
+    b.zone({ id: 'file_desk', x: 2, z: 1.3, r: 2.2 });
     b.zone({ id: 'vent', x: W - 1.4, z: 3, r: 2 });
     b.zone({ id: 'fire_exit', x: W - 0.8, z: 7.5, r: 1.4 });
     b.wallSlots();

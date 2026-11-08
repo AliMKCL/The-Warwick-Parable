@@ -82,14 +82,29 @@ export class TaskRuntime {
         break;
       case 'meeting':
         this.say('enter', tx.meeting.enter);
-        this.ctx.emit({ kind: 'timer', seconds: Number(this.p.countdown) || 45, label: tx.meeting.timerLabel });
-        this.log('countdown_start', { seconds: Number(this.p.countdown) || 45 });
+        this.ctx.emit({ kind: 'timer', seconds: Number(this.p.countdown) || 13, label: tx.meeting.timerLabel });
+        this.log('countdown_start', { seconds: Number(this.p.countdown) || 13 });
         break;
       case 'smoke':
         this.say('enter', tx.smoke.enter);
         this.log('prompt_shown', { prompt: 'fetch_file', options: ['fetch', 'ignore'] });
+        // The exits stay shut until the smoke starts, so every player is still in the room when it does.
+        this.ctx.emit({ kind: 'doors', locked: this.exits() });
         break;
     }
+  }
+
+  private exits(): string[] {
+    return this.room.layout.doors.filter((d) => !d.entrance).map((d) => d.id);
+  }
+
+  /** Smoke from the vent: at `onset` seconds, or as soon as the player reaches the far desk. */
+  private startSmoke(trigger: 'time' | 'desk') {
+    if (this.state.smoke !== undefined) return;
+    this.state.smoke = this.at;
+    this.ctx.emit({ kind: 'smoke', from: String(this.p.ventProp), level: 1, seconds: Number(this.p.growth) || 60 });
+    this.ctx.emit({ kind: 'doors', locked: [] });
+    this.log('smoke_start', { growth: Number(this.p.growth) || 60, trigger });
   }
 
   onEvent(e: GameEvent) {
@@ -129,6 +144,10 @@ export class TaskRuntime {
         break;
       case 'door_tried':
         this.log('interact', { object: e.doorId, action: 'door_tried' });
+        if (this.id === 'smoke' && this.state.smoke === undefined && !this.state.toldLocked) {
+          this.state.toldLocked = true;
+          this.say('locked', this.ctx.data.tasks.smoke.locked);
+        }
         break;
       case 'pressed':
         this.pressed(e.objectId);
@@ -217,7 +236,7 @@ export class TaskRuntime {
         break;
       }
       case 'meeting': {
-        const countdown = Number(this.p.countdown) || 45;
+        const countdown = Number(this.p.countdown) || 13;
         if (!this.state.late && since >= countdown) {
           this.state.late = true;
           this.ctx.emit({ kind: 'timer', seconds: null, label: '' });
@@ -227,12 +246,7 @@ export class TaskRuntime {
         break;
       }
       case 'smoke': {
-        const onset = Number(this.p.onset) || 10;
-        if (!this.state.smoke && since >= onset) {
-          this.state.smoke = t;
-          this.ctx.emit({ kind: 'smoke', from: String(this.p.ventProp), level: 1, seconds: Number(this.p.growth) || 60 });
-          this.log('smoke_start', { growth: Number(this.p.growth) || 60 });
-        }
+        if (since >= (Number(this.p.onset) || 8)) this.startSmoke('time');
         // One of the calm workers glances at the smoke and goes back to typing.
         const workers = String(this.p.workerProps ?? '').split(',').filter(Boolean);
         if (this.state.smoke !== undefined && !this.state.glanced && workers.length && t >= Number(this.state.smoke) + 8) {
@@ -271,6 +285,7 @@ export class TaskRuntime {
       this.say('ask', this.ctx.data.tasks.meeting.ask);
       this.log('prompt_shown', { prompt: 'help', options: ['help', 'ignore'], clock: this.clock() });
     }
+    if (this.id === 'smoke' && zone === 'file_desk') this.startSmoke('desk');
   }
 
   private pressed(objectId: string) {
@@ -296,22 +311,29 @@ export class TaskRuntime {
       const n = Number(this.state.talks ?? 0);
       this.state.talks = n + 1;
       this.log('interact', { object: objectId, action: 'talk' });
-      this.say(`worker${n}`, tx.smoke.workers[n % tx.smoke.workers.length]!);
+      // They turn to look at the player, answer, and go back to typing. Before the smoke it's small talk;
+      // after it, the calm brush-off the task is about.
+      this.ctx.emit({ kind: 'glance', prop: objectId, at: 'player', seconds: 2.2 });
+      const lines = this.state.smoke === undefined ? tx.smoke.workersBefore : tx.smoke.workers;
+      this.say(`worker${n}`, lines[n % lines.length]!);
     } else {
       this.log('interact', { object: objectId, action: 'press' });
     }
   }
 
   private holdStart(objectId: string) {
+    if (this.state.helped) return; // fixed once; the printer is done
     this.log('interact', { object: objectId, action: 'hold_start', clock: this.clock() });
   }
 
   private holdEnd(objectId: string, seconds: number, completed: boolean) {
+    if (this.state.helped) return;
     this.log('interact', { object: objectId, action: 'hold_end', seconds, completed, clock: this.clock() });
-    if (this.id === 'meeting' && completed && !this.state.helped) {
+    if (this.id === 'meeting' && completed) {
       this.state.helped = true;
       this.log('choice', { prompt: 'help', chosen: 'help', context: { clock: this.clock() } });
       this.ctx.emit({ kind: 'display', prop: String(this.p.printerProp), text: 'READY' });
+      this.ctx.emit({ kind: 'disable', prop: String(this.p.printerProp) });
       this.say('thanks', this.ctx.data.tasks.meeting.thanks);
     }
   }
@@ -343,7 +365,7 @@ export class TaskRuntime {
   /** Seconds left on the meeting countdown. */
   private clock(): number | undefined {
     if (this.id !== 'meeting') return undefined;
-    return Math.max(0, Math.round(((Number(this.p.countdown) || 45) - (this.now - this.t0)) * 10) / 10);
+    return Math.max(0, Math.round(((Number(this.p.countdown) || 13) - (this.now - this.t0)) * 10) / 10);
   }
 
   /** Tasks feed the hidden profile too, so the room generator and the dossier see them. */

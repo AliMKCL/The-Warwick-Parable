@@ -28,7 +28,11 @@ export function sessionParams(seed: number): Record<TaskId, TaskParams> {
     two_doors: { instructedSide: rng() < 0.5 ? 'left' : 'right', lineVariant: rng() < 0.5 ? 0 : 1 },
     lift: { timeout: 90, stairs: 'plain' },
     desk: { items: 5, offset: 'near' },
-    meeting: { countdown: 45, helpSeconds: 5 },
-    smoke: { condition: rng() < 0.5 ? 'crowd' : 'alone', workers: 3, onset: 10, growth: 60 },
+    // Tight on purpose: walking straight to the boardroom takes about 6 s, so 13 s is enough on its own,
+    // but stopping for the 8 s printer fix (plus the walk to it) makes the player late. Helping costs something.
+    meeting: { countdown: 13, helpSeconds: 8 },
+    // Smoke starts at `onset` s or as soon as the player reaches the far desk, whichever comes first;
+    // the exits stay shut until then, so nobody can leave before it starts.
+    smoke: { condition: rng() < 0.5 ? 'crowd' : 'alone', workers: 3, onset: 8, growth: 60 },
   };
 }

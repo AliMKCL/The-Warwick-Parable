@@ -3541,6 +3541,30 @@
      -0.025
     ],
     "mat": "hair_dark"
+   },
+   {
+    "shape": "sphere",
+    "size": [
+     0.016
+    ],
+    "pos": [
+     -0.042,
+     1.67,
+     0.108
+    ],
+    "mat": "plastic_black"
+   },
+   {
+    "shape": "sphere",
+    "size": [
+     0.016
+    ],
+    "pos": [
+     0.042,
+     1.67,
+     0.108
+    ],
+    "mat": "plastic_black"
    }
   ]
  },
@@ -3763,7 +3787,8 @@
      0.8,
      0.14
     ],
-    "mat": "shirt_white"
+    "mat": "shirt_white",
+    "anim": "type"
    },
    {
     "shape": "box",
@@ -3777,7 +3802,8 @@
      0.8,
      0.14
     ],
-    "mat": "shirt_white"
+    "mat": "shirt_white",
+    "anim": "type"
    },
    {
     "shape": "sphere",
@@ -3789,7 +3815,8 @@
      0.8,
      0.33
     ],
-    "mat": "skin"
+    "mat": "skin",
+    "anim": "type"
    },
    {
     "shape": "sphere",
@@ -3801,7 +3828,8 @@
      0.8,
      0.33
     ],
-    "mat": "skin"
+    "mat": "skin",
+    "anim": "type"
    },
    {
     "shape": "cyl",
@@ -3840,6 +3868,30 @@
      -0.06
     ],
     "mat": "hair_dark"
+   },
+   {
+    "shape": "sphere",
+    "size": [
+     0.016
+    ],
+    "pos": [
+     -0.042,
+     1.38,
+     0.075
+    ],
+    "mat": "plastic_black"
+   },
+   {
+    "shape": "sphere",
+    "size": [
+     0.016
+    ],
+    "pos": [
+     0.042,
+     1.38,
+     0.075
+    ],
+    "mat": "plastic_black"
    }
   ]
  },
@@ -4124,5 +4176,659 @@
    ],
    "style": "label"
   }
+ },
+ {
+  "id": "worker_seated_b",
+  "name": "Office worker",
+  "tags": [
+   "person",
+   "task"
+  ],
+  "fits": [
+   "fixture"
+  ],
+  "size": [
+   0.6,
+   1.5,
+   0.6
+  ],
+  "solid": true,
+  "inspectable": false,
+  "interact": "button",
+  "verb": "Talk to them",
+  "parts": [
+   {
+    "shape": "cyl",
+    "size": [
+     0.26,
+     0.26,
+     0.04
+    ],
+    "pos": [
+     0,
+     0.04,
+     0
+    ],
+    "mat": "plastic_black"
+   },
+   {
+    "shape": "cyl",
+    "size": [
+     0.03,
+     0.03,
+     0.38
+    ],
+    "pos": [
+     0,
+     0.25,
+     0
+    ],
+    "mat": "metal_grey"
+   },
+   {
+    "shape": "box",
+    "size": [
+     0.48,
+     0.07,
+     0.46
+    ],
+    "pos": [
+     0,
+     0.47,
+     0
+    ],
+    "mat": "fabric_grey"
+   },
+   {
+    "shape": "box",
+    "size": [
+     0.46,
+     0.5,
+     0.06
+    ],
+    "pos": [
+     0,
+     0.8,
+     -0.24
+    ],
+    "mat": "fabric_grey"
+   },
+   {
+    "shape": "box",
+    "size": [
+     0.14,
+     0.13,
+     0.42
+    ],
+    "pos": [
+     -0.1,
+     0.57,
+     0.1
+    ],
+    "mat": "trousers_dark"
+   },
+   {
+    "shape": "box",
+    "size": [
+     0.14,
+     0.13,
+     0.42
+    ],
+    "pos": [
+     0.1,
+     0.57,
+     0.1
+    ],
+    "mat": "trousers_dark"
+   },
+   {
+    "shape": "box",
+    "size": [
+     0.13,
+     0.46,
+     0.13
+    ],
+    "pos": [
+     -0.1,
+     0.27,
+     0.32
+    ],
+    "mat": "trousers_dark"
+   },
+   {
+    "shape": "box",
+    "size": [
+     0.13,
+     0.46,
+     0.13
+    ],
+    "pos": [
+     0.1,
+     0.27,
+     0.32
+    ],
+    "mat": "trousers_dark"
+   },
+   {
+    "shape": "box",
+    "size": [
+     0.12,
+     0.06,
+     0.24
+    ],
+    "pos": [
+     -0.1,
+     0.03,
+     0.38
+    ],
+    "mat": "rubber_black"
+   },
+   {
+    "shape": "box",
+    "size": [
+     0.12,
+     0.06,
+     0.24
+    ],
+    "pos": [
+     0.1,
+     0.03,
+     0.38
+    ],
+    "mat": "rubber_black"
+   },
+   {
+    "shape": "box",
+    "size": [
+     0.4,
+     0.56,
+     0.22
+    ],
+    "pos": [
+     0,
+     0.9,
+     -0.08
+    ],
+    "mat": "shirt_blue",
+    "rot": [
+     6,
+     0,
+     0
+    ]
+   },
+   {
+    "shape": "box",
+    "size": [
+     0.1,
+     0.3,
+     0.12
+    ],
+    "pos": [
+     -0.25,
+     0.97,
+     -0.04
+    ],
+    "mat": "shirt_blue"
+   },
+   {
+    "shape": "box",
+    "size": [
+     0.1,
+     0.3,
+     0.12
+    ],
+    "pos": [
+     0.25,
+     0.97,
+     -0.04
+    ],
+    "mat": "shirt_blue"
+   },
+   {
+    "shape": "box",
+    "size": [
+     0.09,
+     0.09,
+     0.34
+    ],
+    "pos": [
+     -0.23,
+     0.8,
+     0.14
+    ],
+    "mat": "shirt_blue",
+    "anim": "type"
+   },
+   {
+    "shape": "box",
+    "size": [
+     0.09,
+     0.09,
+     0.34
+    ],
+    "pos": [
+     0.23,
+     0.8,
+     0.14
+    ],
+    "mat": "shirt_blue",
+    "anim": "type"
+   },
+   {
+    "shape": "sphere",
+    "size": [
+     0.045
+    ],
+    "pos": [
+     -0.22,
+     0.8,
+     0.33
+    ],
+    "mat": "skin",
+    "anim": "type"
+   },
+   {
+    "shape": "sphere",
+    "size": [
+     0.045
+    ],
+    "pos": [
+     0.22,
+     0.8,
+     0.33
+    ],
+    "mat": "skin",
+    "anim": "type"
+   },
+   {
+    "shape": "cyl",
+    "size": [
+     0.05,
+     0.055,
+     0.09
+    ],
+    "pos": [
+     0,
+     1.22,
+     -0.05
+    ],
+    "mat": "skin"
+   },
+   {
+    "shape": "sphere",
+    "size": [
+     0.115
+    ],
+    "pos": [
+     0,
+     1.36,
+     -0.03
+    ],
+    "mat": "skin"
+   },
+   {
+    "shape": "sphere",
+    "size": [
+     0.12
+    ],
+    "pos": [
+     0,
+     1.4,
+     -0.06
+    ],
+    "mat": "hair_dark"
+   },
+   {
+    "shape": "sphere",
+    "size": [
+     0.016
+    ],
+    "pos": [
+     -0.042,
+     1.38,
+     0.075
+    ],
+    "mat": "plastic_black"
+   },
+   {
+    "shape": "sphere",
+    "size": [
+     0.016
+    ],
+    "pos": [
+     0.042,
+     1.38,
+     0.075
+    ],
+    "mat": "plastic_black"
+   }
+  ]
+ },
+ {
+  "id": "worker_seated_c",
+  "name": "Office worker",
+  "tags": [
+   "person",
+   "task"
+  ],
+  "fits": [
+   "fixture"
+  ],
+  "size": [
+   0.6,
+   1.5,
+   0.6
+  ],
+  "solid": true,
+  "inspectable": false,
+  "interact": "button",
+  "verb": "Talk to them",
+  "parts": [
+   {
+    "shape": "cyl",
+    "size": [
+     0.26,
+     0.26,
+     0.04
+    ],
+    "pos": [
+     0,
+     0.04,
+     0
+    ],
+    "mat": "plastic_black"
+   },
+   {
+    "shape": "cyl",
+    "size": [
+     0.03,
+     0.03,
+     0.38
+    ],
+    "pos": [
+     0,
+     0.25,
+     0
+    ],
+    "mat": "metal_grey"
+   },
+   {
+    "shape": "box",
+    "size": [
+     0.48,
+     0.07,
+     0.46
+    ],
+    "pos": [
+     0,
+     0.47,
+     0
+    ],
+    "mat": "fabric_grey"
+   },
+   {
+    "shape": "box",
+    "size": [
+     0.46,
+     0.5,
+     0.06
+    ],
+    "pos": [
+     0,
+     0.8,
+     -0.24
+    ],
+    "mat": "fabric_grey"
+   },
+   {
+    "shape": "box",
+    "size": [
+     0.14,
+     0.13,
+     0.42
+    ],
+    "pos": [
+     -0.1,
+     0.57,
+     0.1
+    ],
+    "mat": "trousers_dark"
+   },
+   {
+    "shape": "box",
+    "size": [
+     0.14,
+     0.13,
+     0.42
+    ],
+    "pos": [
+     0.1,
+     0.57,
+     0.1
+    ],
+    "mat": "trousers_dark"
+   },
+   {
+    "shape": "box",
+    "size": [
+     0.13,
+     0.46,
+     0.13
+    ],
+    "pos": [
+     -0.1,
+     0.27,
+     0.32
+    ],
+    "mat": "trousers_dark"
+   },
+   {
+    "shape": "box",
+    "size": [
+     0.13,
+     0.46,
+     0.13
+    ],
+    "pos": [
+     0.1,
+     0.27,
+     0.32
+    ],
+    "mat": "trousers_dark"
+   },
+   {
+    "shape": "box",
+    "size": [
+     0.12,
+     0.06,
+     0.24
+    ],
+    "pos": [
+     -0.1,
+     0.03,
+     0.38
+    ],
+    "mat": "rubber_black"
+   },
+   {
+    "shape": "box",
+    "size": [
+     0.12,
+     0.06,
+     0.24
+    ],
+    "pos": [
+     0.1,
+     0.03,
+     0.38
+    ],
+    "mat": "rubber_black"
+   },
+   {
+    "shape": "box",
+    "size": [
+     0.4,
+     0.56,
+     0.22
+    ],
+    "pos": [
+     0,
+     0.9,
+     -0.08
+    ],
+    "mat": "shirt_green",
+    "rot": [
+     6,
+     0,
+     0
+    ]
+   },
+   {
+    "shape": "box",
+    "size": [
+     0.1,
+     0.3,
+     0.12
+    ],
+    "pos": [
+     -0.25,
+     0.97,
+     -0.04
+    ],
+    "mat": "shirt_green"
+   },
+   {
+    "shape": "box",
+    "size": [
+     0.1,
+     0.3,
+     0.12
+    ],
+    "pos": [
+     0.25,
+     0.97,
+     -0.04
+    ],
+    "mat": "shirt_green"
+   },
+   {
+    "shape": "box",
+    "size": [
+     0.09,
+     0.09,
+     0.34
+    ],
+    "pos": [
+     -0.23,
+     0.8,
+     0.14
+    ],
+    "mat": "shirt_green",
+    "anim": "type"
+   },
+   {
+    "shape": "box",
+    "size": [
+     0.09,
+     0.09,
+     0.34
+    ],
+    "pos": [
+     0.23,
+     0.8,
+     0.14
+    ],
+    "mat": "shirt_green",
+    "anim": "type"
+   },
+   {
+    "shape": "sphere",
+    "size": [
+     0.045
+    ],
+    "pos": [
+     -0.22,
+     0.8,
+     0.33
+    ],
+    "mat": "skin",
+    "anim": "type"
+   },
+   {
+    "shape": "sphere",
+    "size": [
+     0.045
+    ],
+    "pos": [
+     0.22,
+     0.8,
+     0.33
+    ],
+    "mat": "skin",
+    "anim": "type"
+   },
+   {
+    "shape": "cyl",
+    "size": [
+     0.05,
+     0.055,
+     0.09
+    ],
+    "pos": [
+     0,
+     1.22,
+     -0.05
+    ],
+    "mat": "skin"
+   },
+   {
+    "shape": "sphere",
+    "size": [
+     0.115
+    ],
+    "pos": [
+     0,
+     1.36,
+     -0.03
+    ],
+    "mat": "skin"
+   },
+   {
+    "shape": "sphere",
+    "size": [
+     0.12
+    ],
+    "pos": [
+     0,
+     1.4,
+     -0.06
+    ],
+    "mat": "hair_dark"
+   },
+   {
+    "shape": "sphere",
+    "size": [
+     0.016
+    ],
+    "pos": [
+     -0.042,
+     1.38,
+     0.075
+    ],
+    "mat": "plastic_black"
+   },
+   {
+    "shape": "sphere",
+    "size": [
+     0.016
+    ],
+    "pos": [
+     0.042,
+     1.38,
+     0.075
+    ],
+    "mat": "plastic_black"
+   }
+  ]
  }
 ]

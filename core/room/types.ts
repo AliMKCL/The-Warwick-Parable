@@ -21,6 +21,8 @@ export interface PropPart {
   rot?: [number, number, number];
   /** Key into data/materials.json */
   mat: string;
+  /** A small idle motion the adapter plays: 'type' bobs the part like hands on a keyboard. */
+  anim?: 'type';
 }
 
 export type TextStyle = 'sign' | 'poster' | 'screen' | 'paper' | 'whiteboard' | 'label' | 'led' | 'sticky';
@@ -232,7 +234,7 @@ export interface TaskTexts {
   lift: { title: string; brief: string; enter: string; hint: string; stairsLabel: string; floors: string[] };
   desk: { title: string; brief: string; enter: string; exitLabel: string; items: Record<string, { name: string; text: string; reading: boolean; surface?: string }> };
   meeting: { title: string; brief: string; enter: string; ask: string; thanks: string; late: string; boardLabel: string; secretLabel: string; timerLabel: string };
-  smoke: { title: string; brief: string; enter: string; fileTaken: string; alarm: string; workers: string[]; fileLabel: string; exitLabel: string; otherLabel: string };
+  smoke: { title: string; brief: string; enter: string; fileTaken: string; alarm: string; locked: string; workersBefore: string[]; workers: string[]; fileLabel: string; exitLabel: string; otherLabel: string };
 }
 
 /** Markdown prompt templates from data/prompts and data/themes, with {{placeholders}}. */

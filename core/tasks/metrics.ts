@@ -285,7 +285,7 @@ const SCORERS: Record<TaskId, (events: TaskEvent[], ctx: ScoreContext) => Score>
     const done = first(ev, 'interact', (d) => d.action === 'hold_end' && d.completed === true);
     const farEnd = first(ev, 'zone_enter', (d) => d.zone === 'far_end');
     const helped = done ? 1 : 0;
-    const countdown = Number(params.countdown) || 45;
+    const countdown = Number(params.countdown) || 13;
     const leftOnClock = (t: number) => (start ? Math.max(0, countdown - (t - start.t)) : null);
     const firstStart = starts[0];
     const cameBack = firstStart && farEnd && farEnd.t < firstStart.t ? 1 : 0;

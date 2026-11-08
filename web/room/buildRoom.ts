@@ -50,7 +50,9 @@ export interface RoomView {
   /** Take a prop out of the room (picked up). */
   hideProp(propId: string): void;
   /** Turn a prop (a character) towards another prop for a while, then back. */
-  glance(propId: string, atId: string, seconds: number): void;
+  glance(propId: string, atId: string, seconds: number, player?: { x: number; z: number }): void;
+  /** A prop can no longer be used. */
+  disableProp(propId: string): void;
   /** Stylised smoke from a prop, growing to `level` over `seconds`. */
   smoke(fromId: string, level: number, seconds: number): void;
   smokeLevel(): number;
@@ -207,30 +209,42 @@ export function buildRoom(spec: RoomSpec, data: GameData, materials: MaterialLib
     hemi.intensity = baseHemi * (0.25 + 0.75 * level);
   };
 
-  // ---- characters turning their heads ----
+  // ---- characters: typing hands, and turning to look at something ----
   const glances: { obj: THREE.Object3D; base: number; to: number; t: number; hold: number }[] = [];
+  const typing: { mesh: THREE.Object3D; y: number; phase: number; rate: number }[] = [];
+  group.traverse((o) => {
+    if (o.userData.anim === 'type') typing.push({ mesh: o, y: o.position.y, phase: Math.random() * 10, rate: 9 + Math.random() * 5 });
+  });
+  let clock = 0;
 
-  // ---- smoke: soft grey puffs drifting out of a vent, plus a light haze ----
+  // ---- smoke: irregular grey puffs roll out of a vent, rise, and pool into a layer under the ceiling
+  // that sinks as the room fills, plus a growing haze. Stylised and mild, no fire. ----
   const fog = new THREE.FogExp2(amb.fog, amb.fogDensity);
   const fogBase = new THREE.Color(amb.fog);
-  const fogSmoke = new THREE.Color('#8f8f8a');
+  const fogSmoke = new THREE.Color('#8d8c87');
   let smokeFrom: { x: number; y: number; z: number; dx: number; dz: number } | undefined;
   let smokeNow = 0, smokeTo = 0, smokeRate = 0;
-  const puffs: { sprite: THREE.Sprite; age: number; life: number; vx: number; vy: number; vz: number }[] = [];
-  let puffTex: THREE.Texture | undefined;
+  const puffs: { sprite: THREE.Sprite; age: number; life: number; vx: number; vy: number; vz: number; size: number; spin: number; peak: number }[] = [];
+  let puffTex: THREE.Texture[] | undefined;
   let spawnAcc = 0;
   const spawnPuff = () => {
     if (!smokeFrom) return;
-    puffTex ??= softDot();
+    puffTex ??= [0, 1, 2].map((i) => cloudTexture(i));
     // Sprites aren't lit, so the grey is set dark enough to read as smoke rather than glow.
-    const mat = new THREE.SpriteMaterial({ map: puffTex, color: '#6f6e6a', transparent: true, depthWrite: false, opacity: 0 });
+    const mat = new THREE.SpriteMaterial({ map: puffTex[Math.floor(Math.random() * puffTex.length)]!, color: '#7a7873', transparent: true, depthWrite: false, opacity: 0 });
+    mat.rotation = Math.random() * Math.PI * 2;
     const sprite = new THREE.Sprite(mat);
     sprite.raycast = () => {}; // smoke never blocks what the player is aiming at
-    sprite.position.set(smokeFrom.x + (Math.random() - 0.5) * 0.4, smokeFrom.y + (Math.random() - 0.5) * 0.15, smokeFrom.z + (Math.random() - 0.5) * 0.4);
-    sprite.scale.setScalar(0.4);
+    sprite.position.set(smokeFrom.x + (Math.random() - 0.5) * 0.45, smokeFrom.y + (Math.random() - 0.5) * 0.2, smokeFrom.z + (Math.random() - 0.5) * 0.45);
+    sprite.scale.setScalar(0.35);
     group.add(sprite);
-    const speed = 0.35 + Math.random() * 0.25;
-    puffs.push({ sprite, age: 0, life: 7 + Math.random() * 5, vx: smokeFrom.dx * speed + (Math.random() - 0.5) * 0.12, vy: -0.02 + Math.random() * 0.06, vz: smokeFrom.dz * speed + (Math.random() - 0.5) * 0.12 });
+    const speed = 0.45 + Math.random() * 0.35;
+    const side = (Math.random() - 0.5) * 0.5;
+    puffs.push({
+      sprite, age: 0, life: 14 + Math.random() * 10,
+      vx: smokeFrom.dx * speed - smokeFrom.dz * side, vy: 0.05 + Math.random() * 0.08, vz: smokeFrom.dz * speed + smokeFrom.dx * side,
+      size: 1.6 + Math.random() * 1.6, spin: (Math.random() - 0.5) * 0.25, peak: 0.55 + Math.random() * 0.35,
+    });
   };
 
   return {
@@ -286,14 +300,25 @@ export function buildRoom(spec: RoomSpec, data: GameData, materials: MaterialLib
       const i = interactables.indexOf(obj);
       if (i >= 0) interactables.splice(i, 1);
     },
-    glance(id, atId, seconds) {
-      const obj = propObjects.get(id), at = propObjects.get(atId);
+    glance(id, atId, seconds, player) {
+      const obj = propObjects.get(id);
+      const at = atId === 'player' ? player : propObjects.get(atId)?.position;
       if (!obj || !at) return;
+      // Already turning: let that finish rather than stacking turns.
+      if (glances.some((g) => g.obj === obj)) return;
       const base = obj.rotation.y;
-      // The prop's front is local +z; face it towards the target, but only turn part of the way, like a glance.
-      const want = Math.atan2(at.position.x - obj.position.x, at.position.z - obj.position.z);
+      // The prop's front is local +z. Swivel towards the target, part of the way to a glance at a thing,
+      // most of the way to someone talking to them.
+      const want = Math.atan2(at.x - obj.position.x, at.z - obj.position.z);
       const delta = Math.atan2(Math.sin(want - base), Math.cos(want - base));
-      glances.push({ obj, base, to: base + delta * 0.6, t: 0, hold: seconds });
+      glances.push({ obj, base, to: base + delta * (atId === 'player' ? 0.8 : 0.6), t: 0, hold: seconds });
+    },
+    disableProp(id) {
+      const obj = propObjects.get(id);
+      if (!obj) return;
+      delete obj.userData.interact;
+      const i = interactables.indexOf(obj);
+      if (i >= 0) interactables.splice(i, 1);
     },
     smoke(fromId, to, seconds) {
       const vent = spec.props.find((p) => p.id === fromId);
@@ -305,6 +330,8 @@ export function buildRoom(spec: RoomSpec, data: GameData, materials: MaterialLib
     },
     smokeLevel: () => smokeNow,
     update(dt) {
+      clock += dt;
+      for (const k of typing) k.mesh.position.y = k.y + Math.max(0, Math.sin(clock * k.rate + k.phase)) * 0.012;
       for (let i = glances.length - 1; i >= 0; i--) {
         const g = glances[i]!;
         g.t += dt;
@@ -316,21 +343,35 @@ export function buildRoom(spec: RoomSpec, data: GameData, materials: MaterialLib
       }
       if (smokeFrom) {
         smokeNow = Math.min(smokeTo, smokeNow + smokeRate * dt);
-        fog.color.copy(fogBase).lerp(fogSmoke, smokeNow * 0.8);
-        fog.density = amb.fogDensity + smokeNow * 0.07;
-        spawnAcc += dt * (3 + smokeNow * 9);
-        while (spawnAcc >= 1 && puffs.length < 90) { spawnAcc -= 1; spawnPuff(); }
+        fog.color.copy(fogBase).lerp(fogSmoke, smokeNow * 0.85);
+        fog.density = amb.fogDensity + smokeNow * 0.06;
+        spawnAcc += dt * (4 + smokeNow * 8);
+        while (spawnAcc >= 1 && puffs.length < 160) { spawnAcc -= 1; spawnPuff(); }
+        // The underside of the smoke layer: just below the ceiling at first, sinking towards head height.
+        const layer = H - 0.3 - smokeNow * Math.max(0, H - 2.3);
         for (let i = puffs.length - 1; i >= 0; i--) {
           const p = puffs[i]!;
           p.age += dt;
           const f = p.age / p.life;
-          p.sprite.position.x += p.vx * dt;
-          p.sprite.position.y = Math.min(H - 0.15, p.sprite.position.y + p.vy * dt);
-          p.sprite.position.z += p.vz * dt;
-          p.vx *= 1 - dt * 0.08;
-          p.vz *= 1 - dt * 0.08;
-          p.sprite.scale.setScalar(0.6 + f * 2.4);
-          (p.sprite.material as THREE.SpriteMaterial).opacity = Math.sin(Math.PI * Math.min(1, f)) * (0.38 + 0.27 * smokeNow);
+          const pos = p.sprite.position;
+          // Rise towards the layer, then spread out sideways along it and slow down.
+          p.vy += ((layer + (Math.random() - 0.5) * 0.4 - pos.y) * 0.25 - p.vy) * Math.min(1, dt * 0.8);
+          pos.x += p.vx * dt;
+          pos.y = Math.min(H - 0.12, pos.y + p.vy * dt);
+          pos.z += p.vz * dt;
+          p.vx *= 1 - dt * 0.12;
+          p.vz *= 1 - dt * 0.12;
+          // Keep it inside the room.
+          if (pos.x < 0.3 || pos.x > layout.width - 0.3) p.vx = -p.vx * 0.5;
+          if (pos.z < 0.3 || pos.z > layout.depth - 0.3) p.vz = -p.vz * 0.5;
+          pos.x = Math.min(layout.width - 0.3, Math.max(0.3, pos.x));
+          pos.z = Math.min(layout.depth - 0.3, Math.max(0.3, pos.z));
+          const mat = p.sprite.material as THREE.SpriteMaterial;
+          mat.rotation += p.spin * dt;
+          p.sprite.scale.setScalar(0.35 + Math.min(1, f * 2.5) * p.size);
+          // Fade in fast, linger, fade out slowly.
+          const fade = Math.min(1, f * 6) * Math.min(1, (1 - f) * 3);
+          mat.opacity = fade * p.peak * (0.3 + 0.35 * smokeNow);
           if (f >= 1) {
             group.remove(p.sprite);
             (p.sprite.material as THREE.SpriteMaterial).dispose();
@@ -363,7 +404,7 @@ export function buildRoom(spec: RoomSpec, data: GameData, materials: MaterialLib
       for (const o of owned) o.dispose();
       for (const l of points) l.dispose();
       for (const p of puffs) (p.sprite.material as THREE.SpriteMaterial).dispose();
-      puffTex?.dispose();
+      puffTex?.forEach((t) => t.dispose());
       hemi.dispose();
     },
   };
@@ -487,17 +528,31 @@ export function buildRoom(spec: RoomSpec, data: GameData, materials: MaterialLib
   }
 }
 
-/** A soft round dot (a smoke puff). */
-function softDot(): THREE.Texture {
+/** An irregular, cloudy puff of smoke: a cluster of soft blobs, so no two puffs read as a circle. */
+function cloudTexture(seed: number): THREE.Texture {
+  const S = 128;
   const c = document.createElement('canvas');
-  c.width = c.height = 64;
+  c.width = c.height = S;
   const g = c.getContext('2d')!;
-  const grad = g.createRadialGradient(32, 32, 0, 32, 32, 32);
-  grad.addColorStop(0, 'rgba(255,255,255,1)');
-  grad.addColorStop(0.5, 'rgba(255,255,255,0.45)');
-  grad.addColorStop(1, 'rgba(255,255,255,0)');
-  g.fillStyle = grad;
-  g.fillRect(0, 0, 64, 64);
+  let s = 1234 + seed * 977;
+  const rnd = () => ((s = (s * 16807) % 2147483647) / 2147483647);
+  for (let i = 0; i < 14; i++) {
+    const a = rnd() * Math.PI * 2, d = rnd() * S * 0.22;
+    const x = S / 2 + Math.cos(a) * d, y = S / 2 + Math.sin(a) * d;
+    const r = S * (0.14 + rnd() * 0.16);
+    const grad = g.createRadialGradient(x, y, 0, x, y, r);
+    grad.addColorStop(0, `rgba(255,255,255,${0.35 + rnd() * 0.25})`);
+    grad.addColorStop(1, 'rgba(255,255,255,0)');
+    g.fillStyle = grad;
+    g.fillRect(0, 0, S, S);
+  }
+  // Soften the edge so the square never shows.
+  g.globalCompositeOperation = 'destination-in';
+  const mask = g.createRadialGradient(S / 2, S / 2, S * 0.25, S / 2, S / 2, S / 2);
+  mask.addColorStop(0, 'rgba(0,0,0,1)');
+  mask.addColorStop(1, 'rgba(0,0,0,0)');
+  g.fillStyle = mask;
+  g.fillRect(0, 0, S, S);
   const tex = new THREE.CanvasTexture(c);
   tex.colorSpace = THREE.SRGBColorSpace;
   return tex;

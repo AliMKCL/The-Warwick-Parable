@@ -75,6 +75,12 @@
     "enter": "Could you fetch the Henderson file from the far desk? Thank you.",
     "fileTaken": "The Henderson file. Thank you.",
     "alarm": "The alarm. Right.",
+    "locked": "The doors here run on a schedule. It isn't yours.",
+    "workersBefore": [
+      "“Mm. Busy day.”",
+      "“Henderson? Far corner. Probably.”",
+      "“Sorry, I'm on a deadline.”"
+    ],
     "workers": [
       "“Hm? Oh, that. It does that sometimes.”",
       "“Not my department.”",

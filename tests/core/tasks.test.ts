@@ -277,7 +277,7 @@ async function play(seed: number, bot: Bot) {
   // 4. The meeting.
   const p4 = room.task!.params;
   expect(room.task!.id).toBe('meeting');
-  expect(effects.some((e) => e.kind === 'timer' && e.seconds === 45)).toBe(true);
+  expect(effects.some((e) => e.kind === 'timer' && e.seconds === 13)).toBe(true);
   const printer = prop('t_printer');
   walk(printer.x + (room.layout.width / 2 - printer.x) * 0.5, printer.z + (room.layout.depth / 2 - printer.z) * 0.1);
   if (bot.helps) {
@@ -393,6 +393,87 @@ describe('scripted bots play the office', () => {
     }
     expect(seen.anomaly).toBeGreaterThan(10);
     expect(seen.variant).toBeGreaterThan(0);
+  });
+
+  /** A run advanced to the room of `task`, with a tiny driver: walk at walking speed, wait, send events. */
+  async function at(task: TaskId, seed = 300) {
+    const effects: RuleEffect[] = [];
+    const said: { text: string; lineId?: string }[] = [];
+    const run = new Run(seed, gameData, { observeMs: 0, tasks: true, onEffect: (e) => effects.push(e), onSay: (text, lineId) => said.push({ text, lineId }) });
+    let room = run.start();
+    let t = 0;
+    run.record({ type: 'room_entered', roomId: room.id, t });
+    while (room.task?.id !== task) {
+      t += 5;
+      run.record({ type: 'door_chosen', roomId: room.id, doorId: room.layout.doors.find((d) => !d.entrance)!.id, t });
+      room = await run.next(room.layout.doors.find((d) => !d.entrance)!.id);
+      run.record({ type: 'room_entered', roomId: room.id, t });
+    }
+    let x = room.layout.spawn.x, z = room.layout.spawn.z;
+    const step = () => run.record({ type: 'move', roomId: room.id, x, z, t: (t = Math.round((t + 0.1) * 1000) / 1000) });
+    const d = {
+      run, room, effects, said, get t() { return t; },
+      wait(s: number) { for (let i = 0; i < s * 10; i++) step(); },
+      walk(tx: number, tz: number, speed = 2.7) {
+        const n = Math.max(1, Math.ceil(Math.hypot(tx - x, tz - z) / (speed * 0.1)));
+        const sx = x, sz = z;
+        for (let i = 1; i <= n; i++) { x = sx + ((tx - sx) * i) / n; z = sz + ((tz - sz) * i) / n; step(); }
+      },
+      door(id: unknown) { const dd = room.layout.doors.find((x) => x.id === id)!; return [dd.cx + 0.5, dd.cz + 0.5] as const; },
+      prop(id: string) { const p = room.props.find((x) => x.id === id)!; return [p.x + Math.sin(p.rotY) * 0.9, p.z + Math.cos(p.rotY) * 0.9] as const; },
+      send(e: GameEvent) { run.record(e); },
+    };
+    return d;
+  }
+
+  it('the meeting is a real trade-off: walking straight makes it, stopping to help makes you late', async () => {
+    const rush = await at('meeting');
+    rush.walk(...rush.door(rush.room.task!.params.boardDoor));
+    expect(rush.run.taskLog.events.some((e) => e.task === 'meeting' && e.type === 'countdown_end'), 'straight walk is on time').toBe(false);
+
+    const help = await at('meeting');
+    help.walk(...help.prop('t_printer'));
+    help.send({ type: 'hold_start', roomId: help.room.id, objectId: 't_printer', t: help.t });
+    help.wait(8);
+    help.send({ type: 'hold_end', roomId: help.room.id, objectId: 't_printer', seconds: 8, completed: true, t: help.t });
+    help.walk(...help.door(help.room.task!.params.boardDoor));
+    expect(help.run.taskLog.events.some((e) => e.task === 'meeting' && e.type === 'countdown_end'), 'helping makes you late').toBe(true);
+  });
+
+  it('the printer can only be fixed once', async () => {
+    const d = await at('meeting');
+    d.walk(...d.prop('t_printer'));
+    for (let i = 0; i < 2; i++) {
+      d.send({ type: 'hold_start', roomId: d.room.id, objectId: 't_printer', t: d.t });
+      d.wait(8);
+      d.send({ type: 'hold_end', roomId: d.room.id, objectId: 't_printer', seconds: 8, completed: true, t: d.t });
+    }
+    const log = d.run.taskLog.slice('meeting');
+    expect(log.filter((e) => e.type === 'choice' && e.data.chosen === 'help')).toHaveLength(1);
+    expect(log.filter((e) => e.data.action === 'hold_start')).toHaveLength(1);
+    expect(d.effects.some((e) => e.kind === 'disable' && e.prop === 't_printer')).toBe(true);
+  });
+
+  it('smoke: exits stay shut until the smoke starts, which reaching the far desk brings forward', async () => {
+    const d = await at('smoke');
+    const exits = d.room.layout.doors.filter((x) => !x.entrance).map((x) => x.id);
+    expect(d.effects.some((e) => e.kind === 'doors' && exits.every((id) => e.locked.includes(id)))).toBe(true);
+    // Before the smoke, the workers make small talk and turn to the player.
+    const worker = d.room.task!.params.workerProps ? String(d.room.task!.params.workerProps).split(',')[0] : undefined;
+    if (worker) {
+      d.send({ type: 'pressed', roomId: d.room.id, objectId: worker, t: d.t });
+      expect(gameData.tasks.smoke.workersBefore).toContain(d.said.at(-1)!.text);
+      expect(d.effects.some((e) => e.kind === 'glance' && e.at === 'player')).toBe(true);
+    }
+    d.walk(2, 1.6); // to the far desk, well before the onset time
+    const start = d.run.taskLog.slice('smoke').find((e) => e.type === 'smoke_start')!;
+    expect(start.data.trigger).toBe('desk');
+    expect(start.t - d.run.taskLog.slice('smoke')[0]!.t).toBeLessThan(8);
+    expect(d.effects.at(-1)).toEqual({ kind: 'doors', locked: [] });
+    if (worker) {
+      d.send({ type: 'pressed', roomId: d.room.id, objectId: worker, t: d.t });
+      expect(gameData.tasks.smoke.workers).toContain(d.said.at(-1)!.text);
+    }
   });
 
   it('a run without tasks is unchanged: rules, no task rooms', async () => {
