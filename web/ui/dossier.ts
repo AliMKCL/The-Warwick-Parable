@@ -1,4 +1,4 @@
-import type { Dossier, TraitName } from '../../core/protocol';
+import type { Dossier, Measured, SelfTrait, TraitName } from '../../core/protocol';
 
 const TRAITS: { key: TraitName; label: string; low: string; high: string; colour: string }[] = [
   { key: 'hesitation', label: 'Hesitation', low: 'decisive', high: 'hesitant', colour: '#6e8cd6' },
@@ -11,8 +11,13 @@ const TRAITS: { key: TraitName; label: string; low: string; high: string; colour
 export function showDossier(root: HTMLElement, d: Dossier) {
   const v = d.verdict;
   const mins = Math.floor(d.seconds / 60), secs = d.seconds % 60;
+  // Traits caught pointing opposite ways are shown as one pattern, not two labels.
+  const patterns = d.patterns ?? [];
+  const mixed = new Set(patterns.flatMap((p) => p.traits));
+  const name = (k: TraitName) => TRAITS.find((t) => t.key === k)!.label;
   root.innerHTML = `
   <article class="file">
+    ${saidDid(d)}
     <header>
       <div>
         <p class="kicker">Personnel file · subject ${d.seed}</p>
@@ -22,12 +27,13 @@ export function showDossier(root: HTMLElement, d: Dossier) {
     </header>
     <p class="summary">${esc(v.summary)}</p>
 
+    ${patterns.map((p) => `<div class="pattern"><small>${name(p.traits[0])} and ${name(p.traits[1]).toLowerCase()}, both high</small><p>${esc(p.sentence)}</p></div>`).join('')}
     <section class="traits">
       ${TRAITS.map((t) => {
         const val = d.traits[t.key];
         const moments = d.moments[t.key];
         return `<div class="trait">
-          <div class="trait-head"><strong>${t.label}</strong><span>${val >= 0.62 ? t.high : val <= 0.38 ? t.low : 'unremarkable'}</span></div>
+          <div class="trait-head"><strong>${t.label}</strong><span>${mixed.has(t.key) ? 'see pattern above' : val >= 0.62 ? t.high : val <= 0.38 ? t.low : 'unremarkable'}</span></div>
           <div class="bar"><span style="left:${(val * 100).toFixed(0)}%;background:${t.colour}"></span><i></i></div>
           <div class="ends"><small>${t.low}</small><small>${t.high}</small></div>
           <p>${esc(v[t.key])}</p>
@@ -40,6 +46,8 @@ export function showDossier(root: HTMLElement, d: Dossier) {
       <h2>Your path through the building</h2>
       <ol>${d.rooms.map((r) => `<li class="amb-${esc(r.ambience)}"><small>Room ${r.index}</small><strong>${esc(r.title)}</strong><span>${esc(r.archetype.replace('_', ' '))}${r.rule ? ` · ${esc(r.rule.replaceAll('_', ' '))}` : ''}</span></li>`).join('')}</ol>
     </section>
+
+    ${d.gambles?.length ? `<section class="gambles"><h2>Your gambles</h2><ul>${d.gambles.map((g) => `<li><small>Room ${g.room}${g.timed ? ' · on the clock' : ''}</small>${g.choice === 'risky' ? `Took the 50/50 door: <b>${g.outcome === 'shortcut' ? 'shortcut' : 'detour'}</b>` : g.expired ? 'Let the clock run out: certain door' : 'Took the certain door'}</li>`).join('')}</ul></section>` : ''}
 
     ${d.threads.length ? `<section class="threads"><h2>Loose ends</h2><ul>${d.threads.map((t) => `<li>${esc(t.text)} <small>${t.resolvedIn !== undefined ? `opened in room ${t.room}, explained in room ${t.resolvedIn}` : `opened in room ${t.room}, never explained`}</small></li>`).join('')}</ul></section>` : ''}
 
@@ -54,7 +62,7 @@ export function showDossier(root: HTMLElement, d: Dossier) {
 
     <section class="built" hidden>
       <h2>How this world was built</h2>
-      <p class="note">No room existed before the player reached it. Seeded code laid out each room; ${d.rooms.filter((r) => r.source === 'model').length} of ${d.rooms.length} rooms were then written by the local model from what you had done so far (the rest used templates). The verdict above was written by ${d.verdictSource === 'model' ? 'the model' : 'templates'}.</p>
+      <p class="note">No room existed before the player reached it. Seeded code laid out each room; ${d.rooms.filter((r) => r.source === 'model').length} of ${d.rooms.length} rooms were then written by the local model from what you had done so far (the rest used templates). The verdict above was written by ${d.verdictSource === 'model' ? 'the model' : 'templates'}${d.verdictConflicts?.length ? `; its title and summary contradicted what you did (${d.verdictConflicts.join(', ')}), so they were rewritten from your measured scores` : ''}.</p>
       <h3>Your traits as you entered each room</h3>
       ${chart(d)}
       <h3>Room by room</h3>
@@ -86,6 +94,45 @@ export function showDossier(root: HTMLElement, d: Dossier) {
   };
   root.querySelector('#d-replay')!.addEventListener('click', () => go(d.seed));
   root.querySelector('#d-again')!.addEventListener('click', () => go());
+}
+
+const SELF: { key: SelfTrait; label: string }[] = [
+  { key: 'risk', label: 'I take risks' },
+  { key: 'patience', label: 'I am patient' },
+  { key: 'social', label: "I do what I'm told" },
+  { key: 'exploration', label: 'I explore everything' },
+];
+
+/**
+ * The top of the file: the biggest gap between what the player said about
+ * themselves and what they did, in large type, then each trait side by side.
+ */
+function saidDid(d: Dossier): string {
+  const sd = d.saidDid;
+  if (!d.measured) return '';
+  const dots = (n: number | null, cls: string) => `<span class="dots ${cls}" aria-hidden="true">${[1, 2, 3, 4, 5].map((i) => `<i class="${n !== null && i <= n ? 'on' : ''}"></i>`).join('')}</span>`;
+  const row = (key: SelfTrait, label: string, m: Measured) => {
+    const r = sd?.rows.find((x) => x.trait === key);
+    const said = r?.said ?? null;
+    // Untested this run: no score to compare, never a red gap, never the headline.
+    const did = m.estimated ? null : Math.round(m.score);
+    const gap = said === null || did === null ? 0 : Math.abs(said - did);
+    return `<div class="sd-row${sd?.headlineTrait === key ? ' top' : ''}${gap >= 2 ? ' gap' : ''}${did === null ? ' untested' : ''}">
+      <strong>${esc(label)}</strong>
+      <div class="sd-vals">
+        ${sd ? `<span>You said: <b>${said === null ? '–' : `${said}/5`}</b>${dots(said, 'said')}</span>` : ''}
+        ${did === null
+          ? `<span class="nt">You did: <b>not tested this run</b> <em>(estimate ${Math.round(m.score)}/5)</em></span>`
+          : `<span>You did: <b>${did}/5</b>${dots(did, 'did')}</span>`}
+      </div>
+      <p>${esc(m.evidence)}</p>
+    </div>`;
+  };
+  return `<section class="saiddid">
+    <p class="kicker">${sd ? 'You said · you did' : 'What you did'}</p>
+    ${sd ? `<h2 class="headline${sd.headlineTrait ? '' : ' calm'}">${esc(sd.headline)}</h2><p class="detail">${esc(sd.detail)}</p>` : ''}
+    <div class="sd-rows">${SELF.map((t) => row(t.key, t.label, d.measured[t.key])).join('')}</div>
+  </section>`;
 }
 
 /** Trait values across the rooms, plus the final value. */

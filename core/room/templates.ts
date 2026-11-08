@@ -58,7 +58,7 @@ export function templateAssignments(
   for (const slot of layout.slots) {
     if (opts.skip?.has(slot.id)) continue;
     if (slot.kind === 'center' && opts.forceCenter) {
-      out.push(withText({ slot: slot.id, recipe: opts.forceCenter }, data, rng, opts.index));
+      out.push(withText({ slot: slot.id, recipe: opts.forceCenter, featured: true }, data, rng, opts.index));
       continue;
     }
     const isStructural = slot.tags.includes('desk') || slot.tags.includes('partition');
@@ -74,7 +74,8 @@ export function templateAssignments(
     if (!options.length) continue;
     const recipe = pick(rng, options);
     counts.set(recipe.id, (counts.get(recipe.id) ?? 0) + 1);
-    out.push(withText({ slot: slot.id, recipe: recipe.id }, data, rng, opts.index));
+    // Desks and partitions are the room's furniture; in a model room everything here is background.
+    out.push(withText({ slot: slot.id, recipe: recipe.id, featured: !isStructural && !opts.plainOnly }, data, rng, opts.index));
   }
   return out;
 

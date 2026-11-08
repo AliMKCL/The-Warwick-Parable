@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { gameData } from '../core/data';
-import type { CoreMessage, GameEvent, ProfileSnapshot, RuleEffect } from '../core/protocol';
+import type { CoreMessage, GameEvent, ProfileSnapshot, RuleEffect, SelfRatings } from '../core/protocol';
 import { createCore } from '../core/run/core';
 import type { LlmClient } from '../core/llm/client';
 import type { RoomSpec } from '../core/room/types';
@@ -91,12 +91,12 @@ export class Game {
   }
 
   /** Start a run. With no model (or an unreachable one), rooms are filled from templates. */
-  begin(llm?: LlmClient) {
+  begin(llm?: LlmClient, selfRatings?: SelfRatings) {
     this.sound.start();
     this.core = createCore(gameData, { llm, observeMs: this.opts.observeMs, runLength: this.opts.runLength, concurrency: this.opts.concurrency });
     this.core.onMessage((m) => this.handle(m));
     this.startedAt = performance.now();
-    this.send({ type: 'run_started', seed: this.opts.seed, t: 0 });
+    this.send({ type: 'run_started', seed: this.opts.seed, t: 0, ...(selfRatings ? { selfRatings } : {}) });
   }
 
   send(e: GameEvent) {

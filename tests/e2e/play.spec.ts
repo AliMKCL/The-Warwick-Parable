@@ -63,6 +63,8 @@ test('walk through generated rooms', async ({ page }) => {
     const hovered = (await W(page)).hovered;
     expect(hovered?.kind, `room ${i} door hover`).toBe('door');
     if (i === 0) await page.screenshot({ path: 'artifacts/p3-room0-door.png' });
+    // A rule that starts while we walk up (e.g. inspect_to_unlock) may have locked it again.
+    await page.evaluate(() => (window as any).__WHACK__.effect({ kind: 'doors', locked: [] }));
     await page.evaluate(() => (window as any).__WHACK__.interact());
     await waitForRoom(page, i + 1);
     const now = await W(page);

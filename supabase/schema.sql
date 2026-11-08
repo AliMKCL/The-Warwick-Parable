@@ -8,7 +8,8 @@ create table if not exists public.sessions (
   world_id     int generated always as identity,
   consent      boolean not null,
   self_ratings jsonb,          -- {"risk":1-5|null, "patience":…, "social":…, "exploration":…}
-  profile      jsonb,          -- the game's hidden trait profile at the end, with its evidence
+  profile      jsonb,          -- the game's hidden trait profile at the end, with its evidence, plus
+                               -- said_did (self-ratings vs measured, 1-5), measured, gambles, patterns
   predictions  jsonb,          -- what the game concluded (dossier verdict and trait labels)
   completed    boolean default false,
   ended_at     timestamptz

@@ -9,7 +9,8 @@ import type { RoomSpec } from './room/types';
 
 /** What the player did. Sent adapter -> core. `t` is seconds since the run started. */
 export type GameEvent =
-  | { type: 'run_started'; seed: number; t: number }
+  /** `selfRatings`: the player's own 1–5 ratings from the start screen, compared with what they did on the dossier. */
+  | { type: 'run_started'; seed: number; t: number; selfRatings?: SelfRatings }
   | { type: 'room_entered'; roomId: string; t: number }
   | { type: 'looked_at'; roomId: string; objectId: string; seconds: number; t: number }
   | { type: 'inspected'; roomId: string; objectId: string; t: number }
@@ -44,6 +45,41 @@ export interface Evidence {
   trait: TraitName;
   delta: number;
   reason: string;
+}
+
+/** The four behaviours the player rates themselves on before playing, and is measured on. */
+export type SelfTrait = 'risk' | 'patience' | 'social' | 'exploration';
+/** 1 (not at all) to 5 (very); null if not given. */
+export type SelfRatings = Record<SelfTrait, number | null>;
+
+/** What the player actually did on one self-rated behaviour, on the same 1–5 scale. */
+export interface Measured {
+  /** 1–5, one decimal. */
+  score: number;
+  /** One concrete sentence, e.g. "You left before 3 of 4 countdowns ended." */
+  evidence: string;
+  /** How many moments it is based on. */
+  n: number;
+  /** True when there was no direct test this run and the score is inferred from the hidden profile. */
+  estimated: boolean;
+}
+
+/** "You said / you did" for the dossier. */
+export interface SaidDid {
+  /** `did` and `gap` are null when the trait was not tested this run (`estimate` is the rough guess). */
+  rows: { trait: SelfTrait; label: string; said: number | null; did: number | null; estimate: number; gap: number | null; evidence: string; estimated: boolean }[];
+  /** The single biggest gap in one line, or "You know yourself well." */
+  headline: string;
+  /** Second, smaller line under the headline. */
+  detail: string;
+  /** The trait behind the headline; null when every gap was small. */
+  headlineTrait: SelfTrait | null;
+}
+
+/** Two hidden traits that point opposite ways, described as one pattern instead of two labels. */
+export interface Pattern {
+  traits: [TraitName, TraitName];
+  sentence: string;
 }
 
 /** What core tells the adapter. Sent core -> adapter. */
@@ -83,6 +119,16 @@ export interface Dossier {
   }[];
   threads: { text: string; room: number; resolvedIn?: number }[];
   stats: { inspected: number; pressed: number; stoodStill: number; doorsTried: number };
+  /** The player's behaviour on the four self-rated traits, 1–5. */
+  measured: Record<SelfTrait, Measured>;
+  /** Traits the original verdict name/summary contradicted; when any, they were rewritten from `measured`. */
+  verdictConflicts: SelfTrait[];
+  /** Present when the player rated themselves at the start. */
+  saidDid?: SaidDid;
+  /** Contradictory trait pairs, each resolved into one sentence. */
+  patterns: Pattern[];
+  /** Every gamble: which door, and what happened. */
+  gambles: { room: number; choice: 'safe' | 'risky'; outcome: 'certain' | 'shortcut' | 'setback'; timed: boolean; expired: boolean }[];
 }
 
 export interface Verdict {

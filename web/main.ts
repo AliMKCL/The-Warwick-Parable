@@ -41,21 +41,24 @@ loop.start();
 // ---- start, pause and pointer lock ----
 let started = false;
 let modelReady: Promise<boolean>;
-const startButton = document.getElementById('start-button')!;
+const startButton = document.getElementById('start-button') as HTMLButtonElement;
 startButton.addEventListener('click', () => {
+  if (!started && !readyToBegin()) return;
   canvas.requestPointerLock();
 });
 document.addEventListener('pointerlockchange', () => {
   const locked = document.pointerLockElement === canvas;
   if (locked && !started) {
     started = true;
-    if (consent.checked) record(selfRatings());
+    const ratings = selfRatings();
+    if (telemetryConfigured && consent.checked) record(ratings);
     research.hidden = true;
-    void modelReady.then((ok) => game.begin(ok ? llm : undefined));
+    void modelReady.then((ok) => game.begin(ok ? llm : undefined, ratings));
   }
   game.player.enabled = locked && !game.hud.inspecting && !game.ended;
   game.hud.start.hidden = locked || game.ended;
   startButton.textContent = 'Click to continue';
+  startButton.disabled = false;
 });
 document.addEventListener('mousemove', (e) => {
   if (document.pointerLockElement === canvas) game.player.look(e.movementX, e.movementY);
@@ -68,20 +71,46 @@ addEventListener('keydown', (e) => {
   if (e.code === 'KeyM') game.voice.setMuted(game.sound.toggleMute());
 });
 
-// ---- research data (only offered when Supabase is configured; nothing is sent without consent) ----
+// ---- self-ratings (required: the dossier compares them with what you did) and research consent ----
+// Consent is only asked when Supabase is configured; without it nothing is ever sent.
 const research = document.getElementById('research') as HTMLFormElement;
 const consent = document.getElementById('consent') as HTMLInputElement;
-const ratings = document.getElementById('self-ratings') as HTMLFieldSetElement;
-research.hidden = !telemetryConfigured;
+const consentRow = document.getElementById('consent-row')!;
+const hint = document.getElementById('research-hint')!;
+const TRAITS: Trait[] = ['risk', 'patience', 'social', 'exploration'];
+const rated = new Set<Trait>();
+consentRow.hidden = !telemetryConfigured;
 research.addEventListener('submit', (e) => e.preventDefault());
-consent.addEventListener('change', () => (ratings.disabled = !consent.checked));
 for (const row of research.querySelectorAll<HTMLElement>('.rate')) {
-  const trait = row.dataset.trait!;
-  row.insertAdjacentHTML('beforeend', `<div role="radiogroup" aria-label="${row.textContent}">${[1, 2, 3, 4, 5]
-    .map((n) => `<label><input type="radio" name="rate-${trait}" value="${n}" aria-label="${n}" /><i>${n}</i></label>`).join('')}</div>`);
+  const trait = row.dataset.trait as Trait;
+  const label = row.textContent!.trim();
+  row.classList.add('unset');
+  row.insertAdjacentHTML('beforeend', `<input type="range" name="rate-${trait}" min="1" max="5" step="1" value="3" aria-label="${label}, 1 not at all to 5 very" /><output>–</output>`);
+  const input = row.querySelector('input')!, out = row.querySelector('output')!;
+  // A slider has no "empty" value, so it counts as set once it has been touched.
+  const set = () => {
+    rated.add(trait);
+    row.classList.remove('unset');
+    out.textContent = input.value;
+    updateBegin();
+  };
+  for (const ev of ['input', 'change', 'pointerup']) input.addEventListener(ev, set);
+  input.addEventListener('keydown', (e) => ['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Home', 'End', ' '].includes(e.key) && setTimeout(set));
 }
+consent.addEventListener('change', updateBegin);
+function readyToBegin() {
+  return rated.size === TRAITS.length && (!telemetryConfigured || consent.checked);
+}
+function updateBegin() {
+  if (started) return;
+  startButton.disabled = !readyToBegin();
+  const left = TRAITS.length - rated.size;
+  hint.textContent = left ? `Set ${left === TRAITS.length ? 'all four sliders' : `${left} more slider${left > 1 ? 's' : ''}`} to begin.`
+    : telemetryConfigured && !consent.checked ? 'Tick the box to begin.' : '';
+}
+updateBegin();
 function selfRatings(): SelfRatings {
-  const get = (t: Trait) => Number(research.querySelector<HTMLInputElement>(`input[name="rate-${t}"]:checked`)?.value) || null;
+  const get = (t: Trait) => (rated.has(t) ? Number(research.querySelector<HTMLInputElement>(`input[name="rate-${t}"]`)!.value) : null);
   return { risk: get('risk'), patience: get('patience'), social: get('social'), exploration: get('exploration') };
 }
 /** Starts a research session and listens to the game. Must run before game.begin() so the first room is seen. */
@@ -139,13 +168,16 @@ let testMode = false;
 Object.assign(window, {
   __WHACK__: {
     seed,
-    /** `telemetry` records this run as if the player had agreed on the start screen. */
-    async begin(opts: { telemetry?: SelfRatings | null } = {}) {
+    /**
+     * `telemetry` records this run as if the player had agreed on the start screen, with those self-ratings.
+     * `selfRatings` sets the ratings the dossier compares against (defaults to `telemetry`'s).
+     */
+    async begin(opts: { telemetry?: SelfRatings | null; selfRatings?: SelfRatings } = {}) {
       testMode = true;
       started = true;
       if (opts.telemetry !== undefined) record(opts.telemetry);
       game.hud.start.hidden = true;
-      game.begin((await modelReady) ? llm : undefined);
+      game.begin((await modelReady) ? llm : undefined, opts.selfRatings ?? opts.telemetry ?? undefined);
       game.player.enabled = true;
     },
     state() {
