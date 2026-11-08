@@ -194,25 +194,51 @@ export class Run {
 
   /** The player walked through `doorId`. Resolves with the next room, waiting at most `waitMs` for the model. */
   async next(doorId: string): Promise<RoomSpec> {
+    const spec = await this.prepareNext(doorId);
+    this.arrive(spec);
+    return spec;
+  }
+
+  /** Stop observing the departed room while the player is physically in its corridor. */
+  depart() {
+    this.rule?.stop();
+    this.rule = undefined;
+    this.anomaly = undefined;
+  }
+
+  /** Prepare without counting the next room as visited or starting its rules. */
+  async prepareNext(doorId: string, waitMs = this.opts.waitMs ?? 15000): Promise<RoomSpec> {
     const plan = this.plans.find((p) => p.doorId === doorId);
     if (!plan) throw new Error(`No exit "${doorId}" in the current room`);
     for (const other of this.plans) if (other !== plan) this.cancel(other);
     this.prioritise(doorId);
     this.stopObserving();
 
-    const waitMs = this.opts.waitMs ?? 15000;
-    const timeout = new Promise<'timeout'>((r) => timers.setTimeout(() => r('timeout'), waitMs));
+    let timer: unknown;
+    const timeout = new Promise<'timeout'>((r) => { timer = timers.setTimeout(() => r('timeout'), waitMs); });
     const result = await Promise.race([plan.done, timeout]);
-    let spec: RoomSpec;
-    if (result === 'timeout') {
-      this.cancel(plan);
-      spec = this.templateSpec(plan, createRng(plan.seed), { rule: plan.rule });
-    } else {
-      spec = result;
-    }
+    timers.clearTimeout(timer);
+    let spec = result === 'timeout' ? this.finishPreparation(doorId)! : result;
     spec = this.settleGamble(doorId, spec);
-    this.enter(spec);
+    this.decorate(spec);
     return spec;
+  }
+
+  /** End a bounded preparation wait with a complete template. Late model replies are discarded. */
+  finishPreparation(doorId: string): RoomSpec | undefined {
+    const plan = this.plans.find((p) => p.doorId === doorId);
+    if (!plan) return;
+    if (plan.spec) return plan.spec;
+    this.cancel(plan);
+    plan.spec = this.templateSpec(plan, createRng(plan.seed), { rule: plan.rule });
+    plan.status = 'fallback';
+    plan.resolve(plan.spec);
+    this.emitStatus();
+    return plan.spec;
+  }
+
+  arrive(spec: RoomSpec) {
+    this.enter(spec, true);
   }
 
   /**
@@ -336,9 +362,7 @@ export class Run {
 
   // ---------- internals ----------
 
-  private enter(room: RoomSpec) {
-    this.rule?.stop();
-    this.rule = undefined;
+  private decorate(room: RoomSpec) {
     const previous = this.current;
     const choice = [...this.events].reverse().find((e) => e.type === 'door_chosen' && e.roomId === previous?.id);
     // Set-piece tests (the choice room, the lift lobby) and the finale get no messy/ceiling variant or anomaly on top.
@@ -352,6 +376,11 @@ export class Run {
       room.narrator.onEnter = room.variant ? `${room.narrator.onEnter} ${callback}` : callback;
       room.fact = [room.fact, previous.anomaly.record].filter(Boolean).join(' ');
     }
+  }
+
+  private enter(room: RoomSpec, decorated = false) {
+    this.depart();
+    if (!decorated) this.decorate(room);
     this.anomaly = new AnomalyRuntime(room, this.events, (e) => this.opts.onAnomaly?.(e),
       (line) => this.opts.onSay?.(line), (t) => this.rule?.borrowTime(t, 8) ?? false);
     this.rooms.push(room);

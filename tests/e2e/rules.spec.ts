@@ -1,3 +1,4 @@
+import { traversePassage } from './corridor-helpers';
 import { expect, test, type Page } from '@playwright/test';
 
 const W = (page: Page) => page.evaluate(() => (window as any).__WHACK__.state());
@@ -24,6 +25,7 @@ test('room rules change the world', async ({ page }) => {
     await page.evaluate((id) => (window as any).__WHACK__.useDoor(id), exit.id);
     await page.waitForTimeout(400);
     await page.evaluate(() => (window as any).__WHACK__.interact());
+    await traversePassage(page);
     await waitForRoom(page, i + 1);
     const now = await W(page);
     const rule = now.rule?.id;
@@ -80,6 +82,7 @@ test('room rules change the world', async ({ page }) => {
       await page.evaluate((id) => (window as any).__WHACK__.useDoor(id), open.id);
       await page.waitForTimeout(400);
       await page.evaluate(() => (window as any).__WHACK__.interact());
+      await traversePassage(page);
       await waitForRoom(page, i + 2);
       i++;
     }

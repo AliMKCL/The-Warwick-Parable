@@ -4,11 +4,17 @@ import type { LlmClient } from '../llm/client';
 import type { CoreMessage, CorePort, GameEvent } from '../protocol';
 import type { GameData } from '../room/types';
 import { Run, type RunOptions } from './run';
+import type { RoomSpec } from '../room/types';
+import { corridorStory, CORRIDOR_PREPARE_MS, CORRIDOR_EXIT_WAIT_MS, ROOM_OBSERVE_MS, type CorridorStory } from '../corridors/corridor';
 
 export interface CoreOptions {
+  /** The adapter physically joins rooms with playable passages. */
+  corridors?: boolean;
   maxAnomalies?: number;
   llm?: LlmClient;
   waitMs?: number;
+  /** Additional wait at a corridor exit, bounded by the overall preparation timeout. */
+  corridorExitWaitMs?: number;
   observeMs?: number;
   /** Rooms in a run, counting the first (default 7). */
   runLength?: number;
@@ -20,6 +26,8 @@ export interface CoreOptions {
   layout?: RunOptions['layout'];
 }
 
+interface PassageState { from: string; door: string; story: CorridorStory; used: Set<string>; next?: RoomSpec; startedAt: number; exitRequestedAt?: number; exitTimer?: ReturnType<typeof setTimeout> }
+
 /**
  * Core behind the message protocol. The Three.js adapter calls it directly;
  * a Godot build would reach it over a WebSocket.
@@ -30,14 +38,15 @@ export function createCore(data: GameData, opts: CoreOptions = {}): CorePort & {
   let lineCount = 0;
 
   const emit = (m: CoreMessage) => listeners.forEach((l) => l(m));
-  const say = (text: string) => emit({ type: 'narrator_line', lineId: `l${++lineCount}`, text, final: true });
+  const say = (text: string, interrupt = false) => emit({ type: 'narrator_line', lineId: `l${++lineCount}`, text, final: true, ...(interrupt ? { interrupt } : {}) });
+  let passage: PassageState | undefined;
   const now = () => Date.now();
   /** Resolves once the current room's entry line has been said; the room's rule starts after it. */
   let introduced: Promise<void> = Promise.resolve();
   const runOpts = (): RunOptions => ({
     llm: opts.llm,
     waitMs: opts.waitMs,
-    observeMs: opts.observeMs,
+    observeMs: opts.observeMs ?? (opts.corridors ? ROOM_OBSERVE_MS : undefined),
     runLength: opts.runLength,
     concurrency: opts.concurrency,
     forceArchetypes: opts.forceArchetypes,
@@ -94,6 +103,10 @@ export function createCore(data: GameData, opts: CoreOptions = {}): CorePort & {
     },
     send(event: GameEvent) {
       if (event.type === 'run_started') {
+        run?.depart();
+        if (passage?.exitTimer !== undefined) clearTimeout(passage.exitTimer);
+        passage = undefined;
+        introduced = Promise.resolve();
         run = new Run(event.seed, data, runOpts());
         run.selfRatings = event.selfRatings;
         run.record(event);
@@ -105,23 +118,75 @@ export function createCore(data: GameData, opts: CoreOptions = {}): CorePort & {
       }
       if (!run) return;
       const r = run;
+      if ('roomId' in event && event.roomId !== r.current?.id) return;
+      if (passage) {
+        if (event.type === 'corridor_interacted') {
+          r.record(event);
+          const reply = passage.story.replies[event.objectId];
+          if (reply && !passage.used.has(event.objectId)) { passage.used.add(event.objectId); say(reply); }
+        } else if (event.type === 'corridor_exit_requested') {
+          if (passage.exitRequestedAt === undefined) {
+            r.record(event);
+            passage.exitRequestedAt = now();
+            if (!passage.next) {
+              say('The next department has not released the interlock yet. Your file appears to require a little more consideration.');
+              const waiting = passage;
+              passage.exitTimer = setTimeout(() => {
+                if (run === r && passage === waiting && !waiting.next) r.finishPreparation(waiting.door);
+              }, opts.corridorExitWaitMs ?? CORRIDOR_EXIT_WAIT_MS);
+            }
+          }
+        } else if (event.type === 'corridor_exited' && passage.next) {
+          r.record(event);
+          const room = passage.next;
+          passage = undefined;
+          r.arrive(room);
+          const lines = room.gambleResult ? data.templates.gamble[room.gambleResult] : [];
+          const outcome = lines.length ? lines[r.gambles.length % lines.length]! : '';
+          say([outcome, room.narrator.onEnter].filter(Boolean).join(' '), true);
+          introduced = new Promise((res) => setTimeout(res, Math.min(9000, 1200 + room.narrator.onEnter.length * 35)));
+        }
+        return;
+      }
+      if (event.type.startsWith('corridor_')) return;
       r.record(event);
       if (event.type === 'room_entered' && event.roomId === r.current?.id && r.current.rule) {
         const received = now();
         const roomId = event.roomId;
         void introduced.then(() =>
           setTimeout(() => {
-            if (r.current?.id === roomId) r.startRule(event.t + (now() - received) / 1000);
+            if (run === r && !passage && r.current?.id === roomId) r.startRule(event.t + (now() - received) / 1000);
           }, 900),
         );
       } else if (event.type === 'door_chosen' && (r.finished || r.leavesEarly(event.doorId))) {
+        r.depart();
         // The final exit (or a won gamble that skips the last room): write the player's file.
         if (!r.finished) say(data.templates.gamble.shortcutEnd[0]!);
         void (async () => {
           const { verdict, source } = await writeVerdict(r, data, opts.llm);
-          emit({ type: 'run_ended', dossier: buildDossier(r, verdict, source, data) });
+          if (run === r) emit({ type: 'run_ended', dossier: buildDossier(r, verdict, source, data) });
         })();
       } else if (event.type === 'door_chosen') {
+        if (opts.corridors) {
+          const from = r.current!;
+          const door = from.layout.doors.find((d) => d.id === event.doorId && !d.entrance);
+          if (!door) return;
+          const current: PassageState = { from: from.id, door: door.id, story: corridorStory(from, door, r.events, data), used: new Set<string>(), startedAt: now() };
+          passage = current;
+          r.depart();
+          say(current.story.entry, true);
+          void r.prepareNext(door.id, opts.waitMs ?? CORRIDOR_PREPARE_MS).then((room) => {
+            if (run !== r || passage !== current) return;
+            if (current.exitTimer !== undefined) clearTimeout(current.exitTimer);
+            current.next = room;
+            emit({ type: 'corridor_ready', spec: room, timing: {
+              corridorMs: now() - current.startedAt,
+              exitWaitMs: current.exitRequestedAt === undefined ? 0 : now() - current.exitRequestedAt,
+            } });
+            if (current.exitRequestedAt !== undefined) say('The interlock is released. The next department will see you now.');
+          });
+          return;
+        }
         let markIntroduced!: () => void;
         introduced = new Promise<void>((res) => (markIntroduced = res));
         void (async () => {
@@ -152,3 +217,5 @@ export function createCore(data: GameData, opts: CoreOptions = {}): CorePort & {
 }
 
 declare function setTimeout(fn: () => void, ms: number): unknown;
+
+declare function clearTimeout(id: unknown): void;

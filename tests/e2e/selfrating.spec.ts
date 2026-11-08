@@ -1,3 +1,4 @@
+import { traversePassage } from './corridor-helpers';
 import { expect, test, type Page } from '@playwright/test';
 
 const W = (page: Page) => page.evaluate(() => (window as any).__WHACK__.state());
@@ -47,6 +48,7 @@ test('the dossier opens with what you said next to what you did', async ({ page 
     await page.evaluate((id) => (window as any).__WHACK__.useDoor(id), door);
     await page.waitForTimeout(400);
     await page.evaluate(() => (window as any).__WHACK__.interact());
+    await traversePassage(page);
     await page.waitForFunction((n) => { const s = (window as any).__WHACK__.state(); return s.ended || s.room?.index === n; }, i + 1, { timeout: 60_000 });
     await page.waitForTimeout(1200);
   }

@@ -1,3 +1,4 @@
+import { traversePassage } from './corridor-helpers';
 import { expect, test, type Page } from '@playwright/test';
 
 // The L and U rooms and the lift lobby, forced with ?layout= so they come up at once.
@@ -25,6 +26,7 @@ async function leave(page: Page) {
   await page.evaluate((id) => (window as any).__WHACK__.useDoor(id), exit.id);
   await page.waitForTimeout(400);
   await page.evaluate(() => (window as any).__WHACK__.interact());
+  await traversePassage(page);
   return st.room.index + 1;
 }
 

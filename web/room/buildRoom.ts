@@ -23,6 +23,8 @@ export interface DoorView {
   locked: boolean;
   /** Small status light by the door: red when locked, green when open. */
   indicator?: THREE.MeshStandardMaterial;
+  /** Decorative depth behind an unconnected door; hidden when a real passage is attached. */
+  passage: THREE.Object3D;
 }
 
 export interface RoomView {
@@ -61,7 +63,7 @@ export interface RoomView {
 const DOOR_W = 0.9, DOOR_H = 2.1;
 
 /** Turns a RoomSpec into Three.js objects. Everything the room owns is disposed with it. */
-export function buildRoom(spec: RoomSpec, data: GameData, materials: MaterialLibrary): RoomView {
+export function buildRoom(spec: RoomSpec, data: GameData, materials: MaterialLibrary, connectedEntrance = false): RoomView {
   const { layout } = spec;
   const H = layout.ceiling;
   const amb = data.ambience[spec.ambience] ?? Object.values(data.ambience)[0]!;
@@ -95,7 +97,7 @@ export function buildRoom(spec: RoomSpec, data: GameData, materials: MaterialLib
         if (isFloor(layout, cx + dx, cz + dz)) continue;
         const frame = wallFrame(cx, cz, side);
         const door = doorAt.get(`${cx},${cz},${side}`);
-        if (door && !(layout.archetype === CHOICE_ROOM && door.entrance)) {
+        if (door && !(layout.archetype === CHOICE_ROOM && door.entrance && !connectedEntrance)) {
           // Wall above the door, then the door itself.
           wallQuads.push(place(quad(1, H - DOOR_H - 0.06).translate(0, (H + DOOR_H + 0.06) / 2, 0), frame));
           wallQuads.push(place(quad(0.05, DOOR_H + 0.06).translate(-0.475, (DOOR_H + 0.06) / 2, 0), frame));
@@ -475,7 +477,7 @@ export function buildRoom(spec: RoomSpec, data: GameData, materials: MaterialLib
       : { kind: 'door', id: door.id, name: door.label ? `door “${door.label}”` : 'door' };
     pivot.userData.interact = info;
     group.add(root);
-    return { door, pivot, open: 0, target: 0, swing: 1, locked: false, indicator };
+    return { door, pivot, passage, open: 0, target: 0, swing: 1, locked: false, indicator };
   }
 }
 

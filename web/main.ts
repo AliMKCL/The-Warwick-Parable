@@ -210,6 +210,7 @@ Object.assign(window, {
           props: r.props.map((p) => ({ id: p.id, recipe: p.recipe, x: p.x, y: p.y, z: p.z, rotY: p.rotY })),
         },
         player: { x: game.player.position.x, z: game.player.position.z, yaw: game.player.yaw },
+        corridor: game.corridorState(),
         hovered: game.hovered?.info,
         ask: game.hud.askOpen?.id,
         /** The room's test has started (after the narrator has introduced the room). */
