@@ -36,8 +36,9 @@ Add to the URL: `?seed=123` to replay a run, `?debug=1` for frame rate and room 
 `?post=0` to turn off post-processing, `?dpr=2` for full Retina resolution,
 `?observe=8` seconds to watch the player before generating the next rooms,
 `?ambience=warm` to see every room in one mood, `?mute=1` to start muted,
-`?rooms=5` for a shorter run (default 7 rooms, counting the first),
-`?layout=lift_lobby,l_gallery` to force room types (see "The lift lobby" below).
+`?tests=4&fillers=2&pool=exit_timer,lift_wait` to set the run's layout (see "Run layout" below),
+`?rooms=5` for a shorter run (default 7 rooms, counting the first and the finale),
+`?layout=lift_lobby,l_gallery` to force room types.
 
 A run ends in the final room: its single door leads to the player's file. Demo notes: `docs/demo.md`.
 
@@ -100,31 +101,35 @@ a textual route record with a second inspection, and the mirror combines a live
 reflection with an animated chair silhouette. These fit the existing procedural
 wall slots.
 
-## Room layouts and the Choice Room
+## Run layout: test rooms and filler rooms
 
-L-shaped galleries turn around one corner. U-shaped galleries have two wings
-joined by a passage around a central wall. Both rotate to match the arrival
-direction and use the same prop placement and exit checks as other rooms.
+A run is the waiting room, then a number of **test rooms** (a room running a
+test: a countdown, locked doors, a gamble, the lift…) and **filler rooms**
+(furnished, inspectable, no test), then the **finale**: a hallway whose far
+door glows brighter and warmer than any door before it and leads to the
+player's file. Set the counts and the pool of tests in `data/layout.json`:
 
-Each run schedules at most one `choice_room` after the opening, using the run
-seed. The location is shared by every route. It never takes a gamble room, the
-room behind a gamble (that room needs a task for a won 50/50 to skip) or the
-final room (the finale is written by the model), so a normal 7-room run, whose
-gambles are in rooms 1, 3 and 5, has none; shorter (`?rooms=3`, `?rooms=4`)
-and longer (`?rooms=10`) runs do. Its two exits have stable IDs and markings,
-blue **A** (`d1`) and orange **B** (`d2`). The existing `door_chosen` event
-reports the player's selection.
+```json
+{ "tests": 4, "fillers": 1,
+  "pool": { "exit_timer": 1, "gamble": { "weight": 1, "max": 2 }, "lift_wait": 0.6, "choice": 0.6 } }
+```
 
-## The lift lobby
+The order is not fixed: each room is decided as the player reaches it (test or
+filler, which test, which of its layouts), weighted by the pool and by how the
+player has behaved, and the totals always come out exact. A lost gamble adds
+one filler room. URL overrides: `?tests=4&fillers=2&pool=exit_timer,lift_wait`.
+`?rooms=N` still works (N rooms in all). Adding a test is one file plus a
+registry line: see `core/testrooms/README.md`.
 
-A lift faces the player as they enter, with a call button beside it, and a
-door labelled MAINTENANCE in a side wall is the only way on (the model cannot
-rename it). The lift never comes: its floor indicator creeps down and stalls
-(rule `lift_wait`), and the narrator hints at another way after 45–70 s.
-Pressing the call button five times reads as impulsive, finding the door alone
-as decisive, waiting for the hint as hesitant. At most once per run; never a
-gamble room or the final room; no messy/ceiling variant or anomaly on top.
+Tests in the pool by default: `exit_timer`, `inspect_to_unlock`,
+`lights_dim_on_idle`, `narrator_suggests`, `gamble` (always followed by another
+test room, so a won 50/50 has a task to skip; the second gamble of a run is
+timed), `lift_wait` (the lift lobby: a lift that never comes and a MAINTENANCE
+door as the only way on) and `choice` (Kaan's room with a blue **A** and an
+orange **B** door; the `door_chosen` event reports the pick).
+
+L-shaped and U-shaped galleries are room shapes for both filler and test rooms.
 
 `?layout=lift_lobby,l_gallery,u_gallery` forces room types, each in the first
-room it fits (room 1 is a gamble room in a normal run, so a forced lift lobby
-comes after it).
+room it fits; a test's own room (the lift lobby, the choice room) makes that
+room the test.

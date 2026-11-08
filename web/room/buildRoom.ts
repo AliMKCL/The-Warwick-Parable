@@ -312,8 +312,15 @@ export function buildRoom(spec: RoomSpec, data: GameData, materials: MaterialLib
     const root = new THREE.Group();
     root.applyMatrix4(frame);
     const frameMat = materials.get('door_frame');
-    const leafMat = door.color ? materials.get('door_paint').clone() : materials.get('door_paint');
+    const leafMat = door.color || door.finale ? materials.get('door_paint').clone() : materials.get('door_paint');
     if (door.color) { leafMat.color.set(door.color); owned.push(leafMat); }
+    if (door.finale) {
+      // The way to the player's file: brighter and a little warmer than any door before it.
+      leafMat.color.set('#f6e7c1');
+      leafMat.emissive.set('#ffc865');
+      leafMat.emissiveIntensity = 0.75;
+      owned.push(leafMat);
+    }
     for (const [w, h, x, y] of [
       [0.06, DOOR_H + 0.06, -0.48, (DOOR_H + 0.06) / 2],
       [0.06, DOOR_H + 0.06, 0.48, (DOOR_H + 0.06) / 2],
@@ -372,8 +379,29 @@ export function buildRoom(spec: RoomSpec, data: GameData, materials: MaterialLib
       }
     }
 
+    if (door.finale) {
+      // Warm light spilling round the frame and under the door, and onto the hallway in front of it.
+      const glow = new THREE.MeshStandardMaterial({ color: '#000000', emissive: '#ffd27a', emissiveIntensity: 3.2 });
+      owned.push(glow);
+      for (const [w, h, x, y] of [
+        [0.012, DOOR_H, -0.452, DOOR_H / 2],
+        [0.012, DOOR_H, 0.452, DOOR_H / 2],
+        [0.9, 0.012, 0, DOOR_H + 0.004],
+        [0.9, 0.018, 0, 0.009],
+      ] as const) {
+        const g = new THREE.BoxGeometry(w, h, 0.03);
+        owned.push(g);
+        const m = new THREE.Mesh(g, glow);
+        m.position.set(x, y, 0.012);
+        root.add(m);
+      }
+      const warm = new THREE.PointLight('#ffcf7a', 3.2, 7, 2);
+      warm.position.set(0, 1.4, 0.8);
+      root.add(warm);
+    }
+
     let indicator: THREE.MeshStandardMaterial | undefined;
-    if (!door.entrance) {
+    if (!door.entrance && !door.finale) {
       indicator = new THREE.MeshStandardMaterial({ color: '#2f8f4e', emissive: '#34c759', emissiveIntensity: 1.4, roughness: 0.4 });
       const lampGeo = new THREE.BoxGeometry(0.06, 0.06, 0.02);
       owned.push(indicator, lampGeo);

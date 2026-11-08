@@ -5,6 +5,7 @@ import type { Assignment } from '../room/place';
 import type { GameData, Layout, Side, Slot } from '../room/types';
 import { pick, type Rng } from '../util/random';
 import { describeRule, type RoomRule } from '../rules/rules';
+import { TESTS } from '../testrooms/registry';
 import { fill, storyStage } from './prompts';
 import { roomContentSchema, type ModelRoomContent } from './schema';
 
@@ -92,7 +93,7 @@ export function buildRoomMessages(ctx: ContentContext, slots: Slot[]): { message
     behaviour: ctx.behaviour.length ? ctx.behaviour.map((s) => `- ${s}`).join('\n') : '- Nothing recorded yet.',
     min_slots: Math.min(3, slots.length),
     slots: slotLines.join('\n'),
-    exits: exits.map((d) => `- ${d.id}: on the ${WALL[d.side]} wall${d.fixedLabel ? ` (labelled "${d.label}"; keep that label)` : ''}`).join('\n'),
+    exits: exits.map((d) => `- ${d.id}: on the ${WALL[d.side]} wall${d.fixedLabel ? ` (labelled "${d.label}"; keep that label)` : ''}${d.finale ? ' (at the end of the hallway, glowing warmer and brighter than any door so far: it leads to the player\'s file)' : ''}`).join('\n'),
   });
 
   const propIds = [...new Set(slots.flatMap(allowed))];
@@ -104,7 +105,7 @@ export function buildRoomMessages(ctx: ContentContext, slots: Slot[]): { message
     minSlots: Math.min(3, slots.length),
     maxSlots: slots.length,
     threadIds: ctx.threads.map((t) => t.id),
-    suggest: ctx.rule?.id === 'narrator_suggests',
+    suggest: !!(ctx.rule && TESTS[ctx.rule.id]?.picksDoor),
   });
   return { messages: [{ role: 'system', content: system }, { role: 'user', content: user }], schema, propIds };
 }
@@ -168,7 +169,7 @@ function checkContent(c: ModelRoomContent, ctx: ContentContext, slots: Slot[]): 
   const missing = exits.filter((id) => !named.has(id));
   if (missing.length) problems.push(`doors missing: ${missing.join(', ')}`);
   if (ctx.rule && !c.rule_line?.trim()) problems.push('"rule_line" is empty but this room has a rule');
-  if (ctx.rule?.id === 'narrator_suggests' && !exits.includes(c.suggest_door ?? '')) problems.push('"suggest_door" must be one of the exit ids');
+  if (ctx.rule && TESTS[ctx.rule.id]?.picksDoor && !exits.includes(c.suggest_door ?? '')) problems.push('"suggest_door" must be one of the exit ids');
   const slotIds = new Set(slots.map((s) => s.id));
   const unknown = (c.slots ?? []).filter((s) => !slotIds.has(s.slot)).map((s) => s.slot);
   if (unknown.length) problems.push(`unknown slots: ${unknown.join(', ')}`);

@@ -3,39 +3,62 @@ import { gameData } from '../../core/data';
 import { alignVerdict, compareSelf, conflicts, explorationCounts, findPatterns, measure, pointsOfInterest } from '../../core/director/selfcheck';
 import type { CoreMessage, Measured, RuleEffect, SelfTrait } from '../../core/protocol';
 import { createCore } from '../../core/run/core';
-import { gamblePlan, Run } from '../../core/run/run';
+import { Run } from '../../core/run/run';
 import { RuleRuntime, type RoomRule } from '../../core/rules/rules';
 import { createRng } from '../../core/util/random';
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 const exits = (run: Run) => run.current!.layout.doors.filter((d) => !d.entrance);
 
-/** Plays from room 0 into the first gamble room (room 1). */
-async function toGamble(seed: number, runLength = 7) {
-  const run = new Run(seed, gameData, { observeMs: 0, runLength });
-  run.start();
-  await run.next(exits(run)[0]!.id);
-  return run;
+/** A run whose tests are gambles and countdowns only, so gambles come up early. */
+const GAMBLES = { tests: 4, fillers: 1, pool: ['gamble', 'exit_timer'] };
+
+/** Plays from room 0 into room 1, for the first seed (from `from`) where room 1 is a gamble. */
+async function toGamble(from = 1) {
+  for (let seed = from; seed < from + 200; seed++) {
+    const run = new Run(seed, gameData, { observeMs: 0, layout: GAMBLES });
+    run.start();
+    await run.next(exits(run)[0]!.id);
+    if (run.current!.rule?.id === 'gamble') return run;
+  }
+  throw new Error('no seed found');
 }
 
-/** Finds a seed whose first gamble lands on `outcome` if the 50/50 door is taken. */
+/** Finds a run whose first gamble lands on `outcome` if the 50/50 door is taken. */
 async function seedFor(outcome: 'shortcut' | 'setback') {
-  for (let seed = 1; seed < 200; seed++) {
-    const run = await toGamble(seed);
+  for (let from = 1; from < 400; ) {
+    const run = await toGamble(from);
     if (run.current!.rule?.params.outcome === outcome) return run;
+    from = run.seed + 1;
   }
   throw new Error('no seed found');
 }
 
 describe('gamble rooms', () => {
-  it('puts three gambles in a default run, spread out, never adjacent, the middle one timed', () => {
-    expect([...gamblePlan(6)]).toEqual([[1, { timed: false }], [3, { timed: true }], [5, { timed: false }]]);
-    expect([...gamblePlan(4).keys()]).toEqual([1, 3]);
-    expect(gamblePlan(3).size).toBe(0); // runs of four rooms or fewer have none
+  it('is always followed by a test room, never the finale, and the second gamble of a run is timed', async () => {
+    let timed = 0;
+    for (let seed = 1; seed <= 80; seed++) {
+      const run = new Run(seed, gameData, { observeMs: 0, layout: GAMBLES });
+      run.start();
+      while (!run.finished) {
+        const rule = run.current!.rule;
+        await run.next(rule?.id === 'gamble' ? String(rule.params.safe) : exits(run)[0]!.id);
+      }
+      run.rooms.forEach((r, i) => {
+        if (r.test !== 'gamble') return;
+        expect(exits({ current: r } as Run)).toHaveLength(2);
+        expect(run.rooms[i + 1]!.slot).toBe('test');
+      });
+      const gambles = run.rooms.filter((r) => r.test === 'gamble');
+      expect(gambles.length).toBeLessThanOrEqual(2); // data/layout.json caps it at 2
+      gambles.forEach((g, i) => expect(Number(g.rule!.params.seconds) > 0).toBe(i === 1));
+      timed += gambles.length > 1 ? 1 : 0;
+    }
+    expect(timed).toBeGreaterThan(0);
   });
 
   it('offers two doors, tagged CERTAIN and 50/50, with the stakes spelled out', async () => {
-    const run = await toGamble(11);
+    const run = await toGamble();
     const room = run.current!;
     expect(room.rule?.id).toBe('gamble');
     expect(exits(run)).toHaveLength(2);
@@ -49,13 +72,13 @@ describe('gamble rooms', () => {
   });
 
   it('the certain door gives the next room as planned, with its task', async () => {
-    const run = await toGamble(11);
+    const run = await toGamble();
     const safe = String(run.current!.rule!.params.safe);
     const next = await run.next(safe);
     expect(next.gambleResult).toBeUndefined();
     expect(next.rule).toBeDefined(); // behind a gamble there is always a task
     expect(run.gambles).toEqual([{ room: 1, choice: 'safe', outcome: 'certain', timed: false, expired: false }]);
-    expect(run.last).toBe(6);
+    expect(run.last).toBe(6); // 4 tests + 1 filler, between the waiting room and the finale
   });
 
   it('a won 50/50 skips the next room’s task; a lost one adds a detour room', async () => {
@@ -73,7 +96,7 @@ describe('gamble rooms', () => {
   });
 
   it('the timed gamble locks the 50/50 door when the clock runs out', async () => {
-    const run = await toGamble(11);
+    const run = await toGamble();
     const effects: RuleEffect[] = [];
     const said: string[] = [];
     const rule: RoomRule = { id: 'gamble', params: { safe: 'd1', risky: 'd2', seconds: 0.05, outcome: 'setback', stakes: 'The stakes.' }, line: 'x', doneLine: 'Too late.' };
@@ -86,34 +109,31 @@ describe('gamble rooms', () => {
     expect(said.at(-1)).toBe('Too late.');
   });
 
-  it('announces the coin toss, and a won gamble before the last room ends the run early', async () => {
-    const core = createCore(gameData, { observeMs: 0, runLength: 5 });
+  it('announces the coin toss, records the gamble, and still ends in the finale hallway', async () => {
+    const won = await seedFor('shortcut');
+    const core = createCore(gameData, { observeMs: 0, layout: GAMBLES });
     const msgs: CoreMessage[] = [];
     core.onMessage((m) => msgs.push(m));
-    // Find a seed whose last gamble (room 3 of 0..4) is a shortcut, then always take the 50/50 door.
-    let seed = 1;
-    for (; seed < 300; seed++) {
-      const r = new Run(seed, gameData, { observeMs: 0, runLength: 5 });
-      r.start();
-      for (let i = 0; i < 3; i++) await r.next(r.current!.rule?.id === 'gamble' ? String(r.current!.rule.params.safe) : r.current!.layout.doors.find((d) => !d.entrance)!.id);
-      if (r.current!.rule?.params.outcome === 'shortcut') break;
-    }
-    core.send({ type: 'run_started', seed, t: 0, selfRatings: { risk: 1, patience: 3, social: 3, exploration: 3 } });
+    core.send({ type: 'run_started', seed: won.seed, t: 0, selfRatings: { risk: 1, patience: 3, social: 3, exploration: 3 } });
     let t = 0;
-    for (let i = 0; i < 4 && !msgs.some((m) => m.type === 'run_ended'); i++) {
+    for (let i = 0; i < 12 && !msgs.some((m) => m.type === 'run_ended'); i++) {
       const room = core.run()!.current!;
       core.send({ type: 'room_entered', roomId: room.id, t: (t += 1) });
       await sleep(10);
-      const door = room.rule?.id === 'gamble' && room.index === 3 ? String(room.rule.params.risky) : room.rule?.id === 'gamble' ? String(room.rule.params.safe) : room.layout.doors.find((d) => !d.entrance)!.id;
+      // Take the 50/50 door of the first gamble, the certain door of any later one.
+      const first = room.rule?.id === 'gamble' && core.run()!.gambles.length === 0;
+      const door = first ? String(room.rule!.params.risky) : room.rule?.id === 'gamble' ? String(room.rule.params.safe) : room.layout.doors.find((d) => !d.entrance)!.id;
       core.send({ type: 'door_chosen', roomId: room.id, doorId: door, t: (t += 10) });
       await sleep(30);
     }
     await sleep(50);
     const end = msgs.find((m) => m.type === 'run_ended') as Extract<CoreMessage, { type: 'run_ended' }>;
     expect(end).toBeDefined();
-    expect(end.dossier.rooms).toHaveLength(4); // the last room was skipped
-    expect(end.dossier.gambles.at(-1)).toMatchObject({ room: 3, choice: 'risky', outcome: 'shortcut' });
-    expect(msgs.some((m) => m.type === 'narrator_line' && /straight to your file/.test(m.text))).toBe(true);
+    expect(end.dossier.rooms).toHaveLength(7); // waiting room, 4 tests, 1 filler, finale: a shortcut skips a task, not a room
+    expect(end.dossier.rooms.at(-1)!.archetype).toBe('finale_hall');
+    expect(end.dossier.gambles[0]).toMatchObject({ room: 1, choice: 'risky', outcome: 'shortcut' });
+    expect(core.run()!.rooms[2]!.gambleResult).toBe('shortcut');
+    expect(core.run()!.rooms[2]!.rule).toBeUndefined();
     expect(end.dossier.saidDid?.rows.find((r) => r.trait === 'risk')?.said).toBe(1);
   });
 });

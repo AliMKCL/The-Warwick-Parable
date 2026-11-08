@@ -1,8 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { gameData } from '../../core/data';
-import { Profile } from '../../core/profile/profile';
 import type { GameEvent, RuleEffect } from '../../core/protocol';
-import { chooseRule, RuleRuntime, type RoomRule } from '../../core/rules/rules';
+import { RuleRuntime, type RoomRule } from '../../core/rules/rules';
 import { createRng } from '../../core/util/random';
 import { Run } from '../../core/run/run';
 import { fakeLlm } from './fakeLlm';
@@ -33,22 +32,6 @@ describe('profile', () => {
     expect(run.profile.traits.curiosity).toBeLessThanOrEqual(0.75 + 1e-9);
     expect(run.profile.evidence.every((e) => e.reason.length > 5)).toBe(true);
     expect(run.describe(room).some((l) => l.startsWith('Noticed:'))).toBe(true);
-  });
-});
-
-describe('rule choice', () => {
-  it('never puts a rule in the first room, never repeats the previous rule, and pressures hesitant players with a timer', () => {
-    const p = new Profile(gameData);
-    expect(chooseRule(p, createRng(1), 0)).toBeUndefined();
-    p.traits.hesitation = 0.95;
-    const counts: Record<string, number> = {};
-    for (let i = 0; i < 400; i++) {
-      const r = chooseRule(p, createRng(i), 2, 'lights_dim_on_idle');
-      expect(r?.id).not.toBe('lights_dim_on_idle');
-      counts[r?.id ?? 'none'] = (counts[r?.id ?? 'none'] ?? 0) + 1;
-    }
-    expect(counts.exit_timer).toBeGreaterThan(counts.inspect_to_unlock!);
-    expect(counts.exit_timer).toBeGreaterThan(counts.none ?? 0);
   });
 });
 

@@ -10,8 +10,9 @@ test('all sixteen encounters render and accept a raycast interaction', async ({
   test.setTimeout(900_000); // sixteen rooms; slow without a GPU
   const data = loadGameData();
   const seeds = new Map<string, number>();
-  for (let seed = 1; seed < 1000 && seeds.size < ANOMALIES.length; seed++) {
-    const run = new Run(seed, data, { observeMs: 0, runLength: 4 });
+  for (let seed = 1; seed < 4000 && seeds.size < ANOMALIES.length; seed++) {
+    // One test and two fillers, so room 1 is sometimes a filler: false_exit only appears in a room with no test.
+    const run = new Run(seed, data, { observeMs: 0, layout: { tests: 1, fillers: 2 } });
     const first = run.start();
     run.record({ type: 'room_entered', roomId: first.id, t: 0 });
     run.record({ type: 'door_chosen', roomId: first.id, doorId: 'd1', t: 3 });
@@ -28,7 +29,7 @@ test('all sixteen encounters render and accept a raycast interaction', async ({
     route.fulfill({ status: 503, body: '{}' }),
   );
   for (const [id, seed] of seeds) {
-    await page.goto(`/?seed=${seed}&rooms=4&observe=0&post=0&mute=1&dpr=1`);
+    await page.goto(`/?seed=${seed}&tests=1&fillers=2&observe=0&post=0&mute=1&dpr=1`);
     await page.waitForFunction(() => !!(window as any).__WHACK__);
     await page.evaluate(() => (window as any).__WHACK__.begin());
     await page.waitForFunction(

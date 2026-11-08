@@ -159,6 +159,10 @@
     "lift_lobby": [
       "A lift. Finally, something that does the walking for you.",
       "The lift lobby. Please wait. You're good at that."
+    ],
+    "finale_hall": [
+      "One more hallway. The door at the end is for you. It always was.",
+      "The light at the end is your file. Walk as slowly as you like. You will."
     ]
   },
   "narratorDoor": [

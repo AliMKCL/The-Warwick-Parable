@@ -19,5 +19,6 @@ export function loadGameData(): GameData {
       dossierSystem: md('prompts/dossier-system.md'),
       dossierUser: md('prompts/dossier-user.md'),
     },
+    layout: json('layout.json'),
   };
 }

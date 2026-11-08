@@ -8,7 +8,8 @@ import { templateAssignments } from '../../core/room/templates';
 import { validateRoom } from '../../core/room/validate';
 import type { RoomSpec, Side } from '../../core/room/types';
 import type { RuleEffect } from '../../core/protocol';
-import { liftRule, RuleRuntime } from '../../core/rules/rules';
+import { RuleRuntime } from '../../core/rules/rules';
+import { TESTS } from '../../core/testrooms/registry';
 import { createRng } from '../../core/util/random';
 import { Run } from '../../core/run/run';
 import { fakeLlm } from './fakeLlm';
@@ -69,7 +70,7 @@ describe('lift lobby', () => {
 
   it('is never offered to the model as a prop, and the model is told about the lift', () => {
     const room = liftRoom(4, 'w');
-    const rule = liftRule(room.layout, createRng(1));
+    const rule = { id: 'lift_wait', params: TESTS.lift_wait!.params({ layout: room.layout, rng: createRng(1), profile: new Run(1, gameData).profile, used: {} })! };
     const slots = pickModelSlots(room.layout, gameData, createRng(2));
     const { messages, propIds } = buildRoomMessages(
       { index: 2, layout: room.layout, entranceLabel: 'X', story: [], behaviour: [], profile: [], rule, threads: [], runLength: 7, data: gameData },
@@ -135,7 +136,7 @@ describe('lift lobby in a run', () => {
   it('appears at most once per run, never as the final room, and always runs the lift rule', async () => {
     let seen = 0;
     for (let seed = 1; seed <= 120; seed++) {
-      const run = new Run(seed, gameData, { observeMs: 0 });
+      const run = new Run(seed, gameData, { observeMs: 0, layout: { tests: 5, fillers: 2 } });
       run.start();
       const rng = createRng(seed);
       while (!run.finished) {
@@ -156,12 +157,10 @@ describe('lift lobby in a run', () => {
   it('?layout= forces room types, and the model cannot rename the maintenance door', async () => {
     const run = new Run(9, gameData, { llm: fakeLlm(), observeMs: 0, forceArchetypes: ['lift_lobby', 'l_gallery', 'u_gallery'] });
     run.start();
-    // Room 1 holds a gamble (two doors), so the lift goes in the first room after it. Take the certain door.
-    const first = await run.next('d1');
-    expect(first.rule?.id).toBe('gamble');
-    expect(first.layout.archetype).not.toBe('lift_lobby');
-    const lift = await run.next(String(first.rule!.params.safe));
+    const lift = await run.next('d1');
     expect(lift.layout.archetype).toBe('lift_lobby');
+    expect(lift.slot).toBe('test');
+    expect(lift.test).toBe('lift_wait');
     expect(lift.source).toBe('model');
     expect(lift.rule?.id).toBe('lift_wait');
     expect(lift.layout.doors.find((d) => !d.entrance)!.label).toBe('MAINTENANCE');

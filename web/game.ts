@@ -4,8 +4,8 @@ import type { CoreMessage, GameEvent, ProfileSnapshot, RuleEffect, SelfRatings }
 import { createCore } from '../core/run/core';
 import type { LlmClient } from '../core/llm/client';
 import type { RoomSpec } from '../core/room/types';
-import type { ARCHETYPES } from '../core/room/layouts';
-type Archetype = (typeof ARCHETYPES)[number];
+import type { Archetype } from '../core/room/layouts';
+import type { LayoutInput } from '../core/testrooms/config';
 import { Player } from './player/player';
 import { createPost, type Post } from './render/post';
 import { createRenderer } from './render/renderer';
@@ -24,6 +24,8 @@ export interface GameOptions {
   maxAnomalies?: number;
   /** Debug: room types to force for rooms 1, 2, 3… (`?layout=`). */
   forceArchetypes?: Archetype[];
+  /** `?tests= ?fillers= ?pool=`: the run's layout, on top of data/layout.json. */
+  layout?: LayoutInput;
   post: boolean;
   maxDpr: number;
   debug: boolean;
@@ -98,7 +100,7 @@ export class Game {
   /** Start a run. With no model (or an unreachable one), rooms are filled from templates. */
   begin(llm?: LlmClient, selfRatings?: SelfRatings) {
     this.sound.start();
-    this.core = createCore(gameData, { llm, observeMs: this.opts.observeMs, runLength: this.opts.runLength, concurrency: this.opts.concurrency, maxAnomalies: this.opts.maxAnomalies, forceArchetypes: this.opts.forceArchetypes });
+    this.core = createCore(gameData, { llm, observeMs: this.opts.observeMs, runLength: this.opts.runLength, concurrency: this.opts.concurrency, maxAnomalies: this.opts.maxAnomalies, forceArchetypes: this.opts.forceArchetypes, layout: this.opts.layout });
     this.core.onMessage((m) => this.handle(m));
     this.startedAt = performance.now();
     this.send({ type: 'run_started', seed: this.opts.seed, t: 0, ...(selfRatings ? { selfRatings } : {}) });

@@ -33,11 +33,11 @@ test('lift lobby, L and U rooms', async ({ page }) => {
   const errors: string[] = [];
   page.on('pageerror', (e) => errors.push(e.message));
   await page.setViewportSize({ width: 960, height: 540 });
-  await page.goto('/?seed=4242&debug=1&dpr=1&post=0&observe=0&mute=1&layout=lift_lobby,l_gallery,u_gallery&rooms=9');
+  await page.goto('/?seed=4242&debug=1&dpr=1&post=0&observe=0&mute=1&layout=lift_lobby,l_gallery,u_gallery&tests=4&fillers=2');
   await page.evaluate(() => (window as any).__WHACK__.begin());
   await waitForRoom(page, 0);
 
-  // The lift lobby (room 1 is a gamble room, so it comes after that).
+  // The lift lobby, then an L and a U (each in the first room it fits).
   await reach(page, 'lift_lobby');
   const lift = await W(page);
   expect(lift.room.archetype).toBe('lift_lobby');
@@ -74,5 +74,31 @@ test('lift lobby, L and U rooms', async ({ page }) => {
   await reach(page, 'u_gallery');
   await page.screenshot({ path: 'artifacts/u-gallery.png' });
 
+  expect(errors).toEqual([]);
+});
+
+test('the run ends in a hallway whose far door glows warmer than the rest', async ({ page }) => {
+  test.setTimeout(200_000);
+  const errors: string[] = [];
+  page.on('pageerror', (e) => errors.push(e.message));
+  await page.setViewportSize({ width: 960, height: 540 });
+  await page.goto('/?seed=31&debug=1&dpr=1&observe=0&mute=1&tests=1&fillers=0');
+  await page.waitForFunction(() => !!(window as any).__WHACK__);
+  await page.evaluate(() => (window as any).__WHACK__.begin());
+  await waitForRoom(page, 0);
+  await waitForRoom(page, await leave(page));
+  expect((await W(page)).room.archetype).not.toBe('finale_hall');
+  await waitForRoom(page, await leave(page));
+  const st = await W(page);
+  expect(st.room.archetype).toBe('finale_hall');
+  const door = st.room.doors.find((d: any) => d.finale);
+  expect(door).toBeTruthy();
+  // Look down the hallway at it.
+  await page.evaluate((d) => {
+    const dir = ({ n: [0, -1], s: [0, 1], w: [-1, 0], e: [1, 0] } as any)[d.side];
+    (window as any).__WHACK__.lookFrom(d.cx + 0.5 - dir[0] * 6, d.cz + 0.5 - dir[1] * 6, d.cx + 0.5 + dir[0], 1.2, d.cz + 0.5 + dir[1]);
+  }, door);
+  await page.waitForTimeout(1500);
+  await page.screenshot({ path: 'artifacts/finale-hallway.png' });
   expect(errors).toEqual([]);
 });

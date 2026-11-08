@@ -11,7 +11,8 @@ const tick = (ms = 0) => new Promise((r) => setTimeout(r, ms));
 describe('model-generated rooms', () => {
   it('uses the model content: props, text, door labels, narrator lines, story memory', async () => {
     const calls: { user: string }[] = [];
-    const run = new Run(4, gameData, { llm: fakeLlm({ calls }), observeMs: 0, maxAnomalies: 0 });
+    // No choice room in the pool: it is written from templates, so it wouldn't add a fact to the story.
+    const run = new Run(4, gameData, { llm: fakeLlm({ calls }), observeMs: 0, maxAnomalies: 0, layout: { pool: ['exit_timer', 'lights_dim_on_idle', 'inspect_to_unlock'] } });
     const first = run.start();
     run.record({ type: 'room_entered', roomId: first.id, t: 0 });
     run.record({ type: 'inspected', roomId: first.id, objectId: first.props[0]!.id, t: 12 });

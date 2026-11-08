@@ -101,6 +101,8 @@ export interface Door {
   entrance: boolean;
   /** The label is part of the room's design (e.g. MAINTENANCE): the model may not rename it. */
   fixedLabel?: boolean;
+  /** The door at the end of the finale hallway: brighter and warmer than the rest, it leads to the player's file. */
+  finale?: boolean;
 }
 
 export interface Slot {
@@ -193,8 +195,12 @@ export interface RoomSpec {
   fact?: string;
   /** How long generation took, for the debug overlay. */
   genMs?: number;
-  /** The mechanic running in this room, if any (see core/rules). */
-  rule?: { id: 'lights_dim_on_idle' | 'inspect_to_unlock' | 'exit_timer' | 'narrator_suggests' | 'gamble' | 'lift_wait'; params: Record<string, number | string>; line: string; doneLine: string };
+  /** The mechanic running in this room: the runtime side of its test (see core/testrooms). */
+  rule?: { id: string; params: Record<string, number | string>; line: string; doneLine: string };
+  /** What this room is in the run's layout: the waiting room, a test room, a filler room or the finale. */
+  slot?: 'start' | 'test' | 'filler' | 'finale';
+  /** The test this room holds (core/testrooms), even if a won gamble took its rule away. */
+  test?: string;
   /** Set when the player arrived through a gamble's 50/50 door: what the coin decided. */
   gambleResult?: 'shortcut' | 'setback';
   /** A story thread this room opens, and the id of one it pays off. */
@@ -209,6 +215,8 @@ export interface GameData {
   ambience: Record<string, AmbiencePreset>;
   templates: TextTemplates;
   prompts: Prompts;
+  /** How runs are laid out: test and filler room counts, the test pool (data/layout.json). */
+  layout: import('../testrooms/config').LayoutInput;
 }
 
 /** Markdown prompt templates from data/prompts and data/themes, with {{placeholders}}. */
@@ -235,7 +243,8 @@ export interface TextTemplates {
   narratorEnter: Record<string, string[]>;
   narratorDoor: string[];
   narratorPress: string[];
-  rules: Record<'lights_dim_on_idle' | 'inspect_to_unlock' | 'exit_timer' | 'narrator_suggests' | 'gamble' | 'lift_wait', { line: string[]; done: string[]; tried?: string[] }>;
+  /** Lines for each test, by test id (core/testrooms). */
+  rules: Record<string, { line: string[]; done: string[]; tried?: string[] }>;
   /** Gamble rooms: the stakes said before the choice, and what the coin decided. */
   gamble: { timedLine: string[]; safeDoor: string[]; riskyDoor: string[]; shortcut: string[]; setback: string[]; shortcutEnd: string[] };
 }

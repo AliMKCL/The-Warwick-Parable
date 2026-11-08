@@ -27,13 +27,14 @@ test('the dossier opens with what you said next to what you did', async ({ page 
   test.setTimeout(300_000);
   const errors: string[] = [];
   page.on('pageerror', (e) => errors.push(e.message));
-  await page.goto('/?seed=7&dpr=1&post=0&observe=1&rooms=5&mute=1');
+  // Four test rooms, mostly gambles: gamble, countdown, gamble, countdown (a gamble is always followed by another test).
+  await page.goto('/?seed=7&dpr=1&post=0&observe=1&tests=4&fillers=0&pool=gamble:50,exit_timer&mute=1');
   await page.evaluate(() => (window as any).__WHACK__.begin({ selfRatings: { risk: 5, patience: 3, social: 3, exploration: 1 } }));
   await page.waitForFunction(() => (window as any).__WHACK__.state().room?.index === 0, null, { timeout: 60_000 });
   await page.waitForTimeout(1200);
 
   let gambles = 0;
-  for (let i = 0; i < 8 && !(await W(page)).ended; i++) {
+  for (let i = 0; i < 9 && !(await W(page)).ended; i++) {
     const st = await W(page);
     // Always the certain door: a player who said they take risks, and did not.
     const door = st.rule?.id === 'gamble' ? st.rule.params.safe : st.room.doors.find((d: any) => !d.entrance).id;

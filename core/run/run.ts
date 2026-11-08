@@ -2,18 +2,20 @@ import { describeVisit } from '../director/summary';
 import { generateRoomContent } from '../director/content';
 import { LlmError, type LlmClient } from '../llm/client';
 import { OPPOSITE } from '../room/geometry';
-import { ARCHETYPES, CHOICE_ROOM, generateLayout, type Archetype } from '../room/layouts';
+import { CHOICE_ROOM, FINALE_HALL, generateLayout, type Archetype } from '../room/layouts';
 import { placeAssignments } from '../room/place';
 import { applyRoomVariant } from '../room/variants';
 import { templateAssignments } from '../room/templates';
 import type { Door, GameData, Layout, RoomSpec } from '../room/types';
-import { createRng, deriveSeed, pick, randInt } from '../util/random';
+import { createRng, deriveSeed, pick } from '../util/random';
 import type { GameEvent, ProfileSnapshot, RuleEffect, SelfRatings } from '../protocol';
 import { Profile } from '../profile/profile';
-import { chooseRule, gambleRule, liftRule, GAMBLE_LABELS, RuleRuntime, templateRuleLines, type RoomRule, type RuleId } from '../rules/rules';
+import { RuleRuntime, templateRuleLines, type RoomRule } from '../rules/rules';
+import { resolveLayout, type LayoutConfig, type LayoutInput } from '../testrooms/config';
+import { TESTS } from '../testrooms/registry';
+import { pickRoom, usedCounts } from '../testrooms/schedule';
 import { attachAnomaly, AnomalyRuntime } from '../anomalies/anomalies';
 import type { AnomalyEffect } from '../protocol';
-import { RUN_LENGTH } from '../director/prompts';
 
 const timers = globalThis as unknown as {
   setTimeout(fn: () => void, ms: number): unknown;
@@ -35,10 +37,11 @@ interface Plan {
   resolve: (s: RoomSpec) => void;
   abort?: { abort(): void };
   error?: string;
-  /** The rule this room will run, once chosen (gamble rooms know theirs from the start). */
+  /** What this room is in the run's layout, and its test (core/testrooms). */
+  slot: 'test' | 'filler' | 'finale';
+  test?: string;
+  /** The rule this room will run, made from its test when the room was planned. */
   rule?: Omit<RoomRule, 'line' | 'doneLine'>;
-  /** Chosen yet? (`rule` may legitimately be undefined.) */
-  ruled?: boolean;
 }
 
 /** One gamble the player faced, for the dossier and the said/did comparison. */
@@ -50,35 +53,6 @@ export interface GambleRecord {
   timed: boolean;
   /** The clock ran out before they chose (so the 50/50 door was locked). */
   expired: boolean;
-}
-
-/**
- * Which rooms hold a gamble: up to three, spread through the run, never two
- * in a row (so the room behind a gamble is always an ordinary room) and none
- * in the first or last room. The middle one is on a clock. Runs shorter than
- * five rooms have none.
- */
-export function gamblePlan(last: number): Map<number, { timed: boolean }> {
-  const n = last - 1; // rooms 1 .. last-1 can hold one
-  const out = new Map<number, { timed: boolean }>();
-  if (n < 3) return out;
-  const k = Math.min(3, Math.ceil(n / 2));
-  const at = Array.from({ length: k }, (_, j) => Math.round(1 + (j * (n - 1)) / (k - 1)));
-  at.forEach((i, j) => out.set(i, { timed: j === 1 }));
-  return out;
-}
-
-/**
- * Where the two-door choice room goes: at most one per run. Never a gamble
- * room (the gamble's two doors are the choice there), never the room behind
- * one (it needs a task for a won gamble to skip), never the final room (the
- * finale is written by the model). -1 if no room fits: in a 7-room run the
- * gambles take rooms 1, 3 and 5, so it appears in shorter or longer runs.
- */
-export function choiceRoomFor(seed: number, last: number, gambles: Map<number, unknown>): number {
-  const open = Array.from({ length: Math.max(0, last - 1) }, (_, i) => i + 1).filter((i) => !gambles.has(i));
-  const pool = open.filter((i) => !gambles.has(i - 1));
-  return pool.length ? pool[randInt(createRng(deriveSeed(seed, CHOICE_ROOM)), 0, pool.length - 1)]! : -1;
 }
 
 type RuleSpec = NonNullable<RoomSpec['rule']>;
@@ -102,13 +76,18 @@ export interface RunOptions {
   onSay?: (text: string) => void;
   /** The hidden profile changed. */
   onProfile?: (profile: ProfileSnapshot) => void;
-  /** Rooms in the run, counting the first (default 7). */
+  /**
+   * How the run is laid out: test and filler room counts and the test pool, on
+   * top of data/layout.json (see core/testrooms/config.ts).
+   */
+  layout?: LayoutInput;
+  /** Shorthand for the old ?rooms=N: N rooms counting the waiting room and the finale. `layout` wins. */
   runLength?: number;
   /**
-   * Debug (`?layout=`): room types to use in turn from room 1 on. Each goes in
-   * the first room it fits: a lift lobby skips gamble rooms and the final room.
+   * Debug (`?layout=`): room types to use in turn from room 1 on. A test's own
+   * room (lift lobby, choice room) makes that room the test, if one may go there.
    */
-  forceArchetypes?: (typeof ARCHETYPES)[number][];
+  forceArchetypes?: Archetype[];
   /**
    * How many rooms to generate at the same time (default 1). Set it to the
    * number of parallel requests the model server allows (OLLAMA_NUM_PARALLEL,
@@ -131,8 +110,6 @@ export class Run {
   private plans: Plan[] = [];
   /** Rooms being generated right now. */
   private active = 0;
-  /** Where the two-door choice room goes (-1: none this run). */
-  private readonly choiceRoomIndex: number;
   /** False while the player is being observed in a freshly entered room. */
   private observing = false;
   private observeTimer: unknown;
@@ -142,8 +119,8 @@ export class Run {
   /** Story threads the model has planted, and whether a later room paid them off. */
   readonly threads: { id: string; text: string; room: number; resolvedIn?: number }[] = [];
   private rule?: RuleRuntime;
-  /** Room index -> gamble, fixed at the start from the run's length. */
-  readonly gambleRooms: Map<number, { timed: boolean }>;
+  /** Test and filler counts and the test pool for this run. */
+  readonly layout: LayoutConfig;
   /** Every gamble the player has faced, in order. */
   readonly gambles: GambleRecord[] = [];
   /** Extra rooms added by lost gambles. */
@@ -163,8 +140,7 @@ export class Run {
   ) {
     if (!opts.llm) this.modelOff = true;
     this.profile = new Profile(data);
-    this.gambleRooms = gamblePlan(this.baseLast);
-    this.choiceRoomIndex = choiceRoomFor(seed, this.baseLast, this.gambleRooms);
+    this.layout = resolveLayout(data.layout ?? {}, opts.layout, opts.runLength);
   }
 
   get current(): RoomSpec | undefined {
@@ -176,7 +152,7 @@ export class Run {
     const seed = deriveSeed(this.seed, 'room-0');
     const rng = createRng(seed);
     const layout = generateLayout({ archetype: 'waiting_room', entranceSide: 's', exits: 2, rng, doorLabels: this.data.templates.doorLabels });
-    const spec = this.templateSpec({ index: 0, seed, layout, entranceLabel: '' }, rng, { first: true, ambience: 'cold' });
+    const spec = this.templateSpec({ index: 0, seed, layout, entranceLabel: '', slot: 'start' }, rng, { first: true, ambience: 'cold' });
     this.enter(spec);
     return spec;
   }
@@ -209,7 +185,7 @@ export class Run {
     let spec: RoomSpec;
     if (result === 'timeout') {
       this.cancel(plan);
-      spec = this.templateSpec(plan, createRng(plan.seed), { rule: plan.ruled ? plan.rule : undefined });
+      spec = this.templateSpec(plan, createRng(plan.seed), { rule: plan.rule });
     } else {
       spec = result;
     }
@@ -276,15 +252,9 @@ export class Run {
     });
   }
 
-  /** Index of the final room, including any detours added by lost gambles. */
+  /** Index of the finale: after the waiting room, every test and filler room, and any detours from lost gambles. */
   get last(): number {
-    return this.baseLast + this.detours;
-  }
-
-  /** Index of the final room as planned at the start. */
-  private get baseLast(): number {
-    const length = this.opts.runLength ?? RUN_LENGTH;
-    return Number.isFinite(length) ? Math.max(2, Math.ceil(length) - 1) : RUN_LENGTH - 1;
+    return this.layout.tests + this.layout.fillers + 1 + this.detours;
   }
 
   /** True once the player has reached the last room of the run. */
@@ -324,12 +294,13 @@ export class Run {
     this.rule = undefined;
     const previous = this.current;
     const choice = [...this.events].reverse().find((e) => e.type === 'door_chosen' && e.roomId === previous?.id);
-    // The choice room and the lift lobby are set pieces: no messy/ceiling variant or anomaly on top.
-    if (room.layout.archetype !== CHOICE_ROOM && room.layout.archetype !== 'lift_lobby') {
+    // Set-piece tests (the choice room, the lift lobby) and the finale get no messy/ceiling variant or anomaly on top.
+    const plain = (room.test && TESTS[room.test]?.setPiece) || room.slot === 'finale';
+    if (!plain) {
       applyRoomVariant(room, this.rooms, this.last);
       if (!room.variant) attachAnomaly(room, this.rooms, this.events, this.data, this.last, this.seed, this.opts.maxAnomalies);
     }
-    if (room.layout.archetype !== CHOICE_ROOM && previous?.anomaly?.id === 'blue_door' && choice?.type === 'door_chosen' && choice.doorId === previous.anomaly.doorId) {
+    if (!plain && previous?.anomaly?.id === 'blue_door' && choice?.type === 'door_chosen' && choice.doorId === previous.anomaly.doorId) {
       const callback = `Returned to your file. ${previous.anomaly.record} You may wish to reconsider the wording.`;
       room.narrator.onEnter = room.variant ? `${room.narrator.onEnter} ${callback}` : callback;
       room.fact = [room.fact, previous.anomaly.record].filter(Boolean).join(' ');
@@ -355,73 +326,32 @@ export class Run {
     this.pump();
   }
 
+  /** The room behind one door: decided now (test or filler, which test, which layout), written in the background. */
   private plan(from: RoomSpec, door: Door): Plan {
     const index = from.index + 1;
     const seed = deriveSeed(this.seed, `room-${index}-${from.id}-${door.id}`);
     const rng = createRng(seed);
-    const { archetype, exits } = index === this.choiceRoomIndex
-      ? { archetype: CHOICE_ROOM, exits: 2 } as const
-      : this.dials(from, rng);
+    const pick = pickRoom({ config: this.layout, rooms: this.rooms, index, last: this.last, detours: this.detours, profile: this.profile, forced: this.nextForced() }, createRng(deriveSeed(seed, 'pick-room')));
     const layout = generateLayout({
-      archetype,
+      archetype: pick.archetype,
       entranceSide: OPPOSITE[door.side],
-      exits,
+      exits: pick.exits,
       rng,
       doorLabels: this.data.templates.doorLabels,
     });
     let resolve!: (s: RoomSpec) => void;
     const done = new Promise<RoomSpec>((r) => (resolve = r));
-    const p: Plan = { doorId: door.id, index, seed, layout, entranceLabel: door.label, status: 'queued', done, resolve };
-    const gamble = this.gambleRooms.get(index);
-    if (gamble && index < this.last) {
-      const exits = layout.doors.filter((d) => !d.entrance).map((d) => d.id);
-      if (exits.length >= 2) {
-        p.rule = gambleRule(exits, createRng(deriveSeed(seed, 'gamble')), gamble.timed);
-        p.ruled = true;
-      }
+    const p: Plan = { doorId: door.id, index, seed, layout, entranceLabel: door.label, status: 'queued', done, resolve, slot: pick.slot };
+    if (pick.test) {
+      p.test = pick.test.id;
+      const params = pick.test.params({ layout, rng: createRng(deriveSeed(seed, 'test-params')), profile: this.profile, used: usedCounts(this.rooms) });
+      if (params) p.rule = { id: pick.test.id, params };
     }
     return p;
   }
 
-  /**
-   * The profile shapes the space: hesitant players get more doors and long
-   * corridors, curious ones get rooms full of things, impulsive ones get
-   * fewer choices.
-   */
-  private dials(from: RoomSpec, rng: ReturnType<typeof createRng>): { archetype: Archetype; exits: number } {
-    const t = this.profile.traits;
-    const index = from.index + 1;
-    const final = index >= this.last;
-    const gamble = this.gambleRooms.has(index);
-    const forced = this.nextForced();
-    // L and U rooms are a little rarer than the four basic types; the lift lobby is a set piece, at most once per run.
-    const w: Record<(typeof ARCHETYPES)[number], number> = {
-      waiting_room: 1, corridor: 1, open_office: 1, hub: 1, l_gallery: 0.65, u_gallery: 0.65, lift_lobby: 0.45,
-    };
-    if (t.hesitation > 0.6) { w.corridor += 1.5; w.hub += 1; w.lift_lobby += 0.4; }
-    if (t.curiosity > 0.6) { w.open_office += 1.5; w.hub += 0.5; w.l_gallery += 0.3; w.u_gallery += 0.3; }
-    if (t.impulsivity > 0.6) { w.corridor += 1; w.waiting_room += 0.5; }
-    // A hub always has at least two exits, so it can't be the final room (one way on, to the file).
-    // The lift lobby has one exit, so it can't hold a gamble either.
-    const liftUsed = this.rooms.some((r) => r.layout.archetype === 'lift_lobby');
-    const options = ARCHETYPES.filter((a) => a !== from.layout.archetype && !(a === 'hub' && final) && !(a === 'lift_lobby' && (liftUsed || final || gamble)));
-    let archetype = options[0]!;
-    if (forced && !(forced === 'lift_lobby' && (final || gamble)) && !(forced === 'hub' && final)) archetype = forced;
-    else {
-      const total = options.reduce((a, k) => a + w[k], 0);
-      let r = rng() * total;
-      for (const k of options) if ((r -= w[k]) <= 0) { archetype = k; break; }
-    }
-    let exits = 1 + Math.floor(rng() * 3);
-    if (t.hesitation > 0.62) exits = 3;
-    else if (t.impulsivity > 0.62) exits = Math.min(exits, 2);
-    if (final) exits = 1; // the last room has one way on
-    else if (gamble) exits = 2; // a gamble: certain or 50/50
-    return { archetype, exits };
-  }
-
   /** The next room type from `forceArchetypes` still to be placed. */
-  private nextForced(): (typeof ARCHETYPES)[number] | undefined {
+  private nextForced(): Archetype | undefined {
     const list = this.opts.forceArchetypes;
     if (!list?.length) return undefined;
     let placed = 0;
@@ -458,19 +388,10 @@ export class Run {
     plan.status = 'generating';
     this.emitStatus();
     const rng = createRng(plan.seed);
-    const isChoice = plan.layout.archetype === CHOICE_ROOM;
-    // Behind a gamble the room always has a task, so the shortcut has something to skip.
-    // (The last room never has one: there the shortcut skips the room itself.)
-    const afterGamble = this.current?.rule?.id === 'gamble';
-    if (!plan.ruled) {
-      plan.rule = isChoice || plan.index >= this.last ? undefined
-        : plan.layout.archetype === 'lift_lobby' ? liftRule(plan.layout, createRng(deriveSeed(plan.seed, 'pick-rule')))
-        : chooseRule(this.profile, createRng(deriveSeed(plan.seed, 'pick-rule')), plan.index, this.current?.rule?.id as RuleId | undefined, afterGamble);
-      plan.ruled = true;
-    }
     const rule = plan.rule;
+    const templatesOnly = plan.test !== undefined && TESTS[plan.test]?.modelWritten === false;
     let spec: RoomSpec;
-    if (isChoice || this.modelOff) {
+    if (templatesOnly || this.modelOff) {
       spec = this.templateSpec(plan, rng, { rule });
     } else {
       spec = await this.modelSpec(plan, rng, rule).catch((err: unknown) => {
@@ -519,8 +440,10 @@ export class Run {
     const { props } = placeAssignments(plan.layout, [...gen.assignments, ...furniture], this.data);
     const labels = new Map(c.doors.map((d) => [d.door, d.label.toUpperCase().slice(0, 16)]));
     const layout: Layout = { ...plan.layout, doors: plan.layout.doors.map((d) => (labels.has(d.id) && !d.fixedLabel ? { ...d, label: labels.get(d.id)! } : { ...d, label: d.entrance ? plan.entranceLabel : d.label })) };
-    return this.dressGamble({
+    return this.dress({
       id: `room-${plan.index}-${plan.seed.toString(36)}`,
+      slot: plan.slot,
+      test: plan.test,
       index: plan.index,
       seed: plan.seed,
       layout,
@@ -536,9 +459,9 @@ export class Run {
       genMs: Math.round(this.now() - started),
       rule: rule && {
         ...rule,
-        params: rule.id === 'narrator_suggests' ? { ...rule.params, door: c.suggest_door ?? '' } : rule.params,
+        params: TESTS[rule.id]?.picksDoor ? { ...rule.params, door: c.suggest_door ?? '' } : rule.params,
         line: c.rule_line,
-        doneLine: c.rule_done_line || this.data.templates.rules[rule.id].done[0]!,
+        doneLine: c.rule_done_line || this.data.templates.rules[rule.id]?.done[0] || '',
       },
       provenance: { behaviour, profile, story: this.story(), repaired: gen.repaired },
       thread: {
@@ -549,19 +472,19 @@ export class Run {
   }
 
   private templateSpec(
-    plan: Pick<Plan, 'index' | 'seed' | 'layout' | 'entranceLabel'>,
+    plan: Pick<Plan, 'index' | 'seed' | 'layout' | 'entranceLabel' | 'test'> & { slot: RoomSpec['slot'] },
     rng: ReturnType<typeof createRng>,
     o: { first?: boolean; ambience?: string; rule?: Omit<RoomRule, 'line' | 'doneLine'> } = {},
   ): RoomSpec {
     const { layout } = plan;
     const t = this.data.templates;
     const isChoice = layout.archetype === CHOICE_ROOM;
-    // A lift lobby without its lift rule would be a room with a lift that does nothing.
-    if (!o.rule && layout.archetype === 'lift_lobby' && plan.index < this.last) o = { ...o, rule: liftRule(layout, createRng(deriveSeed(plan.seed, 'pick-rule'))) };
     const assignments = templateAssignments(layout, this.data, rng, { index: plan.index, forceCenter: o.first ? 'button_pedestal' : undefined });
     const { props } = placeAssignments(layout, assignments, this.data);
     const spec: RoomSpec = {
       id: `room-${plan.index}-${plan.seed.toString(36)}`,
+      slot: plan.slot,
+      test: plan.test,
       index: plan.index,
       seed: plan.seed,
       layout: { ...layout, doors: layout.doors.map((d) => (d.entrance ? { ...d, label: plan.entranceLabel } : d)) },
@@ -572,37 +495,22 @@ export class Run {
         doors: isChoice ? {} : Object.fromEntries(layout.doors.filter((d) => !d.entrance).map((d) => [d.id, pick(rng, t.narratorDoor)])),
       },
       source: 'template',
-      title: o.first ? 'The waiting room' : isChoice ? 'Choice Room' : layout.archetype.replaceAll('_', ' '),
+      title: o.first ? 'The waiting room' : isChoice ? 'Choice Room' : layout.archetype === FINALE_HALL ? 'The last hallway' : layout.archetype.replaceAll('_', ' '),
       provenance: o.first ? undefined : { behaviour: this.behaviourLog(), profile: this.profile.readout(), story: this.story(), error: (plan as Partial<Plan>).error },
     };
     if (o.rule) {
       const exits = layout.doors.filter((d) => !d.entrance);
-      const params = o.rule.id === 'narrator_suggests' ? { ...o.rule.params, door: pick(rng, exits).id } : o.rule.params;
+      const params = TESTS[o.rule.id]?.picksDoor ? { ...o.rule.params, door: pick(rng, exits).id } : o.rule.params;
       const rule = { ...o.rule, params };
       spec.rule = { ...rule, ...templateRuleLines(rule, spec, this.data, rng) } as RuleSpec;
     }
-    return this.dressGamble(spec);
+    return this.dress(spec);
   }
 
-  /**
-   * A gamble room states its stakes plainly, whoever wrote the rest: the two
-   * door labels are tagged CERTAIN and 50/50, looking at either says what it
-   * does, and the stakes line comes from templates so it can never be vague.
-   */
-  private dressGamble(spec: RoomSpec): RoomSpec {
-    const rule = spec.rule;
-    if (rule?.id !== 'gamble') return spec;
-    const rng = createRng(deriveSeed(spec.seed, 'gamble-lines'));
-    const g = this.data.templates.gamble;
-    const safe = String(rule.params.safe), risky = String(rule.params.risky);
-    const { line: stakes } = templateRuleLines(rule, spec, this.data, rng);
-    const tag = (label: string, t: string) => `${label.slice(0, 16 - t.length - 3).trim()} · ${t}`.replace(/^ · /, '');
-    return {
-      ...spec,
-      layout: { ...spec.layout, doors: spec.layout.doors.map((d) => (d.id === safe ? { ...d, label: tag(d.label, GAMBLE_LABELS.safe) } : d.id === risky ? { ...d, label: tag(d.label, GAMBLE_LABELS.risky) } : d)) },
-      narrator: { ...spec.narrator, doors: { ...spec.narrator.doors, [safe]: pick(rng, g.safeDoor), [risky]: pick(rng, g.riskyDoor) } },
-      rule: { ...rule, params: { ...rule.params, stakes } },
-    };
+  /** The room's test gets the last word on its spec (the gamble tags its doors and spells out the stakes). */
+  private dress(spec: RoomSpec): RoomSpec {
+    const kind = spec.rule ? TESTS[spec.rule.id] : undefined;
+    return kind?.dress ? kind.dress(spec, this.data) : spec;
   }
 
   /** Behaviour across the whole run so far, room by room. */

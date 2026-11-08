@@ -23,6 +23,13 @@ Read this first when picking up the work. Newest entries at the top.
 
 ## Log
 
+### Run layout: test rooms, filler rooms, finale hallway (8 Nov)
+- `data/layout.json` sets how many test rooms and filler rooms a run has, and the pool of tests (weights, caps). The order is decided room by room as the player goes (`core/testrooms/schedule.ts`); the totals are always exact. URL: `?tests= ?fillers= ?pool=`; `?rooms=N` still works.
+- Tests are pluggable: one `TestKind` file each in `core/testrooms/kinds/` (candidate layouts and door counts, profile weighting, settings, the model's description, runtime behaviour), listed in `registry.ts`. `RuleRuntime` is now a generic host. Replaces `chooseRule`, `gamblePlan`, `choiceRoomFor` and the lift's room-type weight.
+- The finale is always a hallway (`finale_hall`) ending in one door that glows brighter and warmer than the rest.
+- Gambles are always followed by another test room, so a won gamble no longer skips the last room.
+- Tests: 90 unit tests (new `tests/core/layout.test.ts`, including plugging in a new test); e2e checks the finale door.
+
 ### Kaan's rooms back, plus the lift lobby (8 Nov)
 - Restored Kaan's three commits from the reverted PR #3 on top of PRs #4 and #5: anomalies (`core/anomalies`), messy / upside-down room variants, L and U rooms, and the two-door choice room. Divyansh's office tasks were left out (they replace rooms 1–5).
 - The choice room now avoids gamble rooms, the room behind a gamble, and the final room, so a 7-room run has none; it appears in shorter and longer runs.

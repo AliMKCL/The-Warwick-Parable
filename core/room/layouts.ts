@@ -10,7 +10,9 @@ import type { Door, Fixture, Layout, Side, Slot } from './types';
 
 export const ARCHETYPES = ['waiting_room', 'corridor', 'open_office', 'hub', 'l_gallery', 'u_gallery', 'lift_lobby'] as const;
 export const CHOICE_ROOM = 'choice_room';
-export type Archetype = (typeof ARCHETYPES)[number] | typeof CHOICE_ROOM;
+/** The last room of every run: a hallway ending in one brighter, warmer door that leads to the player's file. */
+export const FINALE_HALL = 'finale_hall';
+export type Archetype = (typeof ARCHETYPES)[number] | typeof CHOICE_ROOM | typeof FINALE_HALL;
 
 export interface LayoutOptions {
   archetype: Archetype;
@@ -157,6 +159,17 @@ const BUILDERS: Record<Archetype, (o: LayoutOptions) => Layout> = {
     b.spawnAt(entrance);
     return b.done();
   },
+
+  /** The finale: a long hallway with a single glowing door at the far end. */
+  [FINALE_HALL](o) {
+    const w = 3, d = randInt(o.rng, 13, 17);
+    const b = new Builder(FINALE_HALL, w, d, 2.8, o);
+    const ex = b.entrance(1);
+    b.door('n', 1, { finale: true });
+    b.wallSlots(['wall_mounted', 'wall_mounted', 'wall']);
+    b.spawnAt(ex);
+    return b.done();
+  },
 };
 
 // ---------- builder ----------
@@ -204,7 +217,7 @@ class Builder {
   }
 
   /** An exit on `side` at position `index` along that wall; returns its id. */
-  door(side: Side, index: number, marking?: Pick<Door, 'label' | 'color' | 'fixedLabel'>): string {
+  door(side: Side, index: number, marking?: Partial<Pick<Door, 'label' | 'color' | 'fixedLabel' | 'finale'>>): string {
     const [cx, cz] = this.edgeCell(side, index);
     const n = this.doors.filter((x) => !x.entrance).length + 1;
     const label = marking?.label ?? (this.labels.length ? this.labels.splice(Math.floor(this.o.rng() * this.labels.length), 1)[0]! : String(n));

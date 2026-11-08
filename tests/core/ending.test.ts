@@ -6,8 +6,9 @@ import { fakeLlm } from './fakeLlm';
 
 const tick = (ms = 0) => new Promise((r) => setTimeout(r, ms));
 
+// Countdowns only, so the scripted player (who leaves rooms quickly) is measured as impatient.
 async function playToEnd(llm: ReturnType<typeof fakeLlm> | undefined, runLength: number) {
-  const core = createCore(gameData, { llm, observeMs: 0, runLength });
+  const core = createCore(gameData, { llm, observeMs: 0, runLength, layout: { pool: ['exit_timer'] } });
   const msgs: CoreMessage[] = [];
   core.onMessage((m) => msgs.push(m));
   core.send({ type: 'run_started', seed: 31, t: 0 });

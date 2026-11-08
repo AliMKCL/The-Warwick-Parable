@@ -1,0 +1,22 @@
+{
+  "//": "How a run is laid out. Between the waiting room (room 0) and the finale hallway come `tests` rooms that hold a test and `fillers` rooms that don't (fillers still have furniture to inspect and can have anomalies). Which room gets which is decided as the player goes, so the order differs every run but the totals don't. `pool` lists the tests that can be drawn, by id (see core/testrooms/kinds), with a relative weight, or { \"weight\": w, \"max\": n } to cap it per run. A test left out of the pool never appears. `fillerLayouts` are the room shapes filler rooms are drawn from. URL overrides: ?tests=4&fillers=2&pool=exit_timer,lift_wait",
+  "tests": 4,
+  "fillers": 1,
+  "pool": {
+    "exit_timer": 1,
+    "inspect_to_unlock": 1,
+    "lights_dim_on_idle": 1,
+    "narrator_suggests": 1,
+    "gamble": { "weight": 1, "max": 2 },
+    "lift_wait": 0.6,
+    "choice": 0.6
+  },
+  "fillerLayouts": {
+    "waiting_room": 1,
+    "corridor": 1,
+    "open_office": 1,
+    "hub": 1,
+    "l_gallery": 0.65,
+    "u_gallery": 0.65
+  }
+}

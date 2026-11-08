@@ -16,6 +16,8 @@ export interface CoreOptions {
   concurrency?: number;
   /** Debug: force room types for rooms 1, 2, 3… (see RunOptions). */
   forceArchetypes?: RunOptions['forceArchetypes'];
+  /** Test and filler counts and the test pool, on top of data/layout.json (see RunOptions.layout). */
+  layout?: RunOptions['layout'];
 }
 
 /**
@@ -39,6 +41,7 @@ export function createCore(data: GameData, opts: CoreOptions = {}): CorePort & {
     runLength: opts.runLength,
     concurrency: opts.concurrency,
     forceArchetypes: opts.forceArchetypes,
+    layout: opts.layout,
     onStatus: (doors) => emit({ type: 'gen_status', doors, model: run?.modelOff ? 'off' : 'on' }),
     maxAnomalies: opts.maxAnomalies,
     onAnomaly: (effect) => emit({ type: 'anomaly_effect', effect }),

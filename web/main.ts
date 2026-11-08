@@ -3,7 +3,8 @@ import { createLlmClient } from '../core/llm/client';
 import { Game } from './game';
 import { Loop } from './render/loop';
 import { gameData } from '../core/data';
-import { ARCHETYPES } from '../core/room/layouts';
+import { ARCHETYPES, CHOICE_ROOM, type Archetype } from '../core/room/layouts';
+import type { LayoutInput } from '../core/testrooms/config';
 import { Recorder } from './telemetry/recorder';
 import { endSession, logEvent, startSession, telemetryConfigured, type SelfRatings, type Trait } from './telemetry/telemetry';
 
@@ -17,7 +18,9 @@ import { endSession, logEvent, startSession, telemetryConfigured, type SelfRatin
  *   ?ambience=warm  draw every room in one mood (cold, warm, sickly, dim)
  *   ?mute=1     start with sound off (M toggles it)
  *   ?rooms=5    rooms per run, counting the first (default 7)
- *   ?layout=lift_lobby,l_gallery,u_gallery  force room types for rooms 1, 2, 3… in turn (to see a specific room)
+ *   ?layout=lift_lobby,l_gallery,u_gallery  force room types in turn from room 1 (to see a specific room)
+ *   ?tests=4&fillers=2  test rooms and filler rooms between the waiting room and the finale (data/layout.json)
+ *   ?pool=exit_timer,lift_wait  only draw these tests (ids in core/testrooms/kinds); gamble:3 sets a weight
  */
 const params = new URLSearchParams(location.search);
 const seed = Number(params.get('seed')) || Math.floor(Math.random() * 1e9);
@@ -31,6 +34,7 @@ const game = new Game(canvas, {
   forceAmbience: params.get('ambience') ?? undefined,
   runLength: Number(params.get('rooms')) || undefined,
   forceArchetypes: parseLayouts(params.get('layout')),
+  layout: parseRunLayout(params),
   concurrency: __LLM_PARALLEL__,
   mute: params.get('mute') === '1',
 });
@@ -237,7 +241,19 @@ Object.assign(window, {
 });
 
 /** `?layout=lift_lobby,l_gallery`: room types to force, ignoring unknown names. */
-function parseLayouts(v: string | null): (typeof ARCHETYPES)[number][] | undefined {
-  const list = (v ?? '').split(',').map((x) => x.trim()).filter((x): x is (typeof ARCHETYPES)[number] => (ARCHETYPES as readonly string[]).includes(x));
+function parseLayouts(v: string | null): Archetype[] | undefined {
+  const known: readonly string[] = [...ARCHETYPES, CHOICE_ROOM];
+  const list = (v ?? '').split(',').map((x) => x.trim()).filter((x): x is Archetype => known.includes(x));
   return list.length ? list : undefined;
+}
+
+/** `?tests=4&fillers=2&pool=exit_timer,gamble:3`: the run's layout on top of data/layout.json (id:weight sets a weight). */
+function parseRunLayout(p: URLSearchParams): LayoutInput | undefined {
+  const n = (k: string) => (p.has(k) && Number.isFinite(Number(p.get(k))) ? Math.max(0, Math.floor(Number(p.get(k)))) : undefined);
+  const ids = p.get('pool')?.split(',').map((x) => x.trim()).filter(Boolean) ?? [];
+  const pool = ids.some((x) => x.includes(':'))
+    ? Object.fromEntries(ids.map((x) => { const [id, w] = x.split(':'); return [id!, Number(w ?? 1) || 1]; }))
+    : ids;
+  const out: LayoutInput = { tests: n('tests'), fillers: n('fillers'), pool: ids.length ? pool : undefined };
+  return Object.values(out).some((v) => v !== undefined) ? out : undefined;
 }

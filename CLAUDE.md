@@ -21,8 +21,8 @@ cp .env.example .env.local      # MODEL_BACKEND, PARALLEL_ROOMS, OPENROUTER_* / 
 npm install
 npm run check:llm               # model reachable, JSON output, speed
 npm run try:room                # scripted player + real model: prints the next room, rule, profile, narrator lines
-npm run dev                     # http://127.0.0.1:5188  (?debug=1 ?seed= ?rooms=5 ?post=0 ?ambience= ?mute=1 ?observe= ?layout=)
-npm test                        # vitest: core + telemetry (81 tests)
+npm run dev                     # http://127.0.0.1:5188  (?debug=1 ?seed= ?tests= ?fillers= ?pool= ?rooms=5 ?post=0 ?ambience= ?mute=1 ?observe= ?layout=)
+npm test                        # vitest: core + telemetry (90 tests)
 npm run typecheck               # tsc for web + core, plus core purity check
 npm run test:e2e                # Playwright; see "Working from Claude's sandbox" below
 npm run mock:llm                # fake Ollama + fake ElevenLabs on :11999
@@ -47,18 +47,23 @@ npm run analyze                 # Supabase play data → per-player metrics + po
 
 ## Core modules
 - `core/room/`: types (RoomSpec, Layout, PropRecipe…), `layouts.ts` (7 archetypes: waiting_room, corridor,
-  open_office, hub, l_gallery, u_gallery (Kaan), lift_lobby; plus Kaan's two-door choice_room, placed by
-  `choiceRoomFor` in run.ts; built with the entrance on the south wall, then rotated so it matches the door the
-  player came through). Layouts can carry `fixtures` (props at exact spots: the lift and its call button).
-  A hub is never the final room (it always has 2+ exits). `variants.ts` (Kaan: rare messy / upside-down rooms);
+  open_office, hub, l_gallery, u_gallery (Kaan), lift_lobby; plus Kaan's two-door choice_room and the
+  finale_hall (long hallway, one `Door.finale` that the web adapter makes glow warm); built with the entrance on
+  the south wall, then rotated so it matches the door the player came through). Layouts can carry `fixtures`
+  (props at exact spots: the lift and its call button). `variants.ts` (Kaan: rare messy / upside-down rooms);
   `core/anomalies/` (Kaan: one-off encounters, up to MAX_ANOMALIES_PER_RUN). Lift lobby and choice room get
   neither. `place.ts` (slot placement that drops anything that collides, covers a door or cuts off an
   exit), `validate.ts`, `templates.ts` (fallback furnishing and text). 1 m grid; prop front faces +z.
 - `core/run/run.ts`: the Run. On entering a room it plans the room behind each exit (layout immediately),
   watches the player for `observeMs` (8 s, or until they linger at a door), then generates content for one
   exit at a time, lingered-at door first. Choosing a door cancels the others, waits up to 15 s, else templates.
-  Room 0 is always the template waiting room with the button. Final room (index runLength-1) has one exit
-  and no plans; going through it ends the run.
+  Room 0 is always the template waiting room with the button. Then `layout.tests` test rooms and
+  `layout.fillers` filler rooms (`Run.layout`, from data/layout.json + RunOptions.layout / runLength), decided
+  per door by `pickRoom` (core/testrooms/schedule.ts) as the player goes; `RoomSpec.slot` / `.test` record it.
+  The finale (index `run.last`) is the finale_hall, with no plans; going through its door ends the run.
+- `core/testrooms/`: the test registry. One `TestKind` per file in `kinds/` (candidate layouts + door counts,
+  profile weight, cap, `needsNextTest`, `setPiece`, `params`, `describe`, `start`/`onEvent`, optional `dress`,
+  `templateLines`, `borrowTime`); `registry.ts` lists them; `config.ts` resolves data/layout.json. See its README.
 - `core/run/core.ts`: the CorePort. Streams a live narrator reaction on door choice (only when the next room
   is already ready), says the entry line, starts the room's rule after the entry line has been read, and on
   the final door writes the verdict and emits `run_ended`.
@@ -73,15 +78,13 @@ npm run analyze                 # Supabase play data → per-player metrics + po
   (events → plain sentences), `prompts.ts` (fill, story stages, RUN_LENGTH=7), `dossier.ts` (verdict + Dossier).
 - `core/profile/profile.ts`: traits hesitation/curiosity/compliance/impulsivity, start 0.5, moved only by
   evidence with per-room caps; every change logged with a reason (shown in the dossier and sent to the model).
-- `core/rules/rules.ts`: lights_dim_on_idle, inspect_to_unlock, exit_timer, narrator_suggests (may lie), gamble,
-  lift_wait (only in, and always in, the lift lobby: indicator never arrives via the `display` effect, hint
-  after 45–70 s; the waiting-room button logic in profile/core applies to `button_pedestal` only).
-  Chosen against the player's tendencies, never repeated back to back, none in the first or last room.
-  Gambles are placed by `gamblePlan` in `run.ts`, not chosen: 3 rooms in a 7-room run (1, 3, 5; never adjacent;
-  none in runs of 4 rooms or fewer), the middle one on a 15 s clock that then locks the 50/50 door. Two exits, labels
-  tagged "· CERTAIN" / "· 50/50", stakes always from templates (`params.stakes`). The coin is tossed from the seed when
-  the room is planned. Certain = next room as planned (always has a task); 50/50 = shortcut (next room's task removed;
-  before the last room, skips it and ends the run) or setback (a detour room: `run.last` grows by one).
+- `core/rules/rules.ts`: `RuleRuntime`, the generic host that runs the current room's test (its timers are named
+  and cleared on leaving), plus `describeRule` / `templateRuleLines`. The tests (core/testrooms/kinds): lights_dim_on_idle,
+  inspect_to_unlock, exit_timer, narrator_suggests (may lie), gamble, lift_wait (lift lobby: indicator never arrives
+  via the `display` effect; the waiting-room button logic in profile/core applies to `button_pedestal` only), choice.
+  Gamble: two exits tagged "· CERTAIN" / "· 50/50", stakes from templates, coin tossed from the seed when planned;
+  always followed by another test room (`needsNextTest`), so it never precedes the finale; the second gamble of a
+  run has a 15 s clock. 50/50 = shortcut (next room's task removed) or setback (one more filler: `run.last` grows).
   `RuleRuntime.start(t, history)` picks up current state (e.g. already standing still).
 - `core/llm/client.ts`: Ollama native API (`format` = schema, `think:false`, `keep_alive`) or OpenAI-compatible
   (`response_format: json_schema`); `completeJson`, `streamText`, `ping`. Errors are typed: unreachable / http /

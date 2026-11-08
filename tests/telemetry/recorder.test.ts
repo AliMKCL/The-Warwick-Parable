@@ -154,7 +154,8 @@ describe('telemetry recorder', () => {
 
   it('saves the said/did comparison in the session profile', async () => {
     const { recorder, ended } = setup();
-    const core = createCore(gameData, { observeMs: 0, runLength: 3 });
+    // One filler room between the waiting room and the finale: nothing but the button speaks to "social".
+    const core = createCore(gameData, { observeMs: 0, layout: { tests: 0, fillers: 1 } });
     core.onMessage((m) => recorder.message(m));
     const send = (e: Parameters<typeof core.send>[0]) => { recorder.event(e); core.send(e); };
     send({ type: 'run_started', seed: 9, t: 0, selfRatings: { risk: 2, patience: 4, social: 5, exploration: 1 } });
