@@ -45,7 +45,9 @@ A run ends in the final room: its single door leads to the player's file. Demo n
 Ordinary exits open into playable transfer corridors. Press **E** to open a
 door, then walk through it; crossing commits the choice and seals the door
 behind you. Each corridor is straight, with light-filled windows on both sides and
-3–5 distinct interactable types selected from ordinary prop recipes. Test
+15–18 randomly selected furnishings, at least 8 standing on the floor, plus the
+interlock notice. Types and positions vary with the seed; safe types may repeat.
+Low furniture can sit beneath windows, and wall items fit above furniture with clearance. Test
 equipment (including the opening-room button and lift controls) and human
 characters never appear in transfer corridors. Recipes tagged `task` or `person`
 are excluded; other interactables remain eligible if they fit beside the path. The
