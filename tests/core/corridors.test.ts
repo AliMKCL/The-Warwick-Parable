@@ -2,7 +2,8 @@ import { describe, expect, it } from 'vitest';
 import { corridorStory, createCorridor } from '../../core/corridors/corridor';
 import { gameData } from '../../core/data';
 import type { CoreMessage, GameEvent } from '../../core/protocol';
-import { OPPOSITE, reachable } from '../../core/room/geometry';
+import { footprintRect, OPPOSITE } from '../../core/room/geometry';
+import { validateRoom } from '../../core/room/validate';
 import type { Side } from '../../core/room/types';
 import { createCore } from '../../core/run/core';
 import { Run } from '../../core/run/run';
@@ -12,7 +13,7 @@ const tick = (ms = 0) => new Promise((r) => setTimeout(r, ms));
 
 describe('playable passages', () => {
   it('connects every door orientation with a straight traversable passage and real interaction recipes', () => {
-    for (let seed = 1; seed <= 20; seed++) {
+    for (let seed = 1; seed <= 200; seed++) {
       const room = new Run(seed, gameData).start();
       for (const side of ['n', 's', 'e', 'w'] as Side[]) {
         const door = { ...room.layout.doors.find((d) => !d.entrance)!, side };
@@ -20,13 +21,34 @@ describe('playable passages', () => {
         const [entry, exit] = spec.layout.doors;
         expect(entry!.side).toBe(OPPOSITE[side]);
         expect(exit!.side).toBe(side);
-        expect(reachable(spec.layout, [entry!.cx, entry!.cz], new Set()).has(`${exit!.cx},${exit!.cz}`)).toBe(true);
+        expect(validateRoom(spec, gameData), `seed ${seed}, side ${side}`).toEqual([]);
         expect(spec.props.every((p) => gameData.props.some((r) => r.id === p.recipe))).toBe(true);
         expect(spec.corridor!.windows.length).toBeGreaterThanOrEqual(4);
         expect(new Set(spec.corridor!.windows.map((w) => w.side)).size).toBe(2);
         expect(side === 'n' || side === 's' ? entry!.cx === exit!.cx : entry!.cz === exit!.cz).toBe(true);
-        expect(spec.props.length).toBeGreaterThanOrEqual(4); // 3 optional objects + interlock
-        expect(spec.props.length).toBeLessThanOrEqual(6);
+        expect(spec.props.length).toBeGreaterThanOrEqual(16); // 15 furnishings + interlock
+        expect(spec.props.length).toBeLessThanOrEqual(19);
+        expect(spec.props.filter((p) => p.y === 0).length).toBeGreaterThanOrEqual(8);
+        expect(new Set(spec.props.map((p) => p.id)).size).toBe(spec.props.length);
+        const bounds = spec.props.map((p) => {
+          const r = gameData.props.find((r) => r.id === p.recipe)!;
+          expect(r.tags).not.toContain('task');
+          expect(r.tags).not.toContain('person');
+          const mounted = r.fits.every((f) => f === 'wall_mounted');
+          const bottom = mounted ? p.y - r.size[1] / 2 : p.y;
+          const top = bottom + r.size[1];
+          const rect = footprintRect(p.x, p.z, p.rotY, r.size[0], r.size[2]);
+          // Furnishings stay in the side strips, away from the central walking path.
+          expect(side === 'n' || side === 's'
+            ? rect.maxX < 1.5 || rect.minX > 3.5
+            : rect.maxZ < 1.5 || rect.minZ > 3.5).toBe(true);
+          return { ...rect, bottom, top };
+        });
+        for (let i = 0; i < bounds.length; i++) for (let j = i + 1; j < bounds.length; j++) {
+          const a = bounds[i]!, b = bounds[j]!;
+          expect(a.maxX > b.minX && b.maxX > a.minX && a.maxZ > b.minZ && b.maxZ > a.minZ
+            && a.top > b.bottom && b.top > a.bottom, `${spec.props[i]!.id} overlaps ${spec.props[j]!.id}`).toBe(false);
+        }
         expect(spec.rule).toBeUndefined();
         expect(spec.anomaly).toBeUndefined();
       }
@@ -35,6 +57,7 @@ describe('playable passages', () => {
 
   it('replays seeded selections, includes all events, and draws only ordinary non-human interactables', () => {
     const events = new Set<string>(), recipes = new Set<string>();
+    const selections = new Set<string>(), placements = new Set<string>();
     for (let seed = 1; seed <= 200; seed++) {
       const room = new Run(seed, gameData).start(), door = room.layout.doors.find((d) => !d.entrance)!;
       const story = corridorStory(room, door, [], gameData);
@@ -42,6 +65,8 @@ describe('playable passages', () => {
       expect(createCorridor(room, door, story, gameData)).toEqual(spec);
       events.add(spec.corridor!.event?.kind ?? 'none');
       spec.props.forEach((p) => recipes.add(p.recipe));
+      selections.add(spec.props.map((p) => p.recipe).sort().join(','));
+      placements.add(JSON.stringify(spec.props.map((p) => [p.x, p.y, p.z])));
     }
     expect([...events].sort()).toEqual(['breaking_window', 'falling_art', 'none', 'paper_gust']);
     expect([...recipes].sort()).toEqual([
@@ -49,6 +74,8 @@ describe('playable passages', () => {
       'sign_wall', 'poster_wall', 'whiteboard', 'clock_wall', 'copier', 'trash_bin',
       'vending_machine', 'box_stack', 'table_round', 'bookshelf', 'memo_board',
     ].sort());
+    expect(selections.size).toBeGreaterThan(100);
+    expect(placements.size).toBeGreaterThan(100);
   });
 
   it('uses the selected door and observed actions, without inventing inspection or button presses', () => {

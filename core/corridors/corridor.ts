@@ -1,7 +1,7 @@
 import type { GameEvent } from '../protocol';
 import { DIR, OPPOSITE, ROTATE_CW, yawForFacing } from '../room/geometry';
 import { rotateCW } from '../room/layouts';
-import type { Door, GameData, Layout, RoomSpec, Side } from '../room/types';
+import type { Door, GameData, Layout, PropRecipe, RoomSpec, Side } from '../room/types';
 import { createRng, deriveSeed, pick, randInt } from '../util/random';
 
 /** Observe briefly before speculating on the next rooms. Door focus can start sooner. */
@@ -108,28 +108,58 @@ export function createCorridor(room: RoomSpec, door: Door, story: CorridorStory,
     fixtures: [{ id: 'interlock', recipe: 'sign_wall', x: 0.03, y: 1.6, z: 2.5, face: 'e', surfaceText: 'TRANSFER INTERLOCK\nRELEASES WHEN READY', inspectText: 'The next department opens when the transfer is complete. You may explore this corridor in the meantime.' }],
   };
   // Ordinary interactables only: test equipment and people belong in their rooms.
-  // Draw without replacement, keeping the existing clearance beside the route.
   const pool = data.props.filter((p) => (p.inspectable || p.interact)
     && !p.tags.includes('task') && !p.tags.includes('person')
     && p.size[0] <= 2 && p.size[2] <= 1.2 && p.size[1] <= 2.6);
-  const count = Math.min(randInt(rng, 3, 5), pool.length);
-  const anchors: { z: number; side: 'w' | 'e' }[] = [];
+  const mounted = (p: PropRecipe) => p.fits.every((f) => f === 'wall_mounted');
+  type Anchor = { z: number; side: 'w' | 'e' };
+  const floorAnchors: Anchor[] = [], wallAnchors: Anchor[] = [];
+  // Two-metre bays keep furniture apart, leaving a clear central route. Only
+  // the event's own side needs reserving; low furniture may sit under windows.
+  for (let z = 3; z <= depth - 3; z += 2) for (const side of ['w', 'e'] as const) {
+    if (z === 3 && side === 'w') continue; // access to the interlock notice
+    if (eventKind && side === eventSide && Math.abs(z - (eventZ + 0.5)) < 2) continue;
+    floorAnchors.push({ z, side });
+  }
   for (let z = 2; z < depth - 3; z += 2) for (const side of ['w', 'e'] as const) {
     if (z < 4 && side === 'w') continue;
-    if (eventKind && Math.abs(z + 0.5 - (eventZ + 0.5)) < 2) continue;
+    if (eventKind && side === eventSide && Math.abs(z - eventZ) < 2) continue;
     if (corridor.windows.some((w) => w.side === side && Math.abs(z + 0.5 - (w.cz + 0.5)) < 1.5)) continue;
-    anchors.push({ z: z + 0.5, side });
+    wallAnchors.push({ z: z + 0.5, side });
   }
-  for (let i = 0; i < count && anchors.length; i++) {
-    const recipe = pool.splice(randInt(rng, 0, pool.length - 1), 1)[0]!;
+  // Count only furnishings, not the interlock or event scenery. Reserve enough
+  // floor bays to meet the total even in the shortest, most windowed corridor.
+  const count = randInt(rng, 15, Math.min(18, floorAnchors.length + wallAnchors.length));
+  const floorCount = randInt(rng, Math.max(8, count - wallAnchors.length), Math.min(floorAnchors.length, count - 4));
+  const used = new Set<string>();
+  const standing: { side: Side; z: number; width: number; height: number }[] = [];
+  for (let i = 0; i < count; i++) {
+    const onWall = i >= floorCount;
+    const anchors = onWall ? wallAnchors : floorAnchors;
     const a = anchors.splice(randInt(rng, 0, anchors.length - 1), 1)[0]!;
-    const mounted = recipe.fits.every((f) => f === 'wall_mounted') || ['lift_call', 'intercom', 'buzzer_button'].includes(recipe.id);
+    const choices = pool.filter((p) => {
+      if (mounted(p) !== onWall) return false;
+      if (onWall) {
+        const bottom = (p.mountHeight ?? 1.35) - p.size[1] / 2;
+        return standing.every((f) => f.side !== a.side || Math.abs(f.z - a.z) > (f.width + p.size[0]) / 2 + 0.15 || f.height + 0.15 < bottom);
+      }
+      return p.size[1] <= 1 || corridor.windows.every((w) => w.side !== a.side || Math.abs(a.z - (w.cz + 0.5)) > p.size[0] / 2 + 0.65);
+    });
+    // Prefer variety; repeat a type only when the remaining safe choices have
+    // already appeared (e.g. a low bin under a window or a clock above a cabinet).
+    const fresh = choices.filter((p) => !used.has(p.id));
+    const recipe = pick(rng, fresh.length ? fresh : choices);
+    used.add(recipe.id);
+    const jitter = onWall ? 0 : Math.max(0, Math.min(0.1, (2 - recipe.size[0] - 0.2) / 2));
+    const z = a.z + (rng() * 2 - 1) * jitter;
     const offset = recipe.size[2] / 2 + 0.04;
-    const id = recipe.id === 'memo_board' ? (rng() < 0.5 ? 'receipt' : 'archive') : recipe.id === 'button_pedestal' ? 'acknowledge' : `corridor-prop-${i}`;
-    layout.fixtures!.push({ id, recipe: recipe.id, x: a.side === 'w' ? offset : 5 - offset, y: mounted ? recipe.mountHeight ?? 1.35 : 0, z: a.z, face: a.side === 'w' ? 'e' : 'w',
-      surfaceText: id === 'receipt' ? 'ROUTE RECEIPT' : id === 'archive' ? 'RECORDS TRANSFER' : id === 'acknowledge' ? 'ACKNOWLEDGE' : 'TRANSFER DEPARTMENT',
+    const recordIds = ['receipt', 'archive'].filter((id) => !layout.fixtures!.some((f) => f.id === id));
+    const id = recipe.id === 'memo_board' && recordIds.length ? pick(rng, recordIds) : `corridor-prop-${i}`;
+    layout.fixtures!.push({ id, recipe: recipe.id, x: a.side === 'w' ? offset : 5 - offset, y: onWall ? recipe.mountHeight ?? 1.35 : 0, z, face: a.side === 'w' ? 'e' : 'w',
+      surfaceText: id === 'receipt' ? 'ROUTE RECEIPT' : id === 'archive' ? 'RECORDS TRANSFER' : 'TRANSFER DEPARTMENT',
       inspectText: id === 'receipt' ? story.receipt : id === 'archive' ? story.archive : `${recipe.name}. Assigned to the transfer department. The inventory lists it as “temporarily here”.`,
     });
+    if (!onWall) standing.push({ side: a.side, z, width: recipe.size[0], height: recipe.size[1] });
   }
   while (layout.doors[0]!.side !== OPPOSITE[door.side]) {
     const rotate = (p: { cx: number; cz: number; side: Side }) => ({ cx: layout.depth - 1 - p.cz, cz: p.cx, side: ROTATE_CW[p.side] });
