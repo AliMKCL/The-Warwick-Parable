@@ -23,6 +23,11 @@ Read this first when picking up the work. Newest entries at the top.
 
 ## Log
 
+### Consistent walking speed (8 Nov)
+- Removed duplicate player and active-room updates from `Game.update`. All rooms and transfer corridors now use one world-space collision update per frame at the existing 2.7 m/s speed; doorway crossings preserve movement and walking cadence. Idle timers and room animations also advance once per frame.
+- Dijkstra's edge costs are distances in metres (1 or √2), so they do not change with speed. Path commitment uses actual timestamps, and office-task speed metrics use the player's measured waiting-room baseline.
+- Regression checks measure each unobstructed step through complete runs with uneven frame times, including both corridor thresholds and scene rebasing; path analysis verifies unchanged distances and longer travel time at 2.7 m/s.
+
 ### Distance fields, path analysis and adaptive test selection (8 Nov)
 - **Distance fields** (`core/room/fields.ts`): on entering a room, the walking distance from every floor cell to every exit, around walls and furniture (Dijkstra on the 1 m grid, 8-connected, no corner cutting). Mean 62 µs per room, once.
 - **Path analysis** (`core/profile/path.ts`): the 10 Hz position samples, read against the fields: walking up to a door and turning back (reversals), when the player committed to the door they took (deliberation vs. walking time), route efficiency, floor coverage. 0.2 µs per sample, 91× faster than searching per sample. Adds small profile nudges (turned back from doors → hesitation; covered most of the room → curiosity; straight to the door → less curiosity) and one `Path:` line per room for the model. Shown in "How this world was built".

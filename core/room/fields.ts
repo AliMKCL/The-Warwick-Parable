@@ -11,6 +11,8 @@ import type { GameData, Layout, RoomSpec } from './types';
  *
  * Built with Dijkstra on the 1 m grid, 8-connected (diagonals cost √2, and
  * never cut a blocked corner), so distances are close to what a player walks.
+ * Costs are metres, not seconds: changing walking speed does not change the
+ * fields. PathTracker measures commitment time from actual sample timestamps.
  */
 
 /** A per-cell distance table, row-major (index = cz * width + cx). Infinity where unreachable. */
