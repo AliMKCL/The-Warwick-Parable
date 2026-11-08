@@ -1,4 +1,4 @@
-import type { Dossier, Measured, SelfTrait, TraitName } from '../../core/protocol';
+import type { AlsoMeasured, Dossier, Measured, SelfTrait, TraitName } from '../../core/protocol';
 
 const TRAITS: { key: TraitName; label: string; low: string; high: string; colour: string }[] = [
   { key: 'hesitation', label: 'Hesitation', low: 'decisive', high: 'hesitant', colour: '#6e8cd6' },
@@ -31,10 +31,11 @@ export function showDossier(root: HTMLElement, d: Dossier) {
     <section class="traits">
       ${TRAITS.map((t) => {
         const val = d.traits[t.key];
+        const sd = d.certainty?.[t.key];
         const moments = d.moments[t.key];
         return `<div class="trait">
-          <div class="trait-head"><strong>${t.label}</strong><span>${mixed.has(t.key) ? 'see pattern above' : val >= 0.62 ? t.high : val <= 0.38 ? t.low : 'unremarkable'}</span></div>
-          <div class="bar"><span style="left:${(val * 100).toFixed(0)}%;background:${t.colour}"></span><i></i></div>
+          <div class="trait-head"><strong>${t.label}</strong><span>${mixed.has(t.key) ? 'see pattern above' : val >= 0.62 ? t.high : val <= 0.38 ? t.low : 'unremarkable'}${sd !== undefined ? ` · ${certainty(sd)}` : ''}</span></div>
+          <div class="bar">${sd !== undefined ? `<u style="left:${(Math.max(0, val - sd) * 100).toFixed(1)}%;width:${((Math.min(1, val + sd) - Math.max(0, val - sd)) * 100).toFixed(1)}%;background:${t.colour}"></u>` : ''}<span style="left:${(val * 100).toFixed(0)}%;background:${t.colour}"></span><i></i></div>
           <div class="ends"><small>${t.low}</small><small>${t.high}</small></div>
           <p>${esc(v[t.key])}</p>
           ${moments.length ? `<ul>${moments.map((m) => `<li><b>${m.delta > 0 ? '+' : ''}${m.delta.toFixed(2)}</b> room ${m.room}: ${esc(m.reason)}</li>`).join('')}</ul>` : ''}
@@ -62,17 +63,19 @@ export function showDossier(root: HTMLElement, d: Dossier) {
 
     <section class="built" hidden>
       <h2>How this world was built</h2>
+      ${d.selection === 'adaptive' ? `<p class="note">Tests were chosen adaptively: before each room the building worked out, from a Bayesian estimate of each trait, which test would tell it the most about what it was least sure of (expected information gain), and leaned its draw towards that one. The shaded band on each trait above is ± one standard deviation of that estimate.</p>` : ''}
       <p class="note">No room existed before the player reached it. Seeded code laid out each room; ${d.rooms.filter((r) => r.source === 'model').length} of ${d.rooms.length} rooms were then written by the local model from what you had done so far (the rest used templates). The verdict above was written by ${d.verdictSource === 'model' ? 'the model' : 'templates'}${d.verdictConflicts?.length ? `; its title and summary contradicted what you did (${d.verdictConflicts.join(', ')}), so they were rewritten from your measured scores` : ''}.</p>
       <h3>Your traits as you entered each room</h3>
       ${chart(d)}
       <h3>Room by room</h3>
       <table>
-        <thead><tr><th>Room</th><th>Layout</th><th>Written by</th><th>Rule</th><th>What the model was told about you</th></tr></thead>
+        <thead><tr><th>Room</th><th>Layout</th><th>Written by</th><th>Rule</th><th>How you walked</th><th>What the model was told about you</th></tr></thead>
         <tbody>${d.rooms.map((r) => `<tr>
           <td><strong>${r.index}</strong> ${esc(r.title)}${r.fact ? `<small>${esc(r.fact)}</small>` : ''}</td>
           <td>${esc(r.archetype.replace('_', ' '))}<small>${esc(r.size)} · seed ${r.seed}</small></td>
           <td>${r.source}${r.genMs ? `<small>${(r.genMs / 1000).toFixed(1)} s</small>` : ''}</td>
-          <td>${r.rule ? esc(r.rule.replaceAll('_', ' ')) : '·'}</td>
+          <td>${r.rule ? esc(r.rule.replaceAll('_', ' ')) : '·'}${why(r.selection)}</td>
+          <td>${walk(r.path)}</td>
           <td>${r.behaviour.length || r.profile.length ? `<details><summary>${r.behaviour.length} notes</summary>${r.profile.length ? `<p><b>Profile:</b> ${r.profile.map(esc).join('; ')}</p>` : ''}${r.behaviour.map((b) => `<p>${esc(b)}</p>`).join('')}</details>` : '<small>first room, nothing yet</small>'}</td>
         </tr>`).join('')}</tbody>
       </table>
@@ -96,6 +99,27 @@ export function showDossier(root: HTMLElement, d: Dossier) {
   root.querySelector('#d-again')!.addEventListener('click', () => go());
 }
 
+/** How sure the file is about a trait, from its posterior sd (0.2 = no evidence). */
+function certainty(sd: number): string {
+  return `±${sd.toFixed(2)} ${sd <= 0.08 ? 'certain' : sd <= 0.12 ? 'fairly sure' : sd <= 0.16 ? 'tentative' : 'a guess'}`;
+}
+
+/** Why the scheduler picked this room's test. */
+function why(s: NonNullable<Dossier['rooms'][number]['selection']> | undefined): string {
+  if (!s) return '';
+  if (s.mode !== 'adaptive' || !s.trait) return `<small>drawn by weight · ${Math.round(s.chance * 100)}% chance</small>`;
+  return `<small>picked to measure ${s.trait} (±${s.sd?.toFixed(2)}): ${s.bits?.toFixed(2)} bits expected · ${Math.round(s.chance * 100)}% chance${s.others.length ? ` · other options: ${s.others.slice(0, 2).map((o) => `${esc(o.test.replaceAll('_', ' '))} ${o.bits.toFixed(2)}`).join(', ')}` : ''}</small>`;
+}
+
+/** The room's path stats, briefly. */
+function walk(p: Dossier['rooms'][number]['path']): string {
+  if (!p || p.samples < 15) return '·';
+  const back = p.reversals ? ` · turned back ${p.reversals}×` : '';
+  const eff = p.efficiency !== undefined ? ` · ${Math.round(p.efficiency * 100)}% direct` : '';
+  const dec = p.deliberation !== undefined ? `<small>decided after ${Math.round(p.deliberation)} s, walked ${Math.round(p.commit ?? 0)} s</small>` : '';
+  return `${Math.round(p.walked)} m · ${Math.round(p.coverage * 100)}% of floor${eff}${back}${dec}`;
+}
+
 const SELF: { key: SelfTrait; label: string }[] = [
   { key: 'risk', label: 'I take risks' },
   { key: 'patience', label: 'I am patient' },
@@ -116,23 +140,41 @@ function saidDid(d: Dossier): string {
     const said = r?.said ?? null;
     // Untested this run: no score to compare, never a red gap, never the headline.
     const did = m.estimated ? null : Math.round(m.score);
-    const gap = said === null || did === null ? 0 : Math.abs(said - did);
+    // A single yes/no moment is shown, but never highlighted as a gap.
+    const gap = said === null || did === null || m.oneObservation ? 0 : Math.abs(said - did);
+    // Task evidence (only once tasks have reported), minus the line already shown as the main evidence.
+    const lines = (m.tasks ?? []).map((x) => x.evidence).filter((x) => x !== m.evidence);
     return `<div class="sd-row${sd?.headlineTrait === key ? ' top' : ''}${gap >= 2 ? ' gap' : ''}${did === null ? ' untested' : ''}">
       <strong>${esc(label)}</strong>
       <div class="sd-vals">
         ${sd ? `<span>You said: <b>${said === null ? '–' : `${said}/5`}</b>${dots(said, 'said')}</span>` : ''}
         ${did === null
           ? `<span class="nt">You did: <b>not tested this run</b> <em>(estimate ${Math.round(m.score)}/5)</em></span>`
-          : `<span>You did: <b>${did}/5</b>${dots(did, 'did')}</span>`}
+          : `<span>You did: <b>${did}/5</b>${dots(did, 'did')}${m.oneObservation ? ' <em>(one observation)</em>' : ''}</span>`}
       </div>
       <p>${esc(m.evidence)}</p>
+      ${lines.length ? `<ul class="sd-tasks">${lines.map((x) => `<li>${esc(x)}</li>`).join('')}</ul>` : ''}
     </div>`;
   };
   return `<section class="saiddid">
     <p class="kicker">${sd ? 'You said · you did' : 'What you did'}</p>
     ${sd ? `<h2 class="headline${sd.headlineTrait ? '' : ' calm'}">${esc(sd.headline)}</h2><p class="detail">${esc(sd.detail)}</p>` : ''}
     <div class="sd-rows">${SELF.map((t) => row(t.key, t.label, d.measured[t.key])).join('')}</div>
+    ${alsoMeasured(d.alsoMeasured)}
   </section>`;
+}
+
+/** Traits with no slider, measured by the office tasks. Absent until a task has reported. */
+function alsoMeasured(list: AlsoMeasured[] | undefined): string {
+  if (!list?.length) return '';
+  return `<div class="also">
+    <p class="kicker">Also measured</p>
+    <div class="sd-rows">${list.map((a) => `<div class="sd-row">
+      <strong>${esc(a.label)}</strong>
+      <div class="sd-vals"><span>Measured: <b>${Math.round(a.score)}/5</b>${a.oneObservation ? ' <em>(one observation)</em>' : ''}</span></div>
+      ${a.evidence.length === 1 ? `<p>${esc(a.evidence[0])}</p>` : `<ul class="sd-tasks">${a.evidence.map((x) => `<li>${esc(x)}</li>`).join('')}</ul>`}
+    </div>`).join('')}</div>
+  </div>`;
 }
 
 /** Trait values across the rooms, plus the final value. */

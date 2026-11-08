@@ -18,6 +18,7 @@ export const GAMBLE_SECONDS = 15;
  */
 export const gamble: TestKind = {
   id: 'gamble',
+  measures: [{ trait: 'impulsivity', a: 7, b: 0.5 }],
   candidates: ORDINARY.map((archetype) => ({ archetype, exits: 2 })),
   maxPerRun: 3,
   needsNextTest: true,

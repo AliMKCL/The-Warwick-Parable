@@ -4,7 +4,8 @@ import type { Dossier, Evidence, TraitName, Verdict } from '../protocol';
 import type { GameData } from '../room/types';
 import type { Run } from '../run/run';
 import { fill } from './prompts';
-import { alignVerdict, compareSelf, findPatterns, measure, SELF_LABELS, SELF_TRAITS } from './selfcheck';
+import { alignVerdict, compareSelf, findPatterns, measure, SELF_LABELS, SELF_TRAITS, taskResultsOf } from './selfcheck';
+import { alsoMeasured, scoreTaskResults } from './taskscore';
 
 const VERDICT_SCHEMA = {
   type: 'object',
@@ -42,7 +43,7 @@ export async function writeVerdict(run: Run, data: GameData, llm?: LlmClient, ti
       findPatterns(run).map((p) => `\n## ${p.traits.join(' and ')} are both high. Do not call the player both; the pattern is: ${p.sentence}`).join('') +
       // The name and summary must agree with these; a verdict that contradicts them is replaced.
       `\n## Measured behaviour (1-5). The name and summary must not contradict these:\n` +
-      SELF_TRAITS.map((k) => { const m = measured[k]; return `- "${SELF_LABELS[k]}": ${m.estimated ? 'not tested this run' : `${Math.round(m.score)}/5`}. ${m.evidence}`; }).join('\n'),
+      SELF_TRAITS.map((k) => { const m = measured[k]; return `- "${SELF_LABELS[k]}": ${m.estimated ? 'not tested this run' : `${Math.round(m.score)}/5`}. ${[...new Set([m.evidence, ...(m.tasks ?? []).map((x) => x.evidence)])].join(' ')}`; }).join('\n'),
     threads: run.threads.map((t) => `- ${t.text}${t.resolvedIn !== undefined ? ` (explained in room ${t.resolvedIn})` : ' (never explained)'}`).join('\n') || '- none',
     minutes: Math.max(1, Math.round((run.events.at(-1)?.t ?? 0) / 60)),
     inspected: run.events.filter((e) => e.type === 'inspected').length,
@@ -103,7 +104,10 @@ export function buildDossier(run: Run, verdict: Verdict, source: 'model' | 'temp
   const measured = measure(run, data);
   // The title and summary must agree with the measured scores shown above them.
   const aligned = alignVerdict(verdict, measured);
+  // Only once tasks have reported: before that the dossier is exactly as it was.
+  const taskMeasures = scoreTaskResults(taskResultsOf(run));
   return {
+    ...(taskMeasures.length ? { taskMeasures, alsoMeasured: alsoMeasured(taskMeasures) } : {}),
     measured,
     verdictConflicts: aligned.conflicts,
     saidDid: run.selfRatings && Object.values(run.selfRatings).some((v) => v !== null) ? compareSelf(measured, run.selfRatings) : undefined,
@@ -114,6 +118,8 @@ export function buildDossier(run: Run, verdict: Verdict, source: 'model' | 'temp
     verdict: aligned.verdict,
     verdictSource: source,
     traits: { ...run.profile.traits },
+    certainty: run.profile.sd(),
+    selection: run.layout.selection,
     moments: topMoments(run.profile.evidence),
     rooms: run.rooms.map((r, i) => ({
       index: r.index,
@@ -129,6 +135,8 @@ export function buildDossier(run: Run, verdict: Verdict, source: 'model' | 'temp
       profile: r.provenance?.profile ?? [],
       seed: r.seed,
       size: `${r.layout.width}×${r.layout.depth} m`,
+      ...(r.selection ? { selection: r.selection } : {}),
+      ...(run.paths.find((p) => p.room === r.index) ? { path: run.paths.find((p) => p.room === r.index) } : {}),
     })),
     threads: run.threads.map(({ text, room, resolvedIn }) => ({ text, room, resolvedIn })),
     stats: {

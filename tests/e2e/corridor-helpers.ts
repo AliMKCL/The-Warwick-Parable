@@ -34,7 +34,7 @@ export async function leavePassage(page: Page) {
   }, s.room.index);
 }
 
-/** Walk the corridor's complete centre route using WASD, including both bends. */
+/** Walk the corridor's complete centre route using WASD. */
 export async function walkPassage(page: Page) {
   const s = await state(page), c = s.corridor;
   const goal = c.layout.doors.find((d: any) => !d.entrance);

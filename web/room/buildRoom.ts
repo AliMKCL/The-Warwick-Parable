@@ -9,6 +9,7 @@ import { ANOMALY_ANCHOR } from '../../core/anomalies/catalog';
 import { buildAnomaly, type AnomalyView } from './buildAnomaly';
 import { addMess, mountOnCeiling, planWallDetails, windowKey } from './dressRoom';
 import { textMaterial } from './textTexture';
+import { buildCorridorEvent, type CorridorEventView } from './buildCorridorEvent';
 
 export interface Rect { minX: number; maxX: number; minZ: number; maxZ: number }
 
@@ -28,6 +29,7 @@ export interface DoorView {
 }
 
 export interface RoomView {
+  corridorEvent?: CorridorEventView;
   spec: RoomSpec;
   anomaly?: AnomalyView;
   group: THREE.Group;
@@ -158,6 +160,8 @@ export function buildRoom(spec: RoomSpec, data: GameData, materials: MaterialLib
 
   if (spec.variant === 'messy') addMess(spec, group, colliders, owned);
 
+  const corridorEvent = buildCorridorEvent(spec, group, owned);
+
   // ---- lights ----
   const panels: THREE.Mesh[] = [];
   const panelGeo = new THREE.PlaneGeometry(1.2, 0.6);
@@ -218,6 +222,7 @@ export function buildRoom(spec: RoomSpec, data: GameData, materials: MaterialLib
 
   return {
     spec,
+    corridorEvent,
     anomaly,
     group,
     colliders,

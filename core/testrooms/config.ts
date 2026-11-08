@@ -17,7 +17,18 @@ export interface LayoutConfig {
   pool: Record<string, PoolEntry>;
   /** Room layouts for filler rooms, with relative weights. */
   fillerLayouts: Partial<Record<Archetype, number>>;
+  /**
+   * How a test is drawn from the pool. 'adaptive' (default): pool weight × how much the
+   * test is expected to teach about the traits the profile is least sure of (Bayesian
+   * expected information gain). 'weighted': pool weight × each test's hand-written
+   * profile heuristic (the original behaviour).
+   */
+  selection: Selection;
+  /** Adaptive only: how hard the draw leans towards the most informative test (0 = not at all, 4 = default, 8+ = nearly always the best). */
+  focus: number;
 }
+
+export type Selection = 'adaptive' | 'weighted';
 
 /** The loose form found in data/layout.json and accepted as an override. */
 export interface LayoutInput {
@@ -26,6 +37,8 @@ export interface LayoutInput {
   /** Weights by test id ({ "exit_timer": 1 }), entries ({ "gamble": { "weight": 1, "max": 2 } }), or just ids. */
   pool?: Record<string, number | { weight?: number; max?: number }> | string[];
   fillerLayouts?: Partial<Record<Archetype, number>>;
+  selection?: Selection;
+  focus?: number;
 }
 
 /**
@@ -45,7 +58,9 @@ export function resolveLayout(base: LayoutInput, override: LayoutInput = {}, run
   const pool = normalisePool(override.pool ?? base.pool ?? Object.keys(TESTS), base.pool);
   const fillerLayouts = { ...(base.fillerLayouts ?? { waiting_room: 1, corridor: 1, open_office: 1, hub: 1, l_gallery: 0.65, u_gallery: 0.65 }), ...override.fillerLayouts };
   for (const k of Object.keys(fillerLayouts)) if (!(ARCHETYPES as readonly string[]).includes(k)) delete fillerLayouts[k as Archetype];
-  return { tests: t, fillers, pool, fillerLayouts };
+  const sel = override.selection ?? base.selection;
+  const focus = Number(override.focus ?? base.focus ?? 4);
+  return { tests: t, fillers, pool, fillerLayouts, selection: sel === 'weighted' ? 'weighted' : 'adaptive', focus: Number.isFinite(focus) ? Math.max(0, focus) : 4 };
 }
 
 /** A list of ids keeps the weights and caps the base gave them; weights alone keep the base caps; unknown ids are dropped. */

@@ -1,9 +1,20 @@
 import type { GameEvent } from '../../protocol';
 import { createRng, deriveSeed, type Rng } from '../../util/random';
-import type { TestHandle, TestKind } from '../types';
+import type { Measure, TestHandle, TestKind } from '../types';
 import type { ModuleCtx, OfficeTaskModule, TaskParams } from './module';
 
 /** The room each office task builds (its Builder archetype), for the scheduler and decoration. */
+/** What each office task tells the profile (the traits its profile() step adjusts), as IRT items for adaptive selection. */
+export const OFFICE_MEASURES: Record<string, Measure[]> = {
+  balloons: [{ trait: 'impulsivity', a: 6, b: 0.6 }],
+  coffee: [{ trait: 'compliance', a: 6, b: 0.5 }],
+  canteen: [{ trait: 'impulsivity', a: 6, b: 0.5 }],
+  renumbered: [{ trait: 'hesitation', a: 4, b: 0.6 }],
+  pitch: [{ trait: 'impulsivity', a: 4, b: 0.55 }, { trait: 'hesitation', a: 4, b: 0.45 }],
+  loan: [{ trait: 'compliance', a: 4, b: 0.5 }],
+  lockdown: [{ trait: 'impulsivity', a: 5, b: 0.6 }, { trait: 'compliance', a: 4, b: 0.4 }, { trait: 'curiosity', a: 3, b: 0.5 }],
+};
+
 export const OFFICE_ROOMS: Record<string, string> = {
   balloons: 'party_room',
   coffee: 'break_room',
@@ -27,6 +38,7 @@ export function officeTest(m: OfficeTaskModule): TestKind {
   return {
     id: m.id,
     candidates: [{ archetype: OFFICE_ROOMS[m.id] ?? m.id }],
+    measures: OFFICE_MEASURES[m.id],
     maxPerRun: 1,
     setPiece: true,
     room({ seed, rng, data }) {

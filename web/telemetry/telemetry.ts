@@ -1,4 +1,5 @@
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
+import type { MeasuredOnlyTrait } from '../../core/protocol';
 
 /**
  * Play-data collection in Supabase, for later analysis (tables in supabase/schema.sql).
@@ -17,7 +18,8 @@ export interface TelemetryEvent {
   room?: string | null;
   type: string;
   choice?: string | null;
-  trait?: Trait | null;
+  /** A slider trait, or (task_measure rows only) a trait with no slider such as 'helpfulness'. */
+  trait?: Trait | MeasuredOnlyTrait | null;
   trait_value?: TraitValue | null;
   latency_ms?: number | null;
   meta?: Record<string, unknown>;

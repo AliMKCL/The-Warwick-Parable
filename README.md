@@ -44,8 +44,13 @@ A run ends in the final room: its single door leads to the player's file. Demo n
 
 Ordinary exits open into playable transfer corridors. Press **E** to open a
 door, then walk through it; crossing commits the choice and seals the door
-behind you. The corridor has two bends, light-filled windows, a route receipt,
-an archive notice and an optional acknowledgement button. The narrator refers
+behind you. Each corridor is straight, with light-filled windows on both sides and
+3–5 distinct interactable types selected from the available prop recipes. The
+interlock notice remains at the exit. Furniture stays beside the central path.
+A separate seeded corridor-event pool gives each passage a 55% chance of one
+encounter: a breaking window, a falling framed picture or a gust scattering
+papers. Otherwise it remains quiet. Events trigger once on approach; debris
+never blocks progress. Selections replay with the same seed and chosen door. The narrator refers
 to the chosen door and actions recorded in the previous room. These authored
 callbacks work immediately, including when the model is offline.
 
@@ -83,6 +88,7 @@ the prompts in `data/prompts/`, fallback text in `data/templates.json`.
 | `npm run mock:llm` | Fake model server for testing without Ollama (set `LLM_BASE_URL=http://127.0.0.1:11999`) |
 | `npm run try:voice` | Speak a sample narrator line with ElevenLabs into `voice-sample.mp3` (see `docs/voice.md`) |
 | `npm test` | Core unit tests |
+| `npm run bench` | Speed of the distance fields and path analysis, and how fast adaptive test selection pins down a profile |
 | `npm run typecheck` | Type checks, plus a check that `core/` has no 3D or browser code |
 | `npm run build` | Production build into `dist/` |
 | `npm run test:e2e` | Browser smoke test (run `npx playwright install chromium` once first) |

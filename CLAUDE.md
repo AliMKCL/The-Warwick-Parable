@@ -22,12 +22,13 @@ npm install
 npm run check:llm               # model reachable, JSON output, speed
 npm run try:room                # scripted player + real model: prints the next room, rule, profile, narrator lines
 npm run dev                     # http://127.0.0.1:5188  (?debug=1 ?seed= ?tests= ?fillers= ?pool= ?rooms=5 ?post=0 ?ambience= ?mute=1 ?observe= ?layout=)
-npm test                        # vitest: core + telemetry (100 tests)
+npm test                        # vitest: core + telemetry (126 tests)
 npm run typecheck               # tsc for web + core, plus core purity check
 npm run test:e2e                # Playwright; see "Working from Claude's sandbox" below
 npm run mock:llm                # fake Ollama + fake ElevenLabs on :11999
 npm run try:voice               # ElevenLabs sample line → voice-sample.mp3 (-- <voiceId> | --list)
 npm run analyze                 # Supabase play data → per-player metrics + population stats (-- --all --json f --csv f)
+npm run bench                   # distance fields / path analysis cost + adaptive test selection convergence (-- --quick --json f)
 ```
 
 ## Architecture (the rule that matters most)
@@ -80,8 +81,21 @@ npm run analyze                 # Supabase play data → per-player metrics + po
 - `core/director/`: `content.ts` (picks up to 8 slots for the model, builds messages, schema-constrained call,
   one repair round), `schema.ts` (per-room JSON Schema: enums of real slot/prop/door/thread ids), `summary.ts`
   (events → plain sentences), `prompts.ts` (fill, story stages, RUN_LENGTH=7), `dossier.ts` (verdict + Dossier).
+- `core/director/taskscore.ts` (PR #7, `docs/scoring.md`): office-task `TaskResult` → 0–1 per trait (weight, evidence);
+  `selfcheck.ts` averages them into "you said / you did" with the ordinary signals; dossier "Also measured" for
+  traits with no slider; telemetry `task_measure` rows. Tasks 1–5 in the table are not in the game.
 - `core/profile/profile.ts`: traits hesitation/curiosity/compliance/impulsivity, start 0.5, moved only by
   evidence with per-room caps; every change logged with a reason (shown in the dossier and sent to the model).
+  Each trait is a Bayesian posterior (`bayes.ts`, 51-point grid, 2PL items; a nudge of 0.1 = one response);
+  `traits` = posterior mean, `sd()` = uncertainty (± band in the dossier). `respond()` takes a raw item response.
+- `core/room/fields.ts` + `core/profile/path.ts`: walking-distance field per exit built on room entry (Dijkstra,
+  ~60 µs); the 10 Hz `move` samples are read against it (reversals at doors, commit time, efficiency, coverage)
+  → `Run.paths`, small profile nudges on `door_chosen`, a `Path:` line in `describe()`. Needs ≥ 15 samples.
+- Test selection (`core/testrooms/schedule.ts` `scoreTests`): `"selection": "adaptive"` (default) draws by pool
+  weight × (0.1 + expected-information-gain / best)^`focus` (default 4) from each test's `measures`;
+  `"weighted"` uses the old `weight(traits)`. Exposure control: × 0.35 per earlier use of the same test this run.
+  A test room whose rule ran but produced no evidence for a measured trait gets `profile.neutral()` on leaving
+  (`Run.settleTest`). `RoomSpec.selection` records why. URL `?select=` `?focus=`.
 - `core/rules/rules.ts`: `RuleRuntime`, the generic host that runs the current room's test (its timers are named
   and cleared on leaving), plus `describeRule` / `templateRuleLines`. The tests (core/testrooms/kinds): lights_dim_on_idle,
   inspect_to_unlock, exit_timer, narrator_suggests (may lie), gamble, lift_wait (lift lobby: indicator never arrives

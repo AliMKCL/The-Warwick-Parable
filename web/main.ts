@@ -21,6 +21,8 @@ import { endSession, logEvent, startSession, telemetryConfigured, type SelfRatin
  *   ?layout=lift_lobby,l_gallery,u_gallery  force room types in turn from room 1 (to see a specific room)
  *   ?tests=4&fillers=2  test rooms and filler rooms between the waiting room and the finale (data/layout.json)
  *   ?pool=exit_timer,lift_wait  only draw these tests (ids in core/testrooms/kinds); gamble:3 sets a weight
+ *   ?select=weighted  draw tests by the old hand-written weights instead of Bayesian information gain (adaptive)
+ *   ?focus=8    adaptive: lean harder towards the most informative test (0 = off, default from data/layout.json)
  */
 const params = new URLSearchParams(location.search);
 const seed = Number(params.get('seed')) || Math.floor(Math.random() * 1e9);
@@ -276,6 +278,7 @@ function parseRunLayout(p: URLSearchParams): LayoutInput | undefined {
   const pool = ids.some((x) => x.includes(':'))
     ? Object.fromEntries(ids.map((x) => { const [id, w] = x.split(':'); return [id!, Number(w ?? 1) || 1]; }))
     : ids;
-  const out: LayoutInput = { tests: n('tests'), fillers: n('fillers'), pool: ids.length ? pool : undefined };
+  const sel = p.get('select');
+  const out: LayoutInput = { tests: n('tests'), fillers: n('fillers'), pool: ids.length ? pool : undefined, selection: sel === 'weighted' || sel === 'adaptive' ? sel : undefined, focus: p.has('focus') && Number.isFinite(Number(p.get('focus'))) ? Number(p.get('focus')) : undefined };
   return Object.values(out).some((v) => v !== undefined) ? out : undefined;
 }

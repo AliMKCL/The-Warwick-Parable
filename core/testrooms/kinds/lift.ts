@@ -9,6 +9,7 @@ import type { TestKind } from '../types';
  */
 export const lift: TestKind = {
   id: 'lift_wait',
+  measures: [{ trait: 'hesitation', a: 6, b: 0.6 }, { trait: 'impulsivity', a: 4, b: 0.6 }, { trait: 'compliance', a: 3, b: 0.5 }],
   candidates: [{ archetype: 'lift_lobby' }],
   weight: (t) => (t.hesitation > 0.6 ? 1.6 : 1),
   maxPerRun: 1,

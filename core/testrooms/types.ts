@@ -11,13 +11,30 @@ import type { Rng } from '../util/random';
  * `data/templates.json` under `rules.<id>`, and `data/layout.json` decides how
  * often it is drawn. See core/testrooms/README.md for adding one.
  */
+export interface Measure {
+  trait: TraitName;
+  a: number;
+  b: number;
+}
+
 export interface TestKind {
   /** Also the id of the room's rule (RoomSpec.rule.id) and its key in templates.rules. */
   id: string;
   /** The room layouts this test can run in. One is drawn when the room is planned. */
   candidates: TestRoomCandidate[];
-  /** Relative chance from the player's profile, multiplied by the weight in data/layout.json (default 1). */
+  /**
+   * Relative chance from the player's profile, multiplied by the weight in data/layout.json (default 1).
+   * Used when layout.json sets "selection": "weighted"; the default, adaptive selection, uses `measures`.
+   */
   weight?(traits: Record<TraitName, number>): number;
+  /**
+   * What the test reveals, as item-response (2PL) items: per trait, how sharply the
+   * outcome separates low from high (`a`, about 3 = weak … 9 = very clear) and the
+   * trait level at which it is a coin flip (`b`). The adaptive scheduler picks the
+   * test with the most expected information about the traits it is least sure of.
+   * Leave out for a test that doesn't move the profile (it then scores as average).
+   */
+  measures?: Measure[];
   /** At most this many per run (data/layout.json can lower or raise it). */
   maxPerRun?: number;
   /** The next room must also be a test room (a won gamble skips the next room's task). */
