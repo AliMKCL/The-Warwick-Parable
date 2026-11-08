@@ -22,11 +22,12 @@ npm install
 npm run check:llm               # model reachable, JSON output, speed
 npm run try:room                # scripted player + real model: prints the next room, rule, profile, narrator lines
 npm run dev                     # http://127.0.0.1:5188  (?debug=1 ?seed= ?rooms=5 ?post=0 ?ambience= ?mute=1 ?observe=)
-npm test                        # vitest, core only
+npm test                        # vitest: core + telemetry (36 tests)
 npm run typecheck               # tsc for web + core, plus core purity check
 npm run test:e2e                # Playwright; see "Working from Claude's sandbox" below (PORT=5189 to use another port)
 npm run mock:llm                # fake Ollama + fake ElevenLabs on :11999
 npm run try:voice               # ElevenLabs sample line → voice-sample.mp3 (-- <voiceId> | --list)
+npm run analyze                 # Supabase play data → per-player metrics + population stats (-- --all --json f --csv f)
 ```
 
 ## Architecture (the rule that matters most)
@@ -90,7 +91,12 @@ npm run try:voice               # ElevenLabs sample line → voice-sample.mp3 (-
   Free plan refuses voice-library voices via the API. Model `eleven_flash_v2_5`.
   Do not clone the Stanley Parable actor's voice (no consent); use a library voice or Voice Design. See `docs/voice.md`.
   E2E: `tests/e2e/voice.spec.ts` with `ELEVENLABS_API_KEY=test ELEVENLABS_BASE_URL=http://127.0.0.1:11999` and the mock running.
-- `window.__WHACK__` test hooks: begin, state, lookFrom, useDoor, interact, effect, soundCheck.
+- Play-data telemetry (Supabase, `supabase/schema.sql`): `web/telemetry/telemetry.ts` (startSession/logEvent/endSession,
+  batched, never throws, warns and does nothing when `VITE_SUPABASE_*` is unset or unreachable) and `recorder.ts`, which
+  listens through `Game.tap` (events to core, messages from core, clicks) and logs raw rows. Choices carry trait/trait_value
+  (risk, patience, social, exploration); pressure (timer or narrator recommendation) is in `meta`. Only with the start
+  screen consent box ticked; optional 1–5 self-ratings. Analysis in `tools/analyze.ts` + `tools/analysis/metrics.ts`.
+- `window.__WHACK__` test hooks: begin (`{ telemetry: selfRatings }` to record), state, lookFrom, useDoor, interact, effect, soundCheck.
 
 ## Working from Claude's sandbox (cloud sessions)
 - The device shell (`mcp__remote-devices__device_bash`) is a **Linux VM** on Ali's Mac, not macOS: it can't

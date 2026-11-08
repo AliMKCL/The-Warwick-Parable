@@ -2,6 +2,9 @@ import './styles.css';
 import { createLlmClient } from '../core/llm/client';
 import { Game } from './game';
 import { Loop } from './render/loop';
+import { gameData } from '../core/data';
+import { Recorder } from './telemetry/recorder';
+import { endSession, logEvent, startSession, telemetryConfigured, type SelfRatings, type Trait } from './telemetry/telemetry';
 
 /**
  * Entry point. URL options:
@@ -47,6 +50,8 @@ document.addEventListener('pointerlockchange', () => {
   const locked = document.pointerLockElement === canvas;
   if (locked && !started) {
     started = true;
+    if (consent.checked) record(selfRatings());
+    research.hidden = true;
     void modelReady.then((ok) => game.begin(ok ? llm : undefined));
   }
   game.player.enabled = locked && !game.hud.inspecting && !game.ended;
@@ -74,6 +79,41 @@ addEventListener('keydown', (e) => {
 addEventListener('keyup', (e) => {
   if (e.code === 'KeyE') game.release();
 });
+
+// ---- research data (only offered when Supabase is configured; nothing is sent without consent) ----
+const research = document.getElementById('research') as HTMLFormElement;
+const consent = document.getElementById('consent') as HTMLInputElement;
+const ratings = document.getElementById('self-ratings') as HTMLFieldSetElement;
+research.hidden = !telemetryConfigured;
+research.addEventListener('submit', (e) => e.preventDefault());
+consent.addEventListener('change', () => (ratings.disabled = !consent.checked));
+for (const row of research.querySelectorAll<HTMLElement>('.rate')) {
+  const trait = row.dataset.trait!;
+  row.insertAdjacentHTML('beforeend', `<div role="radiogroup" aria-label="${row.textContent}">${[1, 2, 3, 4, 5]
+    .map((n) => `<label><input type="radio" name="rate-${trait}" value="${n}" aria-label="${n}" /><i>${n}</i></label>`).join('')}</div>`);
+}
+function selfRatings(): SelfRatings {
+  const get = (t: Trait) => Number(research.querySelector<HTMLInputElement>(`input[name="rate-${t}"]:checked`)?.value) || null;
+  return { risk: get('risk'), patience: get('patience'), social: get('social'), exploration: get('exploration') };
+}
+/** Starts a research session and listens to the game. Must run before game.begin() so the first room is seen. */
+function record(selfRatings: SelfRatings | null) {
+  void startSession(selfRatings);
+  const recorder = new Recorder({
+    log: logEvent,
+    end: (profile, predictions) => void endSession(profile, predictions),
+    now: () => performance.now(),
+    inspectable: (id) => {
+      const r = gameData.props.find((p) => p.id === id);
+      return !!r?.inspectable && r.interact !== 'button';
+    },
+  });
+  // A telemetry bug must never break the game.
+  const safe = <T,>(fn: (x: T) => void) => (x: T) => {
+    try { fn(x); } catch (err) { console.warn('[telemetry] recorder failed; the game continues.', err); }
+  };
+  game.tap = { event: safe((e) => recorder.event(e)), message: safe((m) => recorder.message(m)), act: safe((a) => recorder.act(a)) };
+}
 
 // ---- narrator voice status ----
 const voiceStatus = document.getElementById('status-voice')!;
@@ -107,9 +147,11 @@ let testMode = false;
 Object.assign(window, {
   __WHACK__: {
     seed,
-    async begin() {
+    /** `telemetry` records this run as if the player had agreed on the start screen. */
+    async begin(opts: { telemetry?: SelfRatings | null } = {}) {
       testMode = true;
       started = true;
+      if (opts.telemetry !== undefined) record(opts.telemetry);
       game.hud.start.hidden = true;
       game.begin((await modelReady) ? llm : undefined);
       game.player.enabled = true;
