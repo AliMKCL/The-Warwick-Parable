@@ -23,6 +23,18 @@ Read this first when picking up the work. Newest entries at the top.
 
 ## Log
 
+### Dossier fixes: exploration, untested traits, consistent title (8 Nov 2026)
+- Exploration is now per room: "You inspected something in 1 of 5 rooms you entered (3 of 14 objects)", scored on the share of rooms. Only rooms the player entered count, and only props placed on purpose (`featured`: the model's chosen slots, or a template room's chosen pieces), not filler desks and partitions. Rooms that required inspecting are left out.
+- A trait with no real test this run (e.g. patience with no countdown) shows "You did: not tested this run" in grey with a rough estimate; it has no gap, never gets the red highlight and is never the headline.
+- The archetype title and summary are checked against the measured scores; if they contradict a tested score (e.g. "The Patient Applicant" for 1/5 patience), both are rewritten from the measured scores. The "How this world was built" note says when that happened.
+
+### Gambles, required self-ratings and "you said / you did" (8 Nov 2026)
+- Start screen: four required 1–5 sliders (I take risks, I am patient, I do what I'm told, I explore everything). Begin stays disabled until all four are set and, when Supabase is configured, consent is ticked.
+- Gamble rooms: three per default run (rooms 1, 3, 5), two doors tagged CERTAIN and 50/50. The narrator spells out the stakes before the choice; looking at either door repeats them. The middle gamble has a 15 s clock, after which the 50/50 door locks. The 50/50 is a real coin toss (seeded): shortcut (the next room's task is removed; at the last gamble, the last room is skipped) or setback (one extra detour room). The outcome is announced on arrival.
+- Dossier: opens with the biggest gap between the self-rating and measured behaviour in large type ("You said you take risks. You chose the certain door every time."), or "You know yourself well." when no gap is 2 points or more. Below it, each trait with "You said / You did" on 1–5 and one evidence line. Estimates (no test this run) are labelled and never headlined.
+- Contradictions: when hesitation and impulsivity (or curiosity and impulsivity) are both high, the two labels are replaced by one sentence from the evidence, e.g. "You wait when the building makes you, and rush when it doesn't."
+- Telemetry: gamble choices logged as trait risk, safe|risky, with pressure and `meta.gamble.outcome`; `gamble_offer`, `gamble_expired`, `gamble_result` events; the session profile stores `said_did`, `measured`, `gambles`, `patterns`.
+
 ### Play-data collection (Supabase)
 - `supabase/schema.sql`: `sessions` and `events` tables, run by hand in the Supabase SQL editor.
 - The start screen asks for consent (and optional 1–5 self-ratings on risk, patience, following instructions, exploring) only when `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` are set. Without consent nothing is sent.

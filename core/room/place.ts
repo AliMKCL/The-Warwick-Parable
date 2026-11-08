@@ -8,6 +8,8 @@ export interface Assignment {
   recipe: string;
   surfaceText?: string;
   inspectText?: string;
+  /** Placed on purpose (by the model, or a template's chosen piece), as opposed to filler furniture. */
+  featured?: boolean;
 }
 
 export interface PlaceResult {
@@ -60,6 +62,7 @@ export function placeAssignments(layout: Layout, assignments: Assignment[], data
       rotY: round(at.rotY),
       surfaceText: recipe.text ? a.surfaceText : undefined,
       inspectText: recipe.inspectable ? a.inspectText : undefined,
+      ...(a.featured ? { featured: true } : {}),
     });
   }
   return { props, rejected };

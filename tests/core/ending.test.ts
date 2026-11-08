@@ -45,7 +45,12 @@ describe('the ending', () => {
     const { dossier, msgs } = await playToEnd(fakeLlm(), 5);
     checkDossier(dossier, 5);
     expect(dossier!.verdictSource).toBe('model');
-    expect(dossier!.verdict.name).toBe('The Patient Applicant');
+    // The model's per-trait lines are kept. Its title ("The Patient Applicant") is not: this scripted
+    // player left a countdown early, so the title and summary are rewritten from the measured scores.
+    expect(dossier!.verdict.hesitation).toBe('You waited 31 s.');
+    expect(dossier!.measured.patience.score).toBeLessThanOrEqual(2);
+    expect(dossier!.verdictConflicts).toContain('patience');
+    expect(dossier!.verdict.name).not.toBe('The Patient Applicant');
     // Later rooms record what the model was told.
     expect(dossier!.rooms[2]!.behaviour.join(' ')).toMatch(/Pressed the button/);
     expect(msgs.filter((m) => m.type === 'load_room')).toHaveLength(5);

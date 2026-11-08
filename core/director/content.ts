@@ -151,6 +151,7 @@ export async function generateRoomContent(
     recipe: s.prop,
     surfaceText: s.text?.replace(/\\n/g, '\n').trim() || undefined,
     inspectText: s.inspect?.trim() || undefined,
+    featured: true,
   }));
   return { content, assignments, modelSlots: new Set(slots.map((s) => s.id)), timings: res!.timings, repaired };
 }

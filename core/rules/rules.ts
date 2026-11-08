@@ -3,11 +3,18 @@ import type { GameEvent, RuleEffect } from '../protocol';
 import type { GameData, RoomSpec } from '../room/types';
 import { pick, randInt, type Rng } from '../util/random';
 
-export type RuleId = 'lights_dim_on_idle' | 'inspect_to_unlock' | 'exit_timer' | 'narrator_suggests';
+export type RuleId = 'lights_dim_on_idle' | 'inspect_to_unlock' | 'exit_timer' | 'narrator_suggests' | 'gamble';
+
+/** Labels drawn on a gamble room's two doors, so the stakes are visible as well as spoken. */
+export const GAMBLE_LABELS = { safe: 'CERTAIN', risky: '50/50' } as const;
+/** Seconds on the clock in the timed gamble. */
+export const GAMBLE_SECONDS = 15;
 
 export interface RoomRule {
   id: RuleId;
-  /** lights: idleSeconds · unlock: count · timer: seconds · suggests: door, lie (1/0) */
+  /** lights: idleSeconds · unlock: count · timer: seconds · suggests: door, lie (1/0)
+   *  gamble: safe, risky (door ids), seconds (0 = no clock), outcome ('shortcut' | 'setback', decided in advance by seed),
+   *          stakes (the line that spells them out) */
   params: Record<string, number | string>;
   /** Spoken when the rule starts or first triggers. */
   line: string;
@@ -24,13 +31,29 @@ export function describeRule(r: Pick<RoomRule, 'id' | 'params'>): string {
       return `Every exit is locked until the player inspects ${r.params.count} things. "rule_line" is said on entry and hints at this; "rule_done_line" is said when the doors unlock. Make the inspect texts worth reading.`;
     case 'exit_timer':
       return `A countdown of ${r.params.seconds} s starts on entry. When it ends, all exits but one lock. "rule_line" announces the countdown; "rule_done_line" is said when it runs out.`;
+    case 'gamble':
+      return `This room is a gamble between its two exits. Door ${r.params.safe} is CERTAIN: the next room, as planned. Door ${r.params.risky} is a 50/50: it either saves time (skips the next room's task) or adds a detour room.${Number(r.params.seconds) ? ` The player has ${r.params.seconds} s before the 50/50 door locks.` : ''} The narrator states these stakes separately, so "narrator_enter" should only set the scene, and "rule_line" should be a short dry remark about luck. Do not contradict the stakes.`;
     case 'narrator_suggests':
       return `The narrator recommends one exit: set "suggest_door" and use "rule_line" to recommend it.${Number(r.params.lie) ? ' The narrator is lying: the recommendation is self-serving, and a later room will reveal this.' : ' The advice is sincere.'}`;
   }
 }
 
-/** Picks a rule that pushes against the player's strongest tendencies. Room 0 has its own test (the button). */
-export function chooseRule(profile: Profile, rng: Rng, index: number, previous?: RuleId): Omit<RoomRule, 'line' | 'doneLine'> | undefined {
+/**
+ * A gamble between a room's two exits. The first exit is the certain one.
+ * The coin is tossed now, from the seed, so the 50/50 is real and replays the same.
+ */
+export function gambleRule(exits: string[], rng: Rng, timed: boolean): Omit<RoomRule, 'line' | 'doneLine'> {
+  return {
+    id: 'gamble',
+    params: { safe: exits[0]!, risky: exits[1] ?? exits[0]!, seconds: timed ? GAMBLE_SECONDS : 0, outcome: rng() < 0.5 ? 'shortcut' : 'setback' },
+  };
+}
+
+/**
+ * Picks a rule that pushes against the player's strongest tendencies. Room 0 has its own test (the button).
+ * `requireTask` (the room behind a gamble) never returns "no rule", so a shortcut always has a task to skip.
+ */
+export function chooseRule(profile: Profile, rng: Rng, index: number, previous?: RuleId, requireTask = false): Omit<RoomRule, 'line' | 'doneLine'> | undefined {
   if (index === 0) return undefined;
   const t = profile.traits;
   const up = (v: number) => Math.max(0, v - 0.5);
@@ -41,7 +64,7 @@ export function chooseRule(profile: Profile, rng: Rng, index: number, previous?:
     ['narrator_suggests', 1 + 3 * Math.abs(t.compliance - 0.5)],
     ['none', index === 1 ? 0.6 : 0.35],
   ];
-  const usable = weights.filter(([id]) => id !== previous);
+  const usable = weights.filter(([id]) => id !== previous && !(requireTask && id === 'none'));
   const total = usable.reduce((a, [, w]) => a + w, 0);
   let r = rng() * total;
   let id: RuleId | 'none' = 'none';
@@ -49,7 +72,8 @@ export function chooseRule(profile: Profile, rng: Rng, index: number, previous?:
     if ((r -= w) <= 0) { id = k; break; }
   }
   switch (id) {
-    case 'none': return undefined;
+    case 'none':
+    case 'gamble': return undefined;
     case 'lights_dim_on_idle': return { id, params: { idleSeconds: randInt(rng, 4, 7) } };
     case 'inspect_to_unlock': return { id, params: { count: rng() < 0.5 ? 2 : 3 } };
     case 'exit_timer': return { id, params: { seconds: randInt(rng, 25, 40) } };
@@ -62,6 +86,11 @@ export function templateRuleLines(rule: Omit<RoomRule, 'line' | 'doneLine'>, roo
   const lines = data.templates.rules[rule.id];
   const door = room.layout.doors.find((d) => d.id === rule.params.door)?.label ?? '';
   const fill = (s: string) => s.replaceAll('{door}', door).replaceAll('{count}', String(rule.params.count)).replaceAll('{seconds}', String(rule.params.seconds));
+  if (rule.id === 'gamble') {
+    // The stakes are always spelled out from templates, even in model-written rooms: the player must know it is a gamble.
+    const line = Number(rule.params.seconds) ? pick(rng, data.templates.gamble.timedLine) : pick(rng, lines.line);
+    return { line: fill(line), doneLine: fill(pick(rng, lines.done)) };
+  }
   return { line: fill(pick(rng, lines.line)), doneLine: fill(pick(rng, lines.done)) };
 }
 
@@ -110,6 +139,17 @@ export class RuleRuntime {
       case 'narrator_suggests':
         ctx.say(rule.line);
         break;
+      case 'gamble': {
+        // The stakes, always from templates; rule.line is the model's own remark and is not needed here.
+        ctx.say(String(rule.params.stakes || rule.line));
+        const seconds = Number(rule.params.seconds);
+        if (seconds > 0) {
+          ctx.emit({ kind: 'timer', seconds, label: '50/50 closes in' });
+          this.state.startedAt = t;
+          this.timer = timers.setTimeout(() => this.expireGamble(), seconds * 1000);
+        }
+        break;
+      }
       case 'lights_dim_on_idle': {
         // Already standing still when the rule starts? Treat it as stopping now.
         const last = [...history].reverse().find((e) => e.type === 'motion' && e.roomId === ctx.room.id);
@@ -167,6 +207,13 @@ export class RuleRuntime {
           this.state.hovered = { ...(this.state.hovered as object), [e.doorId]: true };
         }
         break;
+      case 'gamble':
+        if (e.type === 'door_chosen') {
+          timers.clearTimeout(this.timer);
+          if (e.doorId === rule.params.risky) ctx.profile.adjust('impulsivity', 0.08, 'took the 50/50 door', room, e.t);
+          else ctx.profile.adjust('impulsivity', -0.05, this.state.expired ? 'let the gamble run out and took the certain door' : 'chose the certain door over the 50/50', room, e.t);
+        }
+        break;
       case 'narrator_suggests':
         if (e.type === 'door_chosen') {
           const followed = e.doorId === rule.params.door;
@@ -191,6 +238,15 @@ export class RuleRuntime {
     ctx.emit({ kind: 'doors', locked: exits.filter((id) => id !== keep) });
     ctx.profile.adjust('hesitation', 0.14, 'let the countdown run out', ctx.room, Number(this.state.startedAt ?? 0) + Number(this.rule.params.seconds));
     ctx.say(this.rule.doneLine);
+  }
+
+  /** The timed gamble ran out: the 50/50 door locks, only the certain one is left. */
+  private expireGamble() {
+    if (this.stopped) return;
+    this.state.expired = true;
+    this.ctx.emit({ kind: 'timer', seconds: null, label: '' });
+    this.ctx.emit({ kind: 'doors', locked: [String(this.rule.params.risky)] });
+    this.ctx.say(this.rule.doneLine);
   }
 
   stop() {

@@ -135,4 +135,41 @@ describe('telemetry recorder', () => {
     expect(rows.find((r) => r.type === 'task_done')?.meta?.duration_ms).toBe(8000);
     expect(rows.find((r) => r.type === 'choice')).toMatchObject({ trait: null, latency_ms: 1000 });
   });
+
+  it('tags gamble doors as risk, with the clock as pressure and the real outcome in meta', () => {
+    const { recorder, rows, advance } = setup();
+    const room = roomWith({ id: 'gamble', params: { safe: 'd1', risky: 'd2', seconds: 15, outcome: 'setback', stakes: 's' }, line: 'x', doneLine: 'y' });
+    room.layout = { ...room.layout, doors: [...room.layout.doors.filter((d) => d.entrance), { ...room.layout.doors.find((d) => !d.entrance)!, id: 'd1' }, { ...room.layout.doors.find((d) => !d.entrance)!, id: 'd2' }] };
+    recorder.message({ type: 'load_room', spec: room });
+    recorder.event({ type: 'room_entered', roomId: room.id, t: 0 });
+    recorder.message({ type: 'rule_effect', effect: { kind: 'timer', seconds: 15, label: '50/50 closes in' } });
+    advance(3000);
+    recorder.act({ kind: 'door', id: 'd2', locked: false });
+    const choice = rows.find((r) => r.type === 'choice')!;
+    expect(choice).toMatchObject({ trait: 'risk', trait_value: 'risky' });
+    expect(choice.meta).toMatchObject({ pressure: true, gamble: { timed: true, expired: false, outcome: 'setback' } });
+    expect(rows.some((r) => r.type === 'gamble_offer')).toBe(true);
+    expect(rows.some((r) => r.type === 'task_start' && r.choice === 'beat_timer')).toBe(false);
+  });
+
+  it('saves the said/did comparison in the session profile', async () => {
+    const { recorder, ended } = setup();
+    const core = createCore(gameData, { observeMs: 0, runLength: 3 });
+    core.onMessage((m) => recorder.message(m));
+    const send = (e: Parameters<typeof core.send>[0]) => { recorder.event(e); core.send(e); };
+    send({ type: 'run_started', seed: 9, t: 0, selfRatings: { risk: 2, patience: 4, social: 5, exploration: 1 } });
+    for (let i = 0; i < 3; i++) {
+      const room = core.run()!.current!;
+      send({ type: 'room_entered', roomId: room.id, t: i * 10 });
+      send({ type: 'door_chosen', roomId: room.id, doorId: room.layout.doors.find((d) => !d.entrance)!.id, t: i * 10 + 8 });
+      await tick(30);
+    }
+    await tick(50);
+    const profile = ended[0]!.profile as any;
+    expect(profile.said_did.rows).toHaveLength(4);
+    expect(profile.said_did.rows.find((r: any) => r.trait === 'social')).toMatchObject({ said: 5, did: 1 });
+    expect(profile.said_did.headline).toMatch(/^You said you do what you're told\. You never pressed the button/);
+    expect(profile.measured.risk.estimated).toBe(true);
+    expect((ended[0]!.predictions as any).said_did_headline).toBe(profile.said_did.headline);
+  });
 });
