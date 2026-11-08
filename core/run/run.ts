@@ -8,7 +8,7 @@ import { applyRoomVariant } from '../room/variants';
 import { templateAssignments } from '../room/templates';
 import type { Door, GameData, Layout, RoomSpec } from '../room/types';
 import { createRng, deriveSeed, pick } from '../util/random';
-import type { GameEvent, ProfileSnapshot, RuleEffect, SelfRatings } from '../protocol';
+import type { GameEvent, ProfileSnapshot, RuleEffect, SelfRatings, TaskResult } from '../protocol';
 import { Profile } from '../profile/profile';
 import { RuleRuntime, templateRuleLines, type RoomRule } from '../rules/rules';
 import { resolveLayout, type LayoutConfig, type LayoutInput } from '../testrooms/config';
@@ -130,6 +130,11 @@ export class Run {
   /** Run clock when each room's rule started, by room id. */
   readonly ruleStarts = new Map<string, number>();
   private anomaly?: AnomalyRuntime;
+  /**
+   * Results reported by the office tasks, in the order they finished. Empty until the tasks
+   * are on this branch; the scoring layer (core/director/taskscore.ts) reads it at the end.
+   */
+  readonly taskResults: TaskResult[] = [];
   /** Trait scores at the moment the player entered each room. */
   readonly traitHistory: Record<'hesitation' | 'curiosity' | 'compliance' | 'impulsivity', number>[] = [];
 

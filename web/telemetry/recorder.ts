@@ -1,4 +1,5 @@
-import type { CoreMessage, Dossier, GameEvent, ProfileSnapshot, TraitName } from '../../core/protocol';
+import { scoreTaskResult } from '../../core/director/taskscore';
+import type { CoreMessage, Dossier, GameEvent, ProfileSnapshot, SelfTrait, TraitName } from '../../core/protocol';
 import type { RoomSpec } from '../../core/room/types';
 import type { TelemetryEvent, Trait, TraitValue } from './telemetry';
 
@@ -221,6 +222,22 @@ export class Recorder {
         }
         break;
       }
+      case 'task_result': {
+        // One row per trait the task measured (core/director/taskscore.ts); a row with no trait when it measured nothing.
+        const res = m.result;
+        const measures = scoreTaskResult(res);
+        const base = { task: res.task, version: res.version ?? 'office', task_room: res.room, title: res.title, params: res.params, metrics: res.metrics, notes: res.notes };
+        if (!measures.length) this.log({ type: 'task_measure', choice: res.task, trait: null, meta: { ...base, value: null, weight: null, evidence: null } });
+        for (const x of measures) {
+          this.log({
+            type: 'task_measure',
+            choice: res.task,
+            trait: x.trait,
+            meta: { ...base, value: x.value, weight: x.weight, graded: x.graded, counts: x.counts, evidence: x.evidence },
+          });
+        }
+        break;
+      }
       case 'run_ended':
         this.log({ type: 'run_end', meta: { seconds: m.dossier.seconds, rooms: m.dossier.rooms.length } });
         this.deps.end(sessionProfile(this.profile ?? { traits: m.dossier.traits, evidence: [] }, m.dossier), predictions(m.dossier));
@@ -287,6 +304,37 @@ function sessionProfile(p: ProfileSnapshot, d: Dossier) {
     measured: d.measured ?? null,
     gambles: d.gambles ?? [],
     patterns: d.patterns ?? [],
+    scoring: scoring(d),
+  };
+}
+
+const SLIDER_TRAITS: SelfTrait[] = ['risk', 'patience', 'social', 'exploration'];
+
+/**
+ * Per trait: the 1–5 score, what it rests on (ordinary signals and each task
+ * measurement), its evidence lines and flags; then the traits with no slider,
+ * and every task measurement including those recorded but not scored.
+ */
+export function scoring(d: Dossier) {
+  if (!d.measured) return null;
+  const traits = Object.fromEntries(SLIDER_TRAITS.map((k) => {
+    const m = d.measured[k];
+    const tasks = m.tasks ?? [];
+    const ordinaryN = m.estimated ? 0 : m.n - tasks.length;
+    return [k, {
+      score: m.score,
+      n: m.n,
+      not_tested: m.estimated,
+      one_observation: !!m.oneObservation,
+      ordinary: ordinaryN ? { n: ordinaryN, share: m.ordinaryShare ?? null, evidence: tasks.length && m.ordinaryShare === undefined ? null : m.evidence } : null,
+      measurements: tasks.map((x) => ({ task: x.task, version: x.version, room: x.room, value: x.value, weight: x.weight, graded: x.graded, evidence: x.evidence })),
+      evidence: [...new Set([m.evidence, ...tasks.map((x) => x.evidence)])],
+    }];
+  }));
+  return {
+    traits,
+    also_measured: (d.alsoMeasured ?? []).map((a) => ({ trait: a.trait, label: a.label, score: a.score, n: a.n, one_observation: a.oneObservation, evidence: a.evidence })),
+    task_measures: d.taskMeasures ?? [],
   };
 }
 
