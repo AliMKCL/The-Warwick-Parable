@@ -45,17 +45,16 @@ test('physical corridor, contextual interactables, sealed doors and seamless arr
   const blocked = (await state(page)).player;
   expect((blocked.x - cx) * dx! + (blocked.z - cz) * dz!).toBeLessThan(-0.27);
 
-  // Read a record, then close it and walk the complete route through both bends.
+  // Read the interlock notice, then walk the complete straight corridor.
   const c = (await state(page)).corridor;
-  const receipt = c.props.find((p: any) => p.id === 'receipt');
+  const receipt = c.props.find((p: any) => p.id === 'interlock');
   await page.evaluate(({ c, p }) => {
     const x = c.x + p.x, z = c.z + p.z;
     (window as any).__WHACK__.lookFrom(x + Math.sin(p.rotY) * 1.2, z + Math.cos(p.rotY) * 1.2, x, 1.5, z);
   }, { c, p: receipt });
-  await page.waitForFunction(() => (window as any).__WHACK__.state().hovered?.id === 'receipt');
+  await page.waitForFunction(() => (window as any).__WHACK__.state().hovered?.id === 'interlock');
   await page.evaluate(() => (window as any).__WHACK__.interact());
-  await expect(page.locator('#inspect-text')).toContainText('ROUTE RECEIPT');
-  await expect(page.locator('#inspect-text')).toContainText('Objects inspected: 0');
+  await expect(page.locator('#inspect-text')).toContainText('The next department opens');
   await page.evaluate(() => (window as any).__WHACK__.interact());
   await page.screenshot({ path: 'artifacts/corridor-records.png' });
   // Return to the inside of the entrance to verify the entire traversable route.

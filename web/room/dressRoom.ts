@@ -9,6 +9,10 @@ type Resource = { dispose(): void };
 export const windowKey = (x: number, z: number, side: Side) => `${x},${z},${side}`;
 
 export function planWallDetails(spec: RoomSpec, recipes: ReadonlyMap<string, PropRecipe>) {
+  if (spec.corridor) return {
+    windows: new Set(spec.corridor.windows.map((w) => windowKey(w.cx, w.cz, w.side))),
+    fixtures: new Set<string>(),
+  };
   const { layout } = spec;
   const rng = createRng(deriveSeed(spec.seed, 'wall-details'));
   const nearby = [...spec.props, ...(spec.anomaly ? [spec.anomaly.anchor] : [])].map((prop) => {

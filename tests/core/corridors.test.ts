@@ -11,21 +11,40 @@ import { fakeLlm } from './fakeLlm';
 const tick = (ms = 0) => new Promise((r) => setTimeout(r, ms));
 
 describe('playable passages', () => {
-  it('connects every door orientation with a traversable dogleg and real interaction recipes', () => {
+  it('connects every door orientation with a straight traversable passage and real interaction recipes', () => {
     for (let seed = 1; seed <= 20; seed++) {
       const room = new Run(seed, gameData).start();
       for (const side of ['n', 's', 'e', 'w'] as Side[]) {
         const door = { ...room.layout.doors.find((d) => !d.entrance)!, side };
-        const spec = createCorridor(room, door, corridorStory(room, door, [], gameData));
+        const spec = createCorridor(room, door, corridorStory(room, door, [], gameData), gameData);
         const [entry, exit] = spec.layout.doors;
         expect(entry!.side).toBe(OPPOSITE[side]);
         expect(exit!.side).toBe(side);
         expect(reachable(spec.layout, [entry!.cx, entry!.cz], new Set()).has(`${exit!.cx},${exit!.cz}`)).toBe(true);
         expect(spec.props.every((p) => gameData.props.some((r) => r.id === p.recipe))).toBe(true);
+        expect(spec.corridor!.windows.length).toBeGreaterThanOrEqual(4);
+        expect(new Set(spec.corridor!.windows.map((w) => w.side)).size).toBe(2);
+        expect(side === 'n' || side === 's' ? entry!.cx === exit!.cx : entry!.cz === exit!.cz).toBe(true);
+        expect(spec.props.length).toBeGreaterThanOrEqual(4); // 3 optional objects + interlock
+        expect(spec.props.length).toBeLessThanOrEqual(6);
         expect(spec.rule).toBeUndefined();
         expect(spec.anomaly).toBeUndefined();
       }
     }
+  });
+
+  it('replays seeded selections and includes all event types as well as quiet corridors', () => {
+    const events = new Set<string>(), recipes = new Set<string>();
+    for (let seed = 1; seed <= 200; seed++) {
+      const room = new Run(seed, gameData).start(), door = room.layout.doors.find((d) => !d.entrance)!;
+      const story = corridorStory(room, door, [], gameData);
+      const spec = createCorridor(room, door, story, gameData);
+      expect(createCorridor(room, door, story, gameData)).toEqual(spec);
+      events.add(spec.corridor!.event?.kind ?? 'none');
+      spec.props.forEach((p) => recipes.add(p.recipe));
+    }
+    expect([...events].sort()).toEqual(['breaking_window', 'falling_art', 'none', 'paper_gust']);
+    for (const recipe of gameData.props.filter((p) => p.inspectable || p.interact)) expect(recipes.has(recipe.id), recipe.id).toBe(true);
   });
 
   it('uses the selected door and observed actions, without inventing inspection or button presses', () => {
