@@ -1680,7 +1680,8 @@
   "name": "Button on a pedestal",
   "tags": [
    "button",
-   "choice"
+   "choice",
+   "task"
   ],
   "fits": [
    "center"
@@ -2317,7 +2318,8 @@
   "id": "lift_doors",
   "name": "Lift",
   "tags": [
-   "lift"
+   "lift",
+   "task"
   ],
   "fits": [
    "fixture"
@@ -2461,7 +2463,8 @@
   "name": "Lift call button",
   "tags": [
    "lift",
-   "button"
+   "button",
+   "task"
   ],
   "fits": [
    "fixture"
