@@ -173,7 +173,12 @@ export class Recorder {
     const r = this.room;
     switch (m.type) {
       case 'load_room':
+      case 'corridor_ready':
         this.specs.set(m.spec.id, m.spec);
+        break;
+      case 'task_result':
+        // An office task finished: what it measured (its full event slice stays in core).
+        this.log({ type: 'task_result', choice: m.result.task, meta: { metrics: m.result.metrics, notes: m.result.notes, params: m.result.params } });
         break;
       case 'profile':
         this.profile = m.profile;

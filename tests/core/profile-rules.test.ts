@@ -100,12 +100,12 @@ describe('story across a run', () => {
     const run = new Run(21, gameData, { llm: fakeLlm({ calls }), observeMs: 0 });
     run.start();
     let room;
-    for (let i = 0; i < 6; i++) room = await run.next(run.current!.layout.doors.find((d) => !d.entrance)!.id);
+    while (!run.finished) room = await run.next(run.current!.layout.doors.find((d) => !d.entrance)!.id);
     expect(run.threads.length).toBeGreaterThan(0);
     expect(calls.some((c) => /^- t1: Someone else has your badge\./m.test(c.user))).toBe(true);
     expect(run.threads.some((t) => t.resolvedIn !== undefined)).toBe(true);
-    expect(room!.index).toBe(6);
-    expect(run.finished).toBe(true);
+    expect(room!.index).toBe(run.last);
+    expect(room!.slot).toBe('finale');
     expect(room!.layout.doors.filter((d) => !d.entrance)).toHaveLength(1);
     expect(room!.rule).toBeUndefined();
     // Rooms with rules carry the model's lines for them.

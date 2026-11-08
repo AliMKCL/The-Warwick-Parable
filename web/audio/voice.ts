@@ -10,6 +10,8 @@ export class Voice {
   private cache = new Map<string, Promise<AudioBuffer | null>>();
   private queue: string[] = [];
   private playing?: AudioBufferSourceNode;
+  private fetching = false;
+  private epoch = 0;
   private voiceId: string;
   /** The game's AudioContext (unlocked by the start click), so Safari doesn't block playback. */
   getContext?: () => { ctx: AudioContext; out: AudioNode } | undefined;
@@ -41,11 +43,13 @@ export class Voice {
     if (this.queue.length >= 2) this.queue.shift();
     this.queue.push(t);
     this.prefetch(t);
-    if (!this.playing) void this.next();
+    if (!this.playing && !this.fetching) void this.next();
   }
 
   /** Stop talking now (e.g. at the end of the run). */
   stop() {
+    this.epoch++;
+    this.fetching = false;
     this.queue = [];
     try { this.playing?.stop(); } catch { /* already stopped */ }
     this.playing = undefined;
@@ -76,13 +80,17 @@ export class Voice {
   }
 
   private async next(): Promise<void> {
+    const epoch = this.epoch;
     const text = this.queue.shift();
     if (!text) {
       this.playing = undefined;
       this.onSpeaking?.(false);
       return;
     }
+    this.fetching = true;
     const buffer = await this.audioFor(text);
+    if (epoch !== this.epoch) return;
+    this.fetching = false;
     const out = this.getContext?.();
     if (!buffer || !out || this.muted) return this.next();
     const src = out.ctx.createBufferSource();
@@ -92,7 +100,7 @@ export class Voice {
     src.connect(gain).connect(out.out);
     this.playing = src;
     this.onSpeaking?.(true);
-    src.onended = () => void this.next();
+    src.onended = () => { if (epoch === this.epoch) void this.next(); };
     src.start();
   }
 

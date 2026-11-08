@@ -163,6 +163,10 @@
     "finale_hall": [
       "One more hallway. The door at the end is for you. It always was.",
       "The light at the end is your file. Walk as slowly as you like. You will."
+    ],
+    "default": [
+      "Another room. It has plans for you.",
+      "Come in. Something here has been waiting for you specifically."
     ]
   },
   "narratorDoor": [

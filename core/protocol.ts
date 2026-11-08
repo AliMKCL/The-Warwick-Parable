@@ -18,12 +18,34 @@ export type GameEvent =
   | { type: 'pressed'; roomId: string; objectId: string; t: number }
   | { type: 'door_hovered'; roomId: string; doorId: string; seconds: number; t: number }
   | { type: 'door_chosen'; roomId: string; doorId: string; t: number }
+  | { type: 'corridor_interacted'; roomId: string; objectId: string; t: number }
+  | { type: 'corridor_exit_requested'; roomId: string; t: number }
+  | { type: 'corridor_exited'; roomId: string; t: number }
   | { type: 'idle'; roomId: string; seconds: number; t: number }
   | { type: 'went_back'; fromRoomId: string; toRoomId: string; t: number }
   /** The player started or stopped moving (sent after ~1.5 s of stillness, and on the first step after it). */
   | { type: 'motion'; roomId: string; moving: boolean; t: number }
   /** The player tried a locked door. */
-  | { type: 'door_tried'; roomId: string; doorId: string; t: number };
+  | { type: 'door_tried'; roomId: string; doorId: string; t: number }
+  // ---- for tests that watch closely (the office tasks, core/testrooms/office) ----
+  /** Position sample, sent at 10 Hz while a room is on screen. Metres = tiles. Not kept in the run's event log. */
+  | { type: 'move'; roomId: string; x: number; z: number; t: number }
+  /** Any key or mouse button press while playing; `target` is what the player was aiming at. Not kept in the event log. */
+  | { type: 'input'; roomId: string; key: string; target?: string; t: number }
+  /** The player answered an on-screen question (see AskSpec): an option index, a slider value, or where the meter stopped (0 to 1). */
+  | { type: 'answer'; roomId: string; askId: string; value: number; seconds: number; t: number };
+
+/**
+ * An on-screen question a test asks: pick one of a few options, set a slider,
+ * or stop a moving marker inside a highlighted zone (a timing challenge).
+ * The adapter shows it and replies with an `answer` event; core decides what it means.
+ */
+export type AskSpec = { id: string; title: string; text?: string } & (
+  | { mode: 'choice'; options: string[] }
+  | { mode: 'slider'; min: number; max: number; step: number; value: number; unit?: string }
+  /** The marker sweeps 0 → 1 → 0 at `speed` sweeps per second; `zone` is the target band. */
+  | { mode: 'meter'; speed: number; zone: [number, number] }
+);
 
 /** Something a room rule changes in the world. The adapter shows it; core decides it. */
 export type RuleEffect =
@@ -34,7 +56,46 @@ export type RuleEffect =
   /** Show a countdown, or hide it with seconds = null. */
   | { kind: 'timer'; seconds: number | null; label: string }
   /** Redraw the text on a prop (the lift's floor indicator). */
-  | { kind: 'display'; prop: string; text: string };
+  | { kind: 'display'; prop: string; text: string }
+  /** Turn a prop (a character) towards another prop, or 'player', for `seconds`, then back. */
+  | { kind: 'glance'; prop: string; at: string; seconds: number }
+  /** A prop can no longer be used. */
+  | { kind: 'disable'; prop: string }
+  /** Ask the player something on screen (closes itself when answered). */
+  | { kind: 'ask'; ask: AskSpec }
+  /** Close an open question without an answer ('*' closes any). */
+  | { kind: 'ask_close'; id: string }
+  /** Shake the view briefly (a harsh buzzer). */
+  | { kind: 'shake'; seconds: number }
+  /** A one-off sound. */
+  | { kind: 'sound'; name: 'buzz' | 'pop' | 'clunk' | 'click' | 'pour' | 'spill' | 'ding' | 'squeak' | 'paper' }
+  /** Scale a prop (an inflating balloon); 0 hides it. */
+  | { kind: 'scale'; prop: string; scale: number }
+  /** Turn a prop (a character) to face another prop, and stay that way (someone pointing the way). */
+  | { kind: 'turn'; prop: string; at: string }
+  /** Fade out, move the player, fade back in (a corridor that loops back). */
+  | { kind: 'teleport'; x: number; z: number; yaw: number; dark: number }
+  /** A short status line on screen (energy, party score); null hides it. */
+  | { kind: 'status'; text: string | null };
+
+/** One entry in the run's test log (moves, presses, answers… for tests that score from it). `t` is seconds on the run clock. */
+export interface TaskEvent {
+  t: number;
+  task: string;
+  type: string;
+  data: Record<string, unknown>;
+}
+
+/** What a scored test measured when the player left its room. Metric values are null when there wasn't enough to measure. */
+export interface TaskResult {
+  task: string;
+  room: number;
+  title: string;
+  params: Record<string, number | string | boolean>;
+  metrics: Record<string, number | null>;
+  /** Plain sentences quoting the numbers, for the model and telemetry. */
+  notes: string[];
+}
 
 /** The hidden player profile, for the debug overlay and the final dossier. */
 export interface ProfileSnapshot {
@@ -91,10 +152,13 @@ export interface AnomalyEffect { roomId: string; stage: number; text: string; ch
 export type CoreMessage =
   | { type: 'anomaly_effect'; effect: AnomalyEffect }
   | { type: 'load_room'; spec: RoomSpec }
-  | { type: 'narrator_line'; lineId: string; text: string; final: boolean }
+  | { type: 'corridor_ready'; spec: RoomSpec; timing?: { corridorMs: number; exitWaitMs: number } }
+  | { type: 'narrator_line'; lineId: string; text: string; final: boolean; interrupt?: boolean }
   | { type: 'gen_status'; model: 'on' | 'off'; doors: { door: string; status: string; ms?: number; error?: string }[] }
   | { type: 'rule_effect'; effect: RuleEffect }
   | { type: 'profile'; profile: ProfileSnapshot }
+  /** A scored test finished (an office task): its metrics and its slice of the test log, for telemetry. */
+  | { type: 'task_result'; result: TaskResult; log: TaskEvent[] }
   | { type: 'run_ended'; dossier: Dossier };
 
 /** Everything the ending screen shows. */

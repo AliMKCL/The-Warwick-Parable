@@ -21,6 +21,8 @@ export interface PropPart {
   rot?: [number, number, number];
   /** Key into data/materials.json */
   mat: string;
+  /** A small idle animation for this part ('type': hands tapping a keyboard). */
+  anim?: string;
 }
 
 export type TextStyle = 'sign' | 'poster' | 'screen' | 'paper' | 'whiteboard' | 'label' | 'led';
@@ -133,6 +135,15 @@ export interface Layout {
   spawn: { x: number; z: number; yaw: number };
   /** Props the layout puts at exact spots (e.g. a lift), placed before any slot is filled. */
   fixtures?: Fixture[];
+  /** Circular trigger areas a test watches (rotated with the layout). */
+  zones?: Zone[];
+}
+
+export interface Zone {
+  id: string;
+  x: number;
+  z: number;
+  r: number;
 }
 
 /** A prop at an exact position, rotated with the layout. Its id is stable so a rule can refer to it. */
@@ -215,6 +226,8 @@ export interface GameData {
   ambience: Record<string, AmbiencePreset>;
   templates: TextTemplates;
   prompts: Prompts;
+  /** Fixed wording for the office tasks (data/tasks.json): titles, briefs, lines and on-prop labels. */
+  tasks: { office: Record<string, import('../testrooms/office/module').OfficeTaskTexts> };
   /** How runs are laid out: test and filler room counts, the test pool (data/layout.json). */
   layout: import('../testrooms/config').LayoutInput;
 }

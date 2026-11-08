@@ -1,3 +1,4 @@
+import { traversePassage } from './corridor-helpers';
 import { expect, test, type Page } from '@playwright/test';
 
 const W = (page: Page) => page.evaluate(() => (window as any).__WHACK__.state());
@@ -12,7 +13,8 @@ test('room rules change the world', async ({ page }) => {
   const errors: string[] = [];
   page.on('pageerror', (e) => errors.push(e.message));
   await page.setViewportSize({ width: 960, height: 540 });
-  await page.goto('/?seed=99&debug=1&dpr=1&observe=0&post=0');
+  // Only the four rules this test checks, so the seed always leads through the same rooms.
+  await page.goto('/?seed=99&debug=1&dpr=1&observe=0&post=0&pool=exit_timer,inspect_to_unlock,lights_dim_on_idle,narrator_suggests');
   await page.evaluate(() => (window as any).__WHACK__.begin());
   await waitForRoom(page, 0);
 
@@ -23,6 +25,7 @@ test('room rules change the world', async ({ page }) => {
     await page.evaluate((id) => (window as any).__WHACK__.useDoor(id), exit.id);
     await page.waitForTimeout(400);
     await page.evaluate(() => (window as any).__WHACK__.interact());
+    await traversePassage(page);
     await waitForRoom(page, i + 1);
     const now = await W(page);
     const rule = now.rule?.id;
@@ -79,6 +82,7 @@ test('room rules change the world', async ({ page }) => {
       await page.evaluate((id) => (window as any).__WHACK__.useDoor(id), open.id);
       await page.waitForTimeout(400);
       await page.evaluate(() => (window as any).__WHACK__.interact());
+      await traversePassage(page);
       await waitForRoom(page, i + 2);
       i++;
     }

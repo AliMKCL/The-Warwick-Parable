@@ -1,6 +1,89 @@
+import type { AskSpec } from '../../core/protocol';
+
 /** All on-screen text: reticle, prompts, the inspect card, narrator subtitles, fades and the start screen. */
 export class Hud {
   private el = (id: string) => document.getElementById(id)!;
+  private askEl = this.el('ask');
+  private statusEl = this.el('status');
+  /** The question on screen, if any: its spec, when it opened, and the current choice or slider value. */
+  private asking?: { spec: AskSpec; openedAt: number; value: number; tick: number };
+
+  /** A short status line (energy, party score, what you're holding); null hides it. */
+  status(text: string | null) {
+    this.statusEl.textContent = text ?? '';
+    this.statusEl.classList.toggle('show', !!text);
+  }
+
+  /** Show a task's question: pick an option, set a slider, or stop a moving marker. null closes it. */
+  ask(spec: AskSpec | null) {
+    if (this.asking) clearInterval(this.asking.tick);
+    this.asking = undefined;
+    if (!spec) {
+      this.askEl.classList.remove('show');
+      return;
+    }
+    const value = spec.mode === 'slider' ? spec.value : 0;
+    this.asking = { spec, openedAt: performance.now(), value, tick: 0 };
+    if (spec.mode === 'meter') this.asking.tick = window.setInterval(() => this.drawAsk(), 16);
+    this.drawAsk();
+    this.askEl.classList.add('show');
+  }
+
+  get askOpen(): AskSpec | undefined {
+    return this.asking?.spec;
+  }
+
+  /** Move the choice or the slider: -1 left, +1 right. */
+  askAdjust(dir: number) {
+    const a = this.asking;
+    if (!a) return;
+    if (a.spec.mode === 'choice') a.value = (a.value + dir + a.spec.options.length) % a.spec.options.length;
+    else if (a.spec.mode === 'slider') a.value = Math.max(a.spec.min, Math.min(a.spec.max, a.value + dir * a.spec.step));
+    this.drawAsk();
+  }
+
+  /** Pick option n directly (number keys). */
+  askPick(n: number) {
+    const a = this.asking;
+    if (a?.spec.mode !== 'choice' || n < 0 || n >= a.spec.options.length) return;
+    a.value = n;
+    this.drawAsk();
+  }
+
+  /** The answer as it stands now, and how long the question has been open. */
+  askAnswer(): { id: string; value: number; seconds: number } | undefined {
+    const a = this.asking;
+    if (!a) return undefined;
+    const value = a.spec.mode === 'meter' ? this.meterPos() : a.value;
+    return { id: a.spec.id, value: Math.round(value * 1000) / 1000, seconds: Math.round((performance.now() - a.openedAt) / 100) / 10 };
+  }
+
+  private meterPos(): number {
+    const a = this.asking;
+    if (a?.spec.mode !== 'meter') return 0;
+    const phase = (((performance.now() - a.openedAt) / 1000) * a.spec.speed) % 2;
+    return phase < 1 ? phase : 2 - phase;
+  }
+
+  private drawAsk() {
+    const a = this.asking;
+    if (!a) return;
+    const s = a.spec;
+    let body = '', help = '';
+    if (s.mode === 'choice') {
+      body = `<div class="opts">${s.options.map((o, i) => `<span class="${i === a.value ? 'on' : ''}"><b>${i + 1}</b>${escapeHtml(o)}</span>`).join('')}</div>`;
+      help = 'A / D or 1–' + s.options.length + ' to choose · E to confirm';
+    } else if (s.mode === 'slider') {
+      const pct = ((a.value - s.min) / Math.max(1, s.max - s.min)) * 100;
+      body = `<div class="value">${a.value}${escapeHtml(s.unit ?? '')}</div><div class="bar"><i style="width:${pct}%"></i></div>`;
+      help = 'A / D or scroll to adjust · E to confirm';
+    } else {
+      const pos = this.meterPos() * 100;
+      body = `<div class="bar meter"><u style="left:${s.zone[0] * 100}%;width:${(s.zone[1] - s.zone[0]) * 100}%"></u><em style="left:${pos}%"></em></div>`;
+      help = 'E to stop';
+    }
+    this.askEl.innerHTML = `<h3>${escapeHtml(s.title)}</h3>${s.text ? `<p>${escapeHtml(s.text)}</p>` : ''}${body}<small>${help}</small>`;
+  }
   private reticle = this.el('reticle');
   private prompt = this.el('prompt');
   private subtitle = this.el('subtitle');
@@ -18,6 +101,16 @@ export class Hud {
   /** Line currently on screen, and finished lines waiting their turn. */
   private current?: { id: string; shownAt: number; done: boolean; text: string };
   private queue: string[] = [];
+
+  /** Drop obsolete room commentary when crossing into a new narrative space. */
+  clearNarration() {
+    clearInterval(this.typing);
+    clearTimeout(this.hideTimer);
+    this.current = undefined;
+    this.queue = [];
+    this.subtitle.textContent = '';
+    this.subtitle.classList.remove('show');
+  }
 
   setPrompt(key: string | null, text = '') {
     this.reticle.classList.toggle('active', !!key);
