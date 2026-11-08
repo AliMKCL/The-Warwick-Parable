@@ -7,7 +7,7 @@ import { ANOMALIES } from '../../core/anomalies/catalog';
 test('all sixteen encounters render and accept a raycast interaction', async ({
   page,
 }) => {
-  test.setTimeout(180_000);
+  test.setTimeout(600_000);
   const data = loadGameData();
   const seeds = new Map<string, number>();
   for (let seed = 1; seed < 1000 && seeds.size < ANOMALIES.length; seed++) {
@@ -23,21 +23,26 @@ test('all sixteen encounters render and accept a raycast interaction', async ({
   expect(seeds.size).toBe(16);
   const errors: string[] = [];
   page.on('pageerror', (e) => errors.push(e.message));
-  await page.route('**/llm/**', (route) =>
+  // Only the model proxy (/llm/...), not the game's own core/llm/ source files.
+  await page.route((url) => url.pathname.startsWith('/llm/'), (route) =>
     route.fulfill({ status: 503, body: '{}' }),
   );
   for (const [id, seed] of seeds) {
-    await page.goto(`/?seed=${seed}&rooms=3&observe=0&post=0&mute=1&dpr=1`);
+    // Seeds were found in ordinary rooms, so the office tasks are off here.
+    await page.goto(`/?seed=${seed}&rooms=3&observe=0&post=0&mute=1&dpr=1&tasks=0`);
     await page.evaluate(() => (window as any).__WHACK__.begin());
     await page.waitForFunction(
       () => (window as any).__WHACK__.state().room?.index === 0,
     );
     await page.waitForTimeout(1000);
     await page.evaluate(() => (window as any).__WHACK__.useDoor('d1'));
-    await page.waitForTimeout(100);
+    // Wait until the door is actually aimed at: frames are slow in headless software rendering.
+    await page.waitForFunction(() => (window as any).__WHACK__.state().hovered?.kind === 'door', null, { timeout: 30_000 });
     await page.evaluate(() => (window as any).__WHACK__.interact());
     await page.waitForFunction(
       () => (window as any).__WHACK__.state().room?.index === 1,
+      null,
+      { timeout: 60_000 },
     );
     await page.waitForTimeout(1000);
     const anomaly = await page.evaluate(
@@ -60,7 +65,7 @@ test('all sixteen encounters render and accept a raycast interaction', async ({
         },
         { anchor: anomaly.anchor, height },
       );
-      await page.waitForTimeout(100);
+      await page.waitForTimeout(600);
       if (
         (await page.evaluate(
           () => (window as any).__WHACK__.state().hovered?.kind,

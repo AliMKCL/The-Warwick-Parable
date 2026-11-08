@@ -1,6 +1,6 @@
 import { pick, randInt, type Rng } from '../util/random';
 import { DIR, ROTATE_CW } from './geometry';
-import type { Door, Layout, Side, Slot } from './types';
+import type { Door, Fixture, Layout, Side, Slot, Zone } from './types';
 
 /**
  * Seeded layout generators. Each builds its room with the entrance on the
@@ -24,8 +24,12 @@ export interface LayoutOptions {
 }
 
 export function generateLayout(opts: LayoutOptions): Layout {
-  const canonical = BUILDERS[opts.archetype](opts);
-  const turns = { s: 0, w: 1, n: 2, e: 3 }[opts.entranceSide];
+  return orient(BUILDERS[opts.archetype](opts), opts.entranceSide);
+}
+
+/** Rotate a canonical layout (entrance on the south wall) so its entrance is on `entranceSide`. */
+export function orient(canonical: Layout, entranceSide: Side): Layout {
+  const turns = { s: 0, w: 1, n: 2, e: 3 }[entranceSide];
   let layout = canonical;
   for (let i = 0; i < turns; i++) layout = rotateCW(layout);
   return layout;
@@ -135,10 +139,15 @@ const BUILDERS: Record<Archetype, (o: LayoutOptions) => Layout> = {
 
 // ---------- builder ----------
 
-class Builder {
+/** Builds a canonical layout (entrance on the south wall). Office tasks use it too (core/tasks/layouts.ts). */
+export class Builder {
   private cells: string[][];
   private doors: Door[] = [];
   private slots: Slot[] = [];
+  private fixtures: Fixture[] = [];
+  private zones: Zone[] = [];
+  /** Cells kept free of wall slots (next to a task's fixtures). */
+  private reserved = new Set<string>();
   private spawn = { x: 0, z: 0, yaw: 0 };
   private labels: string[];
 
@@ -147,10 +156,25 @@ class Builder {
     private w: number,
     private d: number,
     private ceiling: number,
-    private o: LayoutOptions,
+    private o: Pick<LayoutOptions, 'rng' | 'doorLabels'>,
   ) {
     this.cells = Array.from({ length: d }, () => Array.from({ length: w }, () => '.'));
     this.labels = [...o.doorLabels];
+  }
+
+  /** A prop at an exact spot; `reserve` keeps decoration off the cells around it. */
+  fixture(f: Fixture, reserve: [number, number][] = []) {
+    this.fixtures.push(f);
+    for (const [cx, cz] of reserve) this.reserved.add(`${cx},${cz}`);
+  }
+
+  zone(z: Zone) {
+    this.zones.push(z);
+  }
+
+  /** Keep decoration off these cells. */
+  reserve(cells: [number, number][]) {
+    for (const [cx, cz] of cells) this.reserved.add(`${cx},${cz}`);
   }
 
   solid(cx: number, cz: number) {
@@ -164,11 +188,13 @@ class Builder {
     return cx;
   }
 
-  door(side: Side, index: number, marking?: Pick<Door, 'label' | 'color'>) {
+  /** An exit on `side` at position `index` along that wall; returns its id. */
+  door(side: Side, index: number, marking?: Pick<Door, 'label' | 'color'>): string {
     const [cx, cz] = this.edgeCell(side, index);
     const n = this.doors.filter((x) => !x.entrance).length + 1;
     const label = marking?.label ?? (this.labels.length ? this.labels.splice(Math.floor(this.o.rng() * this.labels.length), 1)[0]! : String(n));
     this.doors.push({ id: `d${n}`, cx, cz, side, label, entrance: false, ...marking });
+    return `d${n}`;
   }
 
   exits(count: number, sides: Side[]) {
@@ -227,6 +253,8 @@ class Builder {
       doors: this.doors,
       slots: this.slots,
       spawn: this.spawn,
+      ...(this.fixtures.length ? { fixtures: this.fixtures } : {}),
+      ...(this.zones.length ? { zones: this.zones } : {}),
     };
   }
 
@@ -250,6 +278,7 @@ class Builder {
       }
       // Corner cells are shared by two walls; leave them to the first wall that claims them.
       if (this.slots.some((s) => s.side && covers(s, cx, cz))) return false;
+      if (this.reserved.has(`${cx},${cz}`)) return false;
     }
     return true;
   }
@@ -285,6 +314,8 @@ export function rotateCW(l: Layout): Layout {
       face: s.face && ROTATE_CW[s.face],
     })),
     spawn: { x: D - l.spawn.z, z: l.spawn.x, yaw: l.spawn.yaw - Math.PI / 2 },
+    ...(l.fixtures ? { fixtures: l.fixtures.map((f) => ({ ...f, x: D - f.z, z: f.x, face: ROTATE_CW[f.face] })) } : {}),
+    ...(l.zones ? { zones: l.zones.map((z) => ({ ...z, x: D - z.z, z: z.x })) } : {}),
   };
 }
 

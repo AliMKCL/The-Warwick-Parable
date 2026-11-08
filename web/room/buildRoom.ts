@@ -45,6 +45,15 @@ export interface RoomView {
   setLights(level: number, seconds: number): void;
   lightLevel(): number;
   setLocked(doorIds: string[]): void;
+  /** Redraw a prop's text surface (a lift indicator, a printer's status). */
+  setPropText(propId: string, text: string): void;
+  /** Take a prop out of the room (picked up). */
+  hideProp(propId: string): void;
+  /** Turn a prop (a character) towards another prop for a while, then back. */
+  glance(propId: string, atId: string, seconds: number): void;
+  /** Stylised smoke from a prop, growing to `level` over `seconds`. */
+  smoke(fromId: string, level: number, seconds: number): void;
+  smokeLevel(): number;
   dispose(): void;
 }
 
@@ -122,15 +131,19 @@ export function buildRoom(spec: RoomSpec, data: GameData, materials: MaterialLib
 
   // ---- props ----
   const colliders: Rect[] = [];
+  const propObjects = new Map<string, THREE.Group>();
   for (const placed of spec.props) {
     const recipe = recipes.get(placed.recipe);
     if (!recipe) continue;
     const { object, owned: o } = buildProp(placed, recipe, materials);
     owned.push(...o);
-    if (spec.variant === 'ceiling') mountOnCeiling(object, H);
+    // Upside-down rooms flip the decoration; an office task's own props stay put and keep their collision.
+    const flipped = spec.variant === 'ceiling' && placed.slot !== 'fixture';
+    if (flipped) mountOnCeiling(object, H);
+    propObjects.set(placed.id, object);
     group.add(object);
     if (object.userData.interact) interactables.push(object);
-    if (spec.variant !== 'ceiling' && recipe.solid && !recipe.fits.every((f) => f === 'wall_mounted')) {
+    if (!flipped && recipe.solid && !recipe.fits.every((f) => f === 'wall_mounted')) {
       colliders.push(footprintRect(placed.x, placed.z, placed.rotY, recipe.size[0], recipe.size[2]));
     }
   }
@@ -194,6 +207,32 @@ export function buildRoom(spec: RoomSpec, data: GameData, materials: MaterialLib
     hemi.intensity = baseHemi * (0.25 + 0.75 * level);
   };
 
+  // ---- characters turning their heads ----
+  const glances: { obj: THREE.Object3D; base: number; to: number; t: number; hold: number }[] = [];
+
+  // ---- smoke: soft grey puffs drifting out of a vent, plus a light haze ----
+  const fog = new THREE.FogExp2(amb.fog, amb.fogDensity);
+  const fogBase = new THREE.Color(amb.fog);
+  const fogSmoke = new THREE.Color('#8f8f8a');
+  let smokeFrom: { x: number; y: number; z: number; dx: number; dz: number } | undefined;
+  let smokeNow = 0, smokeTo = 0, smokeRate = 0;
+  const puffs: { sprite: THREE.Sprite; age: number; life: number; vx: number; vy: number; vz: number }[] = [];
+  let puffTex: THREE.Texture | undefined;
+  let spawnAcc = 0;
+  const spawnPuff = () => {
+    if (!smokeFrom) return;
+    puffTex ??= softDot();
+    // Sprites aren't lit, so the grey is set dark enough to read as smoke rather than glow.
+    const mat = new THREE.SpriteMaterial({ map: puffTex, color: '#6f6e6a', transparent: true, depthWrite: false, opacity: 0 });
+    const sprite = new THREE.Sprite(mat);
+    sprite.raycast = () => {}; // smoke never blocks what the player is aiming at
+    sprite.position.set(smokeFrom.x + (Math.random() - 0.5) * 0.4, smokeFrom.y + (Math.random() - 0.5) * 0.15, smokeFrom.z + (Math.random() - 0.5) * 0.4);
+    sprite.scale.setScalar(0.4);
+    group.add(sprite);
+    const speed = 0.35 + Math.random() * 0.25;
+    puffs.push({ sprite, age: 0, life: 7 + Math.random() * 5, vx: smokeFrom.dx * speed + (Math.random() - 0.5) * 0.12, vy: -0.02 + Math.random() * 0.06, vz: smokeFrom.dz * speed + (Math.random() - 0.5) * 0.12 });
+  };
+
   return {
     spec,
     anomaly,
@@ -201,7 +240,7 @@ export function buildRoom(spec: RoomSpec, data: GameData, materials: MaterialLib
     colliders,
     interactables,
     doors,
-    fog: new THREE.FogExp2(amb.fog, amb.fogDensity),
+    fog,
     background: new THREE.Color(amb.fog),
     exposure: amb.exposure,
     grade: amb.grade,
@@ -227,7 +266,78 @@ export function buildRoom(spec: RoomSpec, data: GameData, materials: MaterialLib
         d.indicator?.emissive.set(d.locked ? '#ff3b30' : '#34c759');
       }
     },
+    setPropText(id, text) {
+      const obj = propObjects.get(id);
+      const placed = spec.props.find((p) => p.id === id);
+      const recipe = placed && recipes.get(placed.recipe);
+      const plane = obj?.userData.textPlane as THREE.Mesh | undefined;
+      if (!plane || !recipe?.text) return;
+      const old = plane.material as THREE.MeshStandardMaterial;
+      const mat = textMaterial(text, recipe.text.style, recipe.text.size);
+      plane.material = mat;
+      owned.push(mat.map!, mat);
+      old.map?.dispose();
+      old.dispose();
+    },
+    hideProp(id) {
+      const obj = propObjects.get(id);
+      if (!obj) return;
+      group.remove(obj);
+      const i = interactables.indexOf(obj);
+      if (i >= 0) interactables.splice(i, 1);
+    },
+    glance(id, atId, seconds) {
+      const obj = propObjects.get(id), at = propObjects.get(atId);
+      if (!obj || !at) return;
+      const base = obj.rotation.y;
+      // The prop's front is local +z; face it towards the target, but only turn part of the way, like a glance.
+      const want = Math.atan2(at.position.x - obj.position.x, at.position.z - obj.position.z);
+      const delta = Math.atan2(Math.sin(want - base), Math.cos(want - base));
+      glances.push({ obj, base, to: base + delta * 0.6, t: 0, hold: seconds });
+    },
+    smoke(fromId, to, seconds) {
+      const vent = spec.props.find((p) => p.id === fromId);
+      if (!vent) return;
+      // Out of the vent's face, into the room.
+      smokeFrom = { x: vent.x, y: vent.y, z: vent.z, dx: Math.sin(vent.rotY), dz: Math.cos(vent.rotY) };
+      smokeTo = to;
+      smokeRate = to / Math.max(1, seconds);
+    },
+    smokeLevel: () => smokeNow,
     update(dt) {
+      for (let i = glances.length - 1; i >= 0; i--) {
+        const g = glances[i]!;
+        g.t += dt;
+        const turn = 0.6;
+        const k = g.t < turn ? g.t / turn : g.t < turn + g.hold ? 1 : Math.max(0, 1 - (g.t - turn - g.hold) / turn);
+        const e = k * k * (3 - 2 * k);
+        g.obj.rotation.y = g.base + (g.to - g.base) * e;
+        if (g.t >= turn * 2 + g.hold) { g.obj.rotation.y = g.base; glances.splice(i, 1); }
+      }
+      if (smokeFrom) {
+        smokeNow = Math.min(smokeTo, smokeNow + smokeRate * dt);
+        fog.color.copy(fogBase).lerp(fogSmoke, smokeNow * 0.8);
+        fog.density = amb.fogDensity + smokeNow * 0.07;
+        spawnAcc += dt * (3 + smokeNow * 9);
+        while (spawnAcc >= 1 && puffs.length < 90) { spawnAcc -= 1; spawnPuff(); }
+        for (let i = puffs.length - 1; i >= 0; i--) {
+          const p = puffs[i]!;
+          p.age += dt;
+          const f = p.age / p.life;
+          p.sprite.position.x += p.vx * dt;
+          p.sprite.position.y = Math.min(H - 0.15, p.sprite.position.y + p.vy * dt);
+          p.sprite.position.z += p.vz * dt;
+          p.vx *= 1 - dt * 0.08;
+          p.vz *= 1 - dt * 0.08;
+          p.sprite.scale.setScalar(0.6 + f * 2.4);
+          (p.sprite.material as THREE.SpriteMaterial).opacity = Math.sin(Math.PI * Math.min(1, f)) * (0.38 + 0.27 * smokeNow);
+          if (f >= 1) {
+            group.remove(p.sprite);
+            (p.sprite.material as THREE.SpriteMaterial).dispose();
+            puffs.splice(i, 1);
+          }
+        }
+      }
       if (levelT < 1) {
         levelT = Math.min(1, levelT + dt / levelDur);
         const e = levelT * levelT * (3 - 2 * levelT);
@@ -252,6 +362,8 @@ export function buildRoom(spec: RoomSpec, data: GameData, materials: MaterialLib
     dispose() {
       for (const o of owned) o.dispose();
       for (const l of points) l.dispose();
+      for (const p of puffs) (p.sprite.material as THREE.SpriteMaterial).dispose();
+      puffTex?.dispose();
       hemi.dispose();
     },
   };
@@ -373,6 +485,22 @@ export function buildRoom(spec: RoomSpec, data: GameData, materials: MaterialLib
     group.add(root);
     return { door, pivot, open: 0, target: 0, swing: 1, locked: false, indicator };
   }
+}
+
+/** A soft round dot (a smoke puff). */
+function softDot(): THREE.Texture {
+  const c = document.createElement('canvas');
+  c.width = c.height = 64;
+  const g = c.getContext('2d')!;
+  const grad = g.createRadialGradient(32, 32, 0, 32, 32, 32);
+  grad.addColorStop(0, 'rgba(255,255,255,1)');
+  grad.addColorStop(0.5, 'rgba(255,255,255,0.45)');
+  grad.addColorStop(1, 'rgba(255,255,255,0)');
+  g.fillStyle = grad;
+  g.fillRect(0, 0, 64, 64);
+  const tex = new THREE.CanvasTexture(c);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  return tex;
 }
 
 /** A plane of the given size, facing +z, centred at the origin. */

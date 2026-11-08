@@ -53,6 +53,8 @@ export function attachAnomaly(
   const eligible = ANOMALIES.filter(
     (a) =>
       !used.includes(a.id) &&
+      // In an office task room the doors are part of the test: nothing relabels or hides them.
+      (!room.task || (a.id !== 'blue_door' && a.id !== 'false_exit')) &&
       (a.id !== 'borrowed_clock' || room.rule?.id === 'exit_timer') &&
       (a.id !== 'copier_route' || declined.length > 0) &&
       (a.id !== 'false_exit' ||

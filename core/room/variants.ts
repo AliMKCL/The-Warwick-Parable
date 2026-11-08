@@ -21,7 +21,8 @@ export function applyRoomVariant(room: RoomSpec, visited: readonly RoomSpec[], l
   const roll = createRng(deriveSeed(room.seed, 'room-variant'))();
   const variant = roll < 0.055 ? 'ceiling' : roll < 0.14 ? 'messy' : undefined;
   if (!variant || visited.some((previous) => previous.variant === variant)) return;
-  if (variant === 'ceiling' && !room.props.some((prop) => prop.recipe === 'desk_office' || prop.recipe === 'terminal_desk')) return;
+  // Office task fixtures stay where the task needs them, so only decoration counts here.
+  if (variant === 'ceiling' && !room.props.some((prop) => prop.slot !== 'fixture' && (prop.recipe === 'desk_office' || prop.recipe === 'terminal_desk'))) return;
 
   const detail = variants[variant];
   room.variant = variant;

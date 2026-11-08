@@ -23,6 +23,16 @@ Read this first when picking up the work. Newest entries at the top.
 
 ## Log
 
+### Office tasks 1 to 5 (from "Psychometric Game Tasks: Build Spec")
+- Rooms 1 to 5 now each stage one covert task, in the spec's order: the Two Doors, the Lift That Never Comes, the Abandoned Desk, Late for the Meeting, the Smoky Corridor. Room 0 doubles as the baseline room. `?tasks=0` gives the old run (generated rooms with rules); a shorter run (`?rooms=5`) cuts the last tasks first.
+- Task rooms are still generated: seeded layouts (`core/tasks/layouts.ts`) rotated like any room, decorated by the model or templates. Only the measured parts are fixed: task props (fixtures), door labels and the narrator's lines (`data/tasks.json`). Task rooms have no entry line, door lines, rule or live door reaction, so nothing talks over an instruction.
+- One shared event log (`core/tasks/log.ts`): 10 Hz position samples, every key press, prompts, zone enter/exit, interactions, choices, narrator start/end (start is when the line actually appears on screen). The run clock leaves out paused time.
+- Metrics (`core/tasks/metrics.ts`) are pure functions of the log, with the spec's formulas; timing metrics are robust z-scores against the player's own baseline (with a floor on the scale, since the baseline has few observations). They go into the dossier ("What the building measured") and a `task_result` message (with the task's log slice, for telemetry to store once it is merged in), and they nudge the existing four traits.
+- With Kaan's rooms: anomalies and variants can appear in a task room as decoration around the task. Two anomalies are kept out of task rooms because they change the measured doors (`blue_door` relabels one, `false_exit` hides one), and the upside-down variant flips only the decoration, never a task's props. With tasks on there is no separate choice room: the Two Doors is the run's door choice.
+- Between-player conditions: which door is instructed (left/right) and crowd or alone in the smoke, both seeded from the run seed. Everything else sits at the spec's defaults (lift gives up at 90 s, 5 desk items, 45 s countdown, 5 s to fix the printer, smoke at 10 s growing over 60 s).
+- Not built (needs worlds beyond the office): the relaxed repeat of the meeting (so `pressure_effect` is always empty), the "red button" repeat of the doors, population percentiles and the trait-with-uncertainty layer, the mirror report and the generator.
+- Tests: layouts playable in every orientation; formulas on hand-made logs; three scripted bots (cautious, risky, curious) play whole runs and every metric moves the expected way; replaying a log reproduces its metrics exactly; `tests/e2e/tasks.spec.ts` plays all five in the browser.
+
 ### After Phase 6: context file and narrator voice
 - `CLAUDE.md`: everything a new Claude session needs (architecture, how to run and test, workflow, decisions).
 - Narrator voice with ElevenLabs, off unless `ELEVENLABS_API_KEY` is set; setup in `docs/voice.md`; `npm run try:voice` to audition voices.

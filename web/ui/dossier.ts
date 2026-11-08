@@ -41,6 +41,15 @@ export function showDossier(root: HTMLElement, d: Dossier) {
       <ol>${d.rooms.map((r) => `<li class="amb-${esc(r.ambience)}"><small>Room ${r.index}</small><strong>${esc(r.title)}</strong><span>${esc(r.archetype.replace('_', ' '))}${r.rule ? ` · ${esc(r.rule.replaceAll('_', ' '))}` : ''}</span></li>`).join('')}</ol>
     </section>
 
+    ${d.tasks.length ? `<section class="tasks">
+      <h2>What the building measured</h2>
+      <ol>${d.tasks.map((t) => `<li>
+        <small>Room ${t.room} · ${esc(t.title)}</small>
+        ${t.notes.map((n) => `<p>${esc(n)}</p>`).join('')}
+        <dl>${Object.entries(t.metrics).filter(([, v]) => v !== null).map(([k, v]) => `<div><dt>${esc(k.replaceAll('_', ' '))}</dt><dd>${fmt(v!)}</dd></div>`).join('')}</dl>
+      </li>`).join('')}</ol>
+    </section>` : ''}
+
     ${d.threads.length ? `<section class="threads"><h2>Loose ends</h2><ul>${d.threads.map((t) => `<li>${esc(t.text)} <small>${t.resolvedIn !== undefined ? `opened in room ${t.room}, explained in room ${t.resolvedIn}` : `opened in room ${t.room}, never explained`}</small></li>`).join('')}</ul></section>` : ''}
 
     <p class="stats">${mins} min ${secs} s in the building · ${d.stats.inspected} things inspected · ${d.stats.pressed} button presses · ${d.stats.stoodStill} s standing still${d.stats.doorsTried ? ` · ${d.stats.doorsTried} locked doors tried` : ''}</p>
@@ -55,6 +64,7 @@ export function showDossier(root: HTMLElement, d: Dossier) {
     <section class="built" hidden>
       <h2>How this world was built</h2>
       <p class="note">No room existed before the player reached it. Seeded code laid out each room; ${d.rooms.filter((r) => r.source === 'model').length} of ${d.rooms.length} rooms were then written by the local model from what you had done so far (the rest used templates). The verdict above was written by ${d.verdictSource === 'model' ? 'the model' : 'templates'}.</p>
+      ${d.tasks.length ? `<p class="note">Timing in the office tasks is compared with your own normal from the first room: walking speed ${fmt(d.baseline.speed)} m/s, ${fmt(d.baseline.inputRate)} key presses a second while walking, ${fmt(d.baseline.reaction)} s from a prompt to acting on it. A "z" metric is how many of your own usual spreads away from that normal you were.</p>` : ''}
       <h3>Your traits as you entered each room</h3>
       ${chart(d)}
       <h3>Room by room</h3>
@@ -99,6 +109,11 @@ function chart(d: Dossier): string {
   const lines = TRAITS.map((t) => `<polyline fill="none" stroke="${t.colour}" stroke-width="2" points="${points.map((p, i) => `${x(i)},${y(p[t.key])}`).join(' ')}"/>`).join('');
   const legend = TRAITS.map((t) => `<span><i style="background:${t.colour}"></i>${t.label}</span>`).join('');
   return `<svg viewBox="0 0 ${W} ${H}" class="chart" role="img" aria-label="Trait scores across rooms">${grid}${labels}${lines}</svg><div class="legend">${legend}</div>`;
+}
+
+function fmt(v: number | null | undefined): string {
+  if (v === null || v === undefined) return '–';
+  return Number.isInteger(v) ? String(v) : v.toFixed(2);
 }
 
 function esc(s: string | undefined): string {

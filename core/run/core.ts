@@ -3,6 +3,7 @@ import { fill } from '../director/prompts';
 import type { LlmClient } from '../llm/client';
 import type { CoreMessage, CorePort, GameEvent } from '../protocol';
 import type { GameData } from '../room/types';
+import { taskFor } from '../tasks/params';
 import { Run, type RunOptions } from './run';
 
 export interface CoreOptions {
@@ -12,6 +13,8 @@ export interface CoreOptions {
   observeMs?: number;
   /** Rooms in a run, counting the first (default 7). */
   runLength?: number;
+  /** Stage the office tasks in rooms 1 to 5 (see core/tasks). */
+  tasks?: boolean;
 }
 
 /**
@@ -24,7 +27,9 @@ export function createCore(data: GameData, opts: CoreOptions = {}): CorePort & {
   let lineCount = 0;
 
   const emit = (m: CoreMessage) => listeners.forEach((l) => l(m));
-  const say = (text: string) => emit({ type: 'narrator_line', lineId: `l${++lineCount}`, text, final: true });
+  const say = (text: string, lineId = `l${++lineCount}`) => {
+    if (text) emit({ type: 'narrator_line', lineId, text, final: true });
+  };
   const now = () => Date.now();
   /** Resolves once the current room's entry line has been said; the room's rule starts after it. */
   let introduced: Promise<void> = Promise.resolve();
@@ -33,12 +38,14 @@ export function createCore(data: GameData, opts: CoreOptions = {}): CorePort & {
     waitMs: opts.waitMs,
     observeMs: opts.observeMs,
     runLength: opts.runLength,
+    tasks: opts.tasks,
     onStatus: (doors) => emit({ type: 'gen_status', doors, model: run?.modelOff ? 'off' : 'on' }),
     maxAnomalies: opts.maxAnomalies,
     onAnomaly: (effect) => emit({ type: 'anomaly_effect', effect }),
     onEffect: (effect) => emit({ type: 'rule_effect', effect }),
     onSay: say,
     onProfile: (profile) => emit({ type: 'profile', profile }),
+    onTaskResult: (result, log) => emit({ type: 'task_result', result, log }),
   });
 
   /** A live, streamed reaction to the door the player just chose. Returns when the line is finished. */
@@ -115,7 +122,9 @@ export function createCore(data: GameData, opts: CoreOptions = {}): CorePort & {
         void (async () => {
           // React live only when the next room is already built, so the
           // reaction never delays the room itself.
-          const ready = r.plansStatus().find((p) => p.door === event.doorId)?.status === 'ready';
+          // Not into an office task room: its first line is a measured instruction, and nothing should talk over it.
+          const intoTask = opts.tasks && taskFor((r.current?.index ?? 0) + 1, r.last);
+          const ready = !intoTask && r.plansStatus().find((p) => p.door === event.doorId)?.status === 'ready';
           const reaction = ready ? reactToDoor(event.doorId) : Promise.resolve(false);
           const room = await r.next(event.doorId);
           emit({ type: 'load_room', spec: room });
@@ -124,7 +133,8 @@ export function createCore(data: GameData, opts: CoreOptions = {}): CorePort & {
           // Give the entry line time to be read before the rule speaks.
           setTimeout(() => markIntroduced(), Math.min(6000, 1200 + room.narrator.onEnter.length * 35));
         })();
-      } else if (event.type === 'pressed') {
+      } else if (event.type === 'pressed' && !r.current?.task) {
+        // In a task room the task decides what pressing things means.
         const lines = data.templates.narratorPress;
         say(lines[r.events.filter((e) => e.type === 'pressed').length % lines.length]!);
       } else if (event.type === 'door_hovered' && event.seconds >= 1.5) {

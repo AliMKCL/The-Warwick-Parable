@@ -33,6 +33,12 @@ export const PREFERRED: Record<string, Partial<Record<Slot['kind'] | 'desk' | 'p
     wall_mounted: ['sign_wall', 'poster_wall', 'clock_wall', 'whiteboard'],
   },
 };
+// The office tasks' rooms are decorated like their nearest ordinary archetype.
+PREFERRED.two_doors = PREFERRED.waiting_room!;
+PREFERRED.lift_lobby = PREFERRED.waiting_room!;
+PREFERRED.desk_corridor = PREFERRED.corridor!;
+PREFERRED.meeting_corridor = PREFERRED.corridor!;
+PREFERRED.smoky_office = PREFERRED.open_office!;
 
 export function candidatesFor(slot: Slot, archetype: string, data: GameData): PropRecipe[] {
   const prefs = PREFERRED[archetype] ?? {};
@@ -96,7 +102,7 @@ export function templateAssignments(
 
   function textFor(style: TextStyle, r: Rng, index: number): string {
     const pool = {
-      sign: t.signs, poster: t.posters, screen: t.screens, whiteboard: t.whiteboards, paper: t.papers, label: t.labels,
+      sign: t.signs, poster: t.posters, screen: t.screens, whiteboard: t.whiteboards, paper: t.papers, label: t.labels, led: t.labels, sticky: t.papers,
     }[style];
     const fresh = pool.filter((x) => !usedText.has(x));
     const text = pick(r, fresh.length ? fresh : pool);

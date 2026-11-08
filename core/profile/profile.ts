@@ -51,6 +51,8 @@ export class Profile {
           this.adjust('curiosity', 0.07, `investigated ${e.anomalyId.replaceAll('_', ' ')}`, room, e.t, 0.25);
         break;
       case 'pressed': {
+        // In an office task room (a lift button, a fire alarm) the task scores presses itself.
+        if (room.task) break;
         const nth = mine.filter((x) => x.type === 'pressed').length;
         if (nth === 1) {
           if (since < 5) this.adjust('impulsivity', 0.25, `pressed the button ${Math.round(since)} s after arriving`, room, e.t);
