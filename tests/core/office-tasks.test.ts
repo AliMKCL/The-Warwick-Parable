@@ -7,6 +7,7 @@ import { templateAssignments } from '../../core/room/templates';
 import type { RoomSpec, Side } from '../../core/room/types';
 import { validateRoom } from '../../core/room/validate';
 import { Run } from '../../core/run/run';
+import { buildDossier, templateVerdict } from '../../core/director/dossier';
 import { OFFICE_MODULES, type OfficeTaskId } from '../../core/testrooms/office';
 import { kOf, OFFERS } from '../../core/testrooms/office/canteen';
 import { PAYOFFS } from '../../core/testrooms/office/coffee';
@@ -307,5 +308,48 @@ describe('office task modules: scripted bots', () => {
       // What it measured reaches the model's account of the room.
       expect(d.run.describe(d.room).join(' '), id).toContain('Measured:');
     }
+  });
+});
+
+describe('office tasks in the final report (the task scoring layer, PR #7)', () => {
+  /** Leave the task room and walk to the finale, then write the file. */
+  async function finish(d: Awaited<ReturnType<typeof play>>) {
+    d.leave();
+    const run = d.run;
+    await run.next(d.room.layout.doors.find((q) => !q.entrance)!.id);
+    expect(run.finished).toBe(true);
+    run.selfRatings = { risk: 3, patience: 5, social: 3, exploration: 3 };
+    return buildDossier(run, templateVerdict(run), 'template', gameData);
+  }
+
+  it('a played canteen task scores patience in "you said / you did", with its own evidence line', async () => {
+    const scores: number[] = [];
+    for (const style of ['wait', 'now'] as const) {
+      const d = await play('canteen');
+      for (let s = 1; s <= 4; s++) {
+        const zone = d.room.layout.zones!.find((q) => q.id === `stop${s}`)!;
+        d.walkTo(zone.x, zone.z);
+        d.press(style === 'now' ? `t_now${s}` : `t_wait${s}`);
+        d.wait(style === 'wait' ? 32 : 0.5);
+      }
+      const dossier = await finish(d);
+      const patience = dossier.measured.patience;
+      expect(patience.estimated).toBe(false);
+      expect(patience.tasks?.map((x) => x.task)).toEqual(['canteen']);
+      expect(patience.evidence).toMatch(/canteen/i);
+      expect(dossier.taskMeasures?.some((m) => m.task === 'canteen' && m.trait === 'patience')).toBe(true);
+      scores.push(patience.score);
+    }
+    // The player who waited for the better food every time scores more patient than the one who never did.
+    expect(scores[0]!).toBeGreaterThan(scores[1]!);
+  });
+
+  it('a played coffee task feeds obedience and lists learning under "Also measured"', async () => {
+    const d = await play('coffee');
+    const rec = Number(d.room.rule!.params.recommended);
+    for (let i = 0; i < 12; i++) { d.press(`t_machine${rec + 1}`); d.wait(0.5); }
+    const dossier = await finish(d);
+    expect(dossier.measured.social.tasks?.map((x) => x.task)).toContain('coffee');
+    expect(dossier.alsoMeasured?.map((x) => x.trait)).toContain('learning');
   });
 });

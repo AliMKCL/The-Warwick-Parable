@@ -23,6 +23,11 @@ Read this first when picking up the work. Newest entries at the top.
 
 ## Log
 
+### Task scoring connected to the report (PR #7, 8 Nov)
+- Merged Abhinav's task scoring layer (`core/director/taskscore.ts`, `docs/scoring.md`). It was written before the office tasks were ported, so it was waiting for results that now arrive: each office task's `TaskResult` becomes 0–1 scores on the start-screen traits (risk, patience, obedience, curiosity) and on measured-only traits (learning, trust, calibration…), with a weight and an evidence line each. "You said / you did" averages them with the ordinary signals; the dossier lists task evidence per trait and an "Also measured" section; telemetry logs one `task_measure` row per measurement.
+- Merge fixes: duplicate `TaskResult`/`TaskEvent`/`Run.taskResults` declarations removed; the telemetry recorder had two `case 'task_result'` branches (the second, PR #7's, never ran), now one; the no-tasks golden fixture re-captured on today's run (verified identical with and without the layer).
+- New: `tests/core/office-tasks.test.ts` plays the canteen and coffee tasks through to the dossier and checks their scores and evidence appear.
+
 ### The office tasks from PR #6, in the test pool (8 Nov)
 - PR #6 couldn't merge: it was built on the reverted office-task system (`core/tasks`), so it edited files `main` had deleted, and both sides had rewritten the run, protocol and adapter since. Instead its seven tasks are ported onto `main`'s test rooms: balloons, coffee, canteen, renumbered, pitch, loan, lockdown.
 - The task modules are unchanged (`core/testrooms/office/`); `adapter.ts` runs each as a test with its own room. Drawn from `pool` in `data/layout.json` like any test, at most once per run each.

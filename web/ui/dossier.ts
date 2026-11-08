@@ -1,4 +1,4 @@
-import type { Dossier, Measured, SelfTrait, TraitName } from '../../core/protocol';
+import type { AlsoMeasured, Dossier, Measured, SelfTrait, TraitName } from '../../core/protocol';
 
 const TRAITS: { key: TraitName; label: string; low: string; high: string; colour: string }[] = [
   { key: 'hesitation', label: 'Hesitation', low: 'decisive', high: 'hesitant', colour: '#6e8cd6' },
@@ -116,23 +116,41 @@ function saidDid(d: Dossier): string {
     const said = r?.said ?? null;
     // Untested this run: no score to compare, never a red gap, never the headline.
     const did = m.estimated ? null : Math.round(m.score);
-    const gap = said === null || did === null ? 0 : Math.abs(said - did);
+    // A single yes/no moment is shown, but never highlighted as a gap.
+    const gap = said === null || did === null || m.oneObservation ? 0 : Math.abs(said - did);
+    // Task evidence (only once tasks have reported), minus the line already shown as the main evidence.
+    const lines = (m.tasks ?? []).map((x) => x.evidence).filter((x) => x !== m.evidence);
     return `<div class="sd-row${sd?.headlineTrait === key ? ' top' : ''}${gap >= 2 ? ' gap' : ''}${did === null ? ' untested' : ''}">
       <strong>${esc(label)}</strong>
       <div class="sd-vals">
         ${sd ? `<span>You said: <b>${said === null ? '–' : `${said}/5`}</b>${dots(said, 'said')}</span>` : ''}
         ${did === null
           ? `<span class="nt">You did: <b>not tested this run</b> <em>(estimate ${Math.round(m.score)}/5)</em></span>`
-          : `<span>You did: <b>${did}/5</b>${dots(did, 'did')}</span>`}
+          : `<span>You did: <b>${did}/5</b>${dots(did, 'did')}${m.oneObservation ? ' <em>(one observation)</em>' : ''}</span>`}
       </div>
       <p>${esc(m.evidence)}</p>
+      ${lines.length ? `<ul class="sd-tasks">${lines.map((x) => `<li>${esc(x)}</li>`).join('')}</ul>` : ''}
     </div>`;
   };
   return `<section class="saiddid">
     <p class="kicker">${sd ? 'You said · you did' : 'What you did'}</p>
     ${sd ? `<h2 class="headline${sd.headlineTrait ? '' : ' calm'}">${esc(sd.headline)}</h2><p class="detail">${esc(sd.detail)}</p>` : ''}
     <div class="sd-rows">${SELF.map((t) => row(t.key, t.label, d.measured[t.key])).join('')}</div>
+    ${alsoMeasured(d.alsoMeasured)}
   </section>`;
+}
+
+/** Traits with no slider, measured by the office tasks. Absent until a task has reported. */
+function alsoMeasured(list: AlsoMeasured[] | undefined): string {
+  if (!list?.length) return '';
+  return `<div class="also">
+    <p class="kicker">Also measured</p>
+    <div class="sd-rows">${list.map((a) => `<div class="sd-row">
+      <strong>${esc(a.label)}</strong>
+      <div class="sd-vals"><span>Measured: <b>${Math.round(a.score)}/5</b>${a.oneObservation ? ' <em>(one observation)</em>' : ''}</span></div>
+      ${a.evidence.length === 1 ? `<p>${esc(a.evidence[0])}</p>` : `<ul class="sd-tasks">${a.evidence.map((x) => `<li>${esc(x)}</li>`).join('')}</ul>`}
+    </div>`).join('')}</div>
+  </div>`;
 }
 
 /** Trait values across the rooms, plus the final value. */

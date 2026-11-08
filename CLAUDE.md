@@ -80,6 +80,9 @@ npm run analyze                 # Supabase play data → per-player metrics + po
 - `core/director/`: `content.ts` (picks up to 8 slots for the model, builds messages, schema-constrained call,
   one repair round), `schema.ts` (per-room JSON Schema: enums of real slot/prop/door/thread ids), `summary.ts`
   (events → plain sentences), `prompts.ts` (fill, story stages, RUN_LENGTH=7), `dossier.ts` (verdict + Dossier).
+- `core/director/taskscore.ts` (PR #7, `docs/scoring.md`): office-task `TaskResult` → 0–1 per trait (weight, evidence);
+  `selfcheck.ts` averages them into "you said / you did" with the ordinary signals; dossier "Also measured" for
+  traits with no slider; telemetry `task_measure` rows. Tasks 1–5 in the table are not in the game.
 - `core/profile/profile.ts`: traits hesitation/curiosity/compliance/impulsivity, start 0.5, moved only by
   evidence with per-room caps; every change logged with a reason (shown in the dossier and sent to the model).
 - `core/rules/rules.ts`: `RuleRuntime`, the generic host that runs the current room's test (its timers are named
