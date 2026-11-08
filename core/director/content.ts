@@ -81,7 +81,7 @@ export function buildRoomMessages(ctx: ContentContext, slots: Slot[]): { message
     total: ctx.runLength - 1,
     stage: storyStage(ctx.index, ctx.runLength - 1),
     profile: ctx.profile.map((s) => `- ${s}`).join('\n'),
-    rule: ctx.rule ? describeRule(ctx.rule) : 'None. Leave "rule_line" and "rule_done_line" empty.',
+    rule: ctx.rule ? describeRule(ctx.rule, data) : 'None. Leave "rule_line" and "rule_done_line" empty.',
     threads: ctx.threads.length ? ctx.threads.map((t) => `- ${t.id}: ${t.text}`).join('\n') : '- None yet.',
     archetype: layout.archetype.replace('_', ' '),
     width: layout.width,

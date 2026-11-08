@@ -1,6 +1,6 @@
 import { pick, randInt, type Rng } from '../util/random';
 import { DIR, ROTATE_CW } from './geometry';
-import type { Door, Fixture, Layout, Side, Slot } from './types';
+import type { Door, Fixture, Layout, Side, Slot, Zone } from './types';
 
 /**
  * Seeded layout generators. Each builds its room with the entrance on the
@@ -29,8 +29,12 @@ export interface LayoutOptions {
 export const LIFT = { doors: 't_lift', call: 't_call', exitLabel: 'MAINTENANCE', floors: ['9', '8', '7', '6', '5', '4', '3'] } as const;
 
 export function generateLayout(opts: LayoutOptions): Layout {
-  const canonical = BUILDERS[opts.archetype](opts);
-  const turns = { s: 0, w: 1, n: 2, e: 3 }[opts.entranceSide];
+  return orient(BUILDERS[opts.archetype](opts), opts.entranceSide);
+}
+
+/** Rotate a canonical layout (entrance on the south wall) so its entrance is on `entranceSide`. */
+export function orient(canonical: Layout, entranceSide: Side): Layout {
+  const turns = { s: 0, w: 1, n: 2, e: 3 }[entranceSide];
   let layout = canonical;
   for (let i = 0; i < turns; i++) layout = rotateCW(layout);
   return layout;
@@ -174,11 +178,13 @@ const BUILDERS: Record<Archetype, (o: LayoutOptions) => Layout> = {
 
 // ---------- builder ----------
 
-class Builder {
+/** Builds a canonical layout (entrance on the south wall). Tests with their own rooms use it too (core/testrooms/office). */
+export class Builder {
   private cells: string[][];
   private doors: Door[] = [];
   private slots: Slot[] = [];
   private fixtures: Fixture[] = [];
+  private zones: Zone[] = [];
   /** Cells kept free of wall slots (around fixtures and special doors). */
   private reserved = new Set<string>();
   private spawn = { x: 0, z: 0, yaw: 0 };
@@ -189,7 +195,7 @@ class Builder {
     private w: number,
     private d: number,
     private ceiling: number,
-    private o: LayoutOptions,
+    private o: Pick<LayoutOptions, 'rng' | 'doorLabels'>,
   ) {
     this.cells = Array.from({ length: d }, () => Array.from({ length: w }, () => '.'));
     this.labels = [...o.doorLabels];
@@ -199,6 +205,11 @@ class Builder {
   fixture(f: Fixture, reserve: [number, number][] = []) {
     this.fixtures.push(f);
     this.reserve(reserve);
+  }
+
+  /** A circular area a test watches (the player walking into it). */
+  zone(z: Zone) {
+    this.zones.push(z);
   }
 
   reserve(cellList: [number, number][]) {
@@ -282,6 +293,7 @@ class Builder {
       slots: this.slots,
       spawn: this.spawn,
       ...(this.fixtures.length ? { fixtures: this.fixtures } : {}),
+      ...(this.zones.length ? { zones: this.zones } : {}),
     };
   }
 
@@ -349,6 +361,7 @@ export function rotateCW(l: Layout): Layout {
     })),
     spawn: { x: D - l.spawn.z, z: l.spawn.x, yaw: l.spawn.yaw - Math.PI / 2 },
     ...(l.fixtures ? { fixtures: l.fixtures.map((f) => ({ ...f, x: D - f.z, z: f.x, face: ROTATE_CW[f.face] })) } : {}),
+    ...(l.zones ? { zones: l.zones.map((z) => ({ ...z, x: D - z.z, z: z.x })) } : {}),
   };
 }
 

@@ -20,5 +20,6 @@ export function loadGameData(): GameData {
       dossierUser: md('prompts/dossier-user.md'),
     },
     layout: json('layout.json'),
+    tasks: json('tasks.json'),
   };
 }

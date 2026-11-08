@@ -22,7 +22,7 @@ npm install
 npm run check:llm               # model reachable, JSON output, speed
 npm run try:room                # scripted player + real model: prints the next room, rule, profile, narrator lines
 npm run dev                     # http://127.0.0.1:5188  (?debug=1 ?seed= ?tests= ?fillers= ?pool= ?rooms=5 ?post=0 ?ambience= ?mute=1 ?observe= ?layout=)
-npm test                        # vitest: core + telemetry (90 tests)
+npm test                        # vitest: core + telemetry (100 tests)
 npm run typecheck               # tsc for web + core, plus core purity check
 npm run test:e2e                # Playwright; see "Working from Claude's sandbox" below
 npm run mock:llm                # fake Ollama + fake ElevenLabs on :11999
@@ -64,6 +64,10 @@ npm run analyze                 # Supabase play data → per-player metrics + po
 - `core/testrooms/`: the test registry. One `TestKind` per file in `kinds/` (candidate layouts + door counts,
   profile weight, cap, `needsNextTest`, `setPiece`, `params`, `describe`, `start`/`onEvent`, optional `dress`,
   `templateLines`, `borrowTime`); `registry.ts` lists them; `config.ts` resolves data/layout.json. See its README.
+  `office/`: the 7 office tasks from PR #6 (balloons, coffee, canteen, renumbered, pitch, loan, lockdown), unchanged
+  modules run through `office/adapter.ts` (own room via `TestKind.room`, scored on leaving → profile + `task_result`).
+  They add `move` (10 Hz) / `input` / `answer` events, and ask/status/scale/turn/glance/disable/shake/sound/teleport effects;
+  `Run.taskLog` holds their events (room 0's under 'baseline'), `Run.taskResults` what they measured. Wording: data/tasks.json.
 - `core/run/core.ts`: the CorePort. Streams a live narrator reaction on door choice (only when the next room
   is already ready), says the entry line, starts the room's rule after the entry line has been read, and on
   the final door writes the verdict and emits `run_ended`.

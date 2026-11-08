@@ -53,6 +53,7 @@ export function buildProp(
     mesh.receiveShadow = true;
     // An invisible, larger target for small props: never drawn, but the aim ray still hits it.
     if (part.mat === 'hitbox') mesh.visible = false;
+    if (part.anim) mesh.userData.anim = part.anim;
     group.add(mesh);
   }
 

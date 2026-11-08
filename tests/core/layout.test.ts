@@ -96,12 +96,18 @@ describe('run layout', () => {
   });
 
   it('reads the old ?rooms=N as N rooms: waiting room, as many tests as configured, fillers, finale', () => {
-    expect(resolveLayout(gameData.layout, {}, 7)).toMatchObject({ tests: 4, fillers: 1 });
-    expect(resolveLayout(gameData.layout, {}, 4)).toMatchObject({ tests: 2, fillers: 0 });
-    expect(resolveLayout(gameData.layout, {}, 10)).toMatchObject({ tests: 4, fillers: 4 });
-    expect(resolveLayout(gameData.layout, { tests: 1, fillers: 1 }, 10)).toMatchObject({ tests: 1, fillers: 1 });
+    // A fixed base, so the test doesn't depend on what data/layout.json currently says.
+    const base = { tests: 4, fillers: 1, pool: { exit_timer: 1, gamble: { weight: 1, max: 2 } } };
+    expect(resolveLayout(base, {}, 7)).toMatchObject({ tests: 4, fillers: 1 });
+    expect(resolveLayout(base, {}, 4)).toMatchObject({ tests: 2, fillers: 0 });
+    expect(resolveLayout(base, {}, 10)).toMatchObject({ tests: 4, fillers: 4 });
+    expect(resolveLayout(base, { tests: 1, fillers: 1 }, 10)).toMatchObject({ tests: 1, fillers: 1 });
     // A list of ids keeps the data file's weights and caps; unknown ids are dropped.
-    expect(resolveLayout(gameData.layout, { pool: ['gamble', 'nope'] }).pool).toEqual({ gamble: { weight: 1, max: 2 } });
+    expect(resolveLayout(base, { pool: ['gamble', 'nope'] }).pool).toEqual({ gamble: { weight: 1, max: 2 } });
+    // The notes ("//" keys) in data/layout.json are ignored.
+    const real = resolveLayout(gameData.layout);
+    expect(Object.keys(real.pool)).not.toContain('//');
+    expect(Object.keys(real.fillerLayouts)).not.toContain('//');
   });
 
   it('builds a valid finale hallway from every direction', () => {

@@ -1,8 +1,9 @@
 import type { Profile } from '../profile/profile';
-import type { GameEvent, RuleEffect } from '../protocol';
+import type { GameEvent, RuleEffect, TaskResult } from '../protocol';
 import type { GameData, RoomSpec } from '../room/types';
 import { TESTS } from '../testrooms/registry';
-import type { TestHandle } from '../testrooms/types';
+import type { Baseline } from '../testrooms/office/metrics';
+import type { TestHandle, TestLog } from '../testrooms/types';
 import { pick, type Rng } from '../util/random';
 
 export { GAMBLE_LABELS, GAMBLE_SECONDS } from '../testrooms/kinds/gamble';
@@ -21,8 +22,8 @@ export interface RoomRule {
 }
 
 /** What the model is told about a room's rule, so its text fits the mechanic. */
-export function describeRule(r: Pick<RoomRule, 'id' | 'params'>): string {
-  return TESTS[r.id]?.describe(r.params) ?? '';
+export function describeRule(r: Pick<RoomRule, 'id' | 'params'>, data: GameData): string {
+  return TESTS[r.id]?.describe(r.params, data) ?? '';
 }
 
 /** Template lines when the model is unavailable (a test can supply its own). */
@@ -42,6 +43,20 @@ export interface RuleContext {
   say(text: string): void;
   rng: Rng;
   data: GameData;
+  /** The run's test log, results sink and baseline (optional: a test that doesn't score itself doesn't need them). */
+  log?: TestLog;
+  report?(result: TaskResult): void;
+  baseline?(): Baseline | null;
+}
+
+/** A throwaway log, for rules run on their own (tests). */
+export function testLog(): TestLog {
+  const events: TestLog['events'] = [];
+  return {
+    events,
+    emit: (task, type, data, t) => { events.push({ t: Math.round(t * 1000) / 1000, task, type, data }); },
+    slice: (task) => events.filter((e) => e.task === task),
+  };
 }
 
 const timers = globalThis as unknown as { setTimeout(fn: () => void, ms: number): unknown; clearTimeout(id: unknown): void };
@@ -66,6 +81,9 @@ export class RuleRuntime {
       rng: ctx.rng,
       state: {},
       exits: ctx.room.layout.doors.filter((d) => !d.entrance).map((d) => d.id),
+      log: ctx.log ?? testLog(),
+      report: (r) => ctx.report?.(r),
+      baseline: () => ctx.baseline?.() ?? null,
       emit: (e) => { if (!self.stopped) ctx.emit(e); },
       say: (text) => { if (!self.stopped) ctx.say(text); },
       after: (name, seconds, fn) => {

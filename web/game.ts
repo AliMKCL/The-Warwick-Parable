@@ -43,6 +43,8 @@ export interface GameOptions {
 }
 
 const REACH = 2.6;
+/** Position samples per second, for tests that watch movement (the office tasks). */
+const SAMPLE_HZ = 10;
 const CENTER = new THREE.Vector2(0, 0);
 
 interface Passage {
@@ -128,8 +130,48 @@ export class Game {
     this.core.send(e);
   }
 
+  /** A key or mouse button went down while playing: the raw input stream, for tests that measure it. */
+  input(key: string) {
+    if (!this.room || this.busy || this.ended) return;
+    this.send({ type: 'input', roomId: this.room.spec.id, key, target: this.hovered?.info.id, t: round(this.time) });
+  }
+
+  /** A test's question is on screen: A/D, arrows and the wheel adjust it; number keys pick an option. */
+  askAdjust(dir: number) {
+    this.hud.askAdjust(dir);
+  }
+  askPick(n: number) {
+    this.hud.askPick(n);
+  }
+  get asking() {
+    return !!this.hud.askOpen;
+  }
+  private closeAsk() {
+    this.hud.ask(null);
+    if (!this.ended && (document.pointerLockElement || this.testMode)) this.player.enabled = true;
+  }
+  /** Set by the test hooks, which play without pointer lock. */
+  testMode = false;
+
+  /** Test hook: answer the open question with a given value. */
+  answerWith(value: number): boolean {
+    const a = this.hud.askAnswer();
+    if (!a || !this.room) return false;
+    this.closeAsk();
+    this.send({ type: 'answer', roomId: this.room.spec.id, askId: a.id, value, seconds: a.seconds, t: this.time });
+    return true;
+  }
+
   /** Press E or click. */
   interact() {
+    const answer = this.hud.askAnswer();
+    if (answer && this.room) {
+      // Confirm the question on screen.
+      this.closeAsk();
+      this.sound.play('click');
+      this.send({ type: 'answer', roomId: this.room.spec.id, askId: answer.id, value: answer.value, seconds: answer.seconds, t: this.time });
+      return;
+    }
     if (this.hud.inspecting) {
       this.hud.hideInspect();
       this.player.eyeHeight = 1.62;
@@ -295,6 +337,42 @@ export class Game {
     else if (e.kind === 'doors') room.setLocked(e.locked);
     else if (e.kind === 'timer') this.hud.timer(e.seconds, e.label);
     else if (e.kind === 'display') room.setPropText(e.prop, e.text);
+    else if (e.kind === 'glance') room.glance(e.prop, e.at, e.seconds, this.player.position);
+    else if (e.kind === 'disable') room.disableProp(e.prop);
+    else if (e.kind === 'ask') {
+      this.hud.ask(e.ask);
+      this.player.enabled = false;
+    } else if (e.kind === 'ask_close') {
+      if (this.hud.askOpen && (e.id === '*' || this.hud.askOpen.id === e.id)) this.closeAsk();
+    } else if (e.kind === 'shake') this.shakeLeft = Math.min(1, e.seconds);
+    else if (e.kind === 'sound') this.sound.play(e.name);
+    else if (e.kind === 'scale') room.scaleProp(e.prop, e.scale);
+    else if (e.kind === 'turn') room.turnProp(e.prop, e.at);
+    else if (e.kind === 'status') this.hud.status(e.text);
+    else if (e.kind === 'teleport') void this.teleport(e.x, e.z, e.yaw, e.dark);
+  }
+
+  private shakeLeft = 0;
+  private sampleAcc = 0;
+
+  /** Fade out, put the player somewhere (a corridor that loops back), fade in after `dark` seconds. */
+  private async teleport(x: number, z: number, yaw: number, dark: number) {
+    this.busy = true;
+    await this.hud.fade(true);
+    this.player.placeAt(x, z, yaw);
+    await wait(Math.max(0, dark * 1000 - 940));
+    await this.hud.fade(false);
+    this.busy = false;
+  }
+
+  /** Position at 10 Hz, for tests that watch movement; nothing between rooms. */
+  private sample(room: RoomView, dt: number) {
+    if (this.busy || this.ended || !this.startedAt) return;
+    this.sampleAcc += dt;
+    if (this.sampleAcc < 1 / SAMPLE_HZ) return;
+    this.sampleAcc %= 1 / SAMPLE_HZ;
+    const p = this.player.position;
+    this.send({ type: 'move', roomId: room.spec.id, x: round(p.x), z: round(p.z), t: round(this.time) });
   }
 
   private removeView(view: RoomView) {
@@ -411,6 +489,8 @@ export class Game {
     if (spec.rule?.line) this.voice.prefetch(spec.rule.line);
     this.busy = true;
     await this.hud.fade(true);
+    this.hud.ask(null);
+    this.hud.status(null);
     if (this.room) {
       this.scene.remove(this.room.group);
       this.room.dispose();
@@ -450,6 +530,16 @@ export class Game {
     }
     const room = this.passage?.entered ? this.passage.view : this.room;
     if (room) {
+      this.player.update(dt, room.isWalkable, room.colliders);
+      if (this.shakeLeft > 0) {
+        // A short, small shake (the buzzer): no flashing, just the view jolting.
+        this.shakeLeft -= dt;
+        const k = Math.max(0, this.shakeLeft) * 0.06;
+        this.player.camera.position.x += (Math.random() - 0.5) * k;
+        this.player.camera.position.y += (Math.random() - 0.5) * k;
+      }
+      room.update(dt, t);
+      this.sample(room, dt);
       const erased = room.anomaly?.update(dt, t, this.player.position, this.hovered?.info.id);
       if (erased && room.spec.anomaly) this.send({ type: 'anomaly_action', roomId: room.spec.id, anomalyId: room.spec.anomaly.id, action: 'erase', t: this.time });
       if (this.player.stepped) this.sound.footstep();

@@ -13,7 +13,8 @@ test('room rules change the world', async ({ page }) => {
   const errors: string[] = [];
   page.on('pageerror', (e) => errors.push(e.message));
   await page.setViewportSize({ width: 960, height: 540 });
-  await page.goto('/?seed=99&debug=1&dpr=1&observe=0&post=0');
+  // Only the four rules this test checks, so the seed always leads through the same rooms.
+  await page.goto('/?seed=99&debug=1&dpr=1&observe=0&post=0&pool=exit_timer,inspect_to_unlock,lights_dim_on_idle,narrator_suggests');
   await page.evaluate(() => (window as any).__WHACK__.begin());
   await waitForRoom(page, 0);
 

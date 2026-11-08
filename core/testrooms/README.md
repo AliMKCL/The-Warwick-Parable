@@ -12,6 +12,7 @@ hallway with its glowing door. The counts and the pool of tests are in
 | `registry.ts` | The list of tests |
 | `config.ts` | Reads `data/layout.json` and overrides into a `LayoutConfig` |
 | `schedule.ts` | `pickRoom`: decides each room as the player reaches it |
+| `office/` | The office tasks from PR #6 (balloons, coffee, canteen, renumbered, pitch, loan, lockdown) and `adapter.ts`, which runs each one as a test |
 | `../rules/rules.ts` | `RuleRuntime`: runs the current room's test, owns its timers |
 
 ## How a room is decided
@@ -58,3 +59,22 @@ A test that needs its own room shape (like the lift) adds a builder to
 `core/room/layouts.ts` and lists only that archetype in `candidates`. A test
 with no runtime rule (like the choice room) returns `null` from `params`.
 `tests/core/layout.test.ts` ("adding a test") plugs in a test this way.
+
+## The office tasks (PR #6)
+
+Seven tasks with their own rooms, scripted logic and scoring: `balloons`
+(risk), `coffee` (learning vs advice), `canteen` (patience), `renumbered`
+(adaptability), `pitch` (confidence), `loan` (trust), `lockdown` (what you do
+when you can't leave). Each module in `office/` is unchanged from the PR apart
+from import paths; `office/adapter.ts` turns it into a `TestKind` with its own
+room (`room` hook), runs it on the room's events, and when the player leaves,
+scores it, nudges the profile and reports a `task_result` (telemetry, and a
+"Measured:" line in what the model is told). Their wording is in
+`data/tasks.json`; their weights are in the `pool` in `data/layout.json`.
+
+They use a few things the other tests don't: 10 Hz position samples (`move`
+events, not kept in the run's event log), raw input (`input`), on-screen
+questions (`ask` effect → `answer` event), a status line, props that scale or
+turn, and the player's baseline from the waiting room. To add another office
+task, write a module like those in `office/` and add it to `OFFICE_MODULES`
+in `office/index.ts`.
