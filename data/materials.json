@@ -29,5 +29,8 @@
   "lamp_shade": { "color": "#f3efe4", "emissive": "#ffe9c4", "emissiveIntensity": 0.6 },
   "door_paint": { "color": "#d8d4c8", "roughness": 0.6 },
   "door_frame": { "color": "#b9b7ae", "roughness": 0.5, "metalness": 0.2 },
-  "rubber_black": { "color": "#222222", "roughness": 0.9 }
+  "rubber_black": { "color": "#222222", "roughness": 0.9 },
+  "brushed_steel": { "color": "#a7abad", "roughness": 0.35, "metalness": 0.75 },
+  "call_glow": { "color": "#f2f6ff", "roughness": 0.3, "emissive": "#cfe0ff", "emissiveIntensity": 0.6 },
+  "hitbox": { "color": "#000000", "opacity": 0 }
 }

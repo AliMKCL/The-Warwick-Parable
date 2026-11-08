@@ -4,6 +4,8 @@ import type { CoreMessage, GameEvent, ProfileSnapshot, RuleEffect, SelfRatings }
 import { createCore } from '../core/run/core';
 import type { LlmClient } from '../core/llm/client';
 import type { RoomSpec } from '../core/room/types';
+import type { ARCHETYPES } from '../core/room/layouts';
+type Archetype = (typeof ARCHETYPES)[number];
 import { Player } from './player/player';
 import { createPost, type Post } from './render/post';
 import { createRenderer } from './render/renderer';
@@ -19,6 +21,9 @@ import type { Act } from './telemetry/recorder';
 
 export interface GameOptions {
   seed: number;
+  maxAnomalies?: number;
+  /** Debug: room types to force for rooms 1, 2, 3… (`?layout=`). */
+  forceArchetypes?: Archetype[];
   post: boolean;
   maxDpr: number;
   debug: boolean;
@@ -57,7 +62,7 @@ export class Game {
   private startedAt = 0;
   private busy = false;
   private raycaster = new THREE.Raycaster();
-  hovered?: { info: InteractInfo; object: THREE.Object3D; since: number; doorHoverSent: boolean };
+  hovered?: { info: InteractInfo; object: THREE.Object3D; since: number; doorHoverSent: boolean; gazeReportAt?: number };
   private wasIdle = false;
   private frames = 0;
   private fpsTime = 0;
@@ -93,7 +98,7 @@ export class Game {
   /** Start a run. With no model (or an unreachable one), rooms are filled from templates. */
   begin(llm?: LlmClient, selfRatings?: SelfRatings) {
     this.sound.start();
-    this.core = createCore(gameData, { llm, observeMs: this.opts.observeMs, runLength: this.opts.runLength, concurrency: this.opts.concurrency });
+    this.core = createCore(gameData, { llm, observeMs: this.opts.observeMs, runLength: this.opts.runLength, concurrency: this.opts.concurrency, maxAnomalies: this.opts.maxAnomalies, forceArchetypes: this.opts.forceArchetypes });
     this.core.onMessage((m) => this.handle(m));
     this.startedAt = performance.now();
     this.send({ type: 'run_started', seed: this.opts.seed, t: 0, ...(selfRatings ? { selfRatings } : {}) });
@@ -108,6 +113,7 @@ export class Game {
   interact() {
     if (this.hud.inspecting) {
       this.hud.hideInspect();
+      this.player.eyeHeight = 1.62;
       this.player.enabled = true;
       return;
     }
@@ -117,6 +123,12 @@ export class Game {
     const t = this.time;
     this.tap?.act({ kind: h.info.kind, id: h.info.id, locked: h.info.kind === 'door' ? !!this.room.doors.find((d) => d.door.id === h.info.id)?.locked : undefined });
     switch (h.info.kind) {
+      case 'anomaly':
+        if (this.room.spec.anomaly) {
+          this.sound.button();
+          this.send({ type: 'anomaly_action', roomId, anomalyId: this.room.spec.anomaly.id, action: h.info.action ?? 'use', t });
+        }
+        break;
       case 'inspect':
         this.sound.rustle();
         this.hud.showInspect(h.info.name, h.info.text ?? '');
@@ -129,6 +141,15 @@ export class Game {
         if (knob) {
           knob.position.y -= 0.025;
           setTimeout(() => (knob.position.y += 0.025), 220);
+        }
+        // The lift's call button lights up and stays lit, as call buttons do.
+        // (The material is shared between rooms, so the lit one is a copy.)
+        const lamp = h.object.children.find((c) => ((c as THREE.Mesh).material as THREE.Material | undefined)?.name === 'call_glow') as THREE.Mesh | undefined;
+        if (lamp) {
+          const lit = (lamp.material as THREE.MeshStandardMaterial).clone();
+          lit.name = 'call_glow_lit';
+          lit.emissiveIntensity = 2.2;
+          lamp.material = lit;
         }
         this.send({ type: 'pressed', roomId, objectId: h.info.id, t });
         break;
@@ -167,6 +188,15 @@ export class Game {
       this.hud.narrate(m.lineId, m.text, m.final);
       if (m.final) this.voice.speak(m.text);
     }
+    else if (m.type === 'anomaly_effect') {
+      if (m.effect.roomId === this.room?.spec.id) {
+        this.room.anomaly?.apply(m.effect);
+        if (this.room.spec.anomaly?.id === 'reflection' && m.effect.stage === 1) this.player.eyeHeight = 1.08;
+        if (this.room.spec.anomaly?.id === 'false_exit' && m.effect.stage > 0) this.room.setLights(0.12, 0.7);
+        this.hud.showInspect('Building notice', m.effect.text);
+        this.player.enabled = false;
+      }
+    }
     else if (m.type === 'rule_effect') this.applyEffect(m.effect);
     else if (m.type === 'profile') this.profile = m.profile;
     else if (m.type === 'run_ended') void this.endRun(m.dossier);
@@ -196,6 +226,7 @@ export class Game {
     if (e.kind === 'lights') room.setLights(e.level, e.seconds);
     else if (e.kind === 'doors') room.setLocked(e.locked);
     else if (e.kind === 'timer') this.hud.timer(e.seconds, e.label);
+    else if (e.kind === 'display') room.setPropText(e.prop, e.text);
   }
 
   private async loadRoom(spec: RoomSpec) {
@@ -218,6 +249,7 @@ export class Game {
     if (view.grade) this.post?.setGrade(view.grade);
     this.sound.setAmbience(view.sound);
     this.sound.setLightLevel(1);
+    this.player.eyeHeight = 1.62;
     const s = spec.layout.spawn;
     this.player.placeAt(s.x, s.z, s.yaw);
     this.hovered = undefined;
@@ -235,6 +267,8 @@ export class Game {
     if (room) {
       this.player.update(dt, room.isWalkable, room.colliders);
       room.update(dt, t);
+      const erased = room.anomaly?.update(dt, t, this.player.position, this.hovered?.info.id);
+      if (erased && room.spec.anomaly) this.send({ type: 'anomaly_action', roomId: room.spec.id, anomalyId: room.spec.anomaly.id, action: 'erase', t: this.time });
       if (this.player.stepped) this.sound.footstep();
       if (room.consumeFlicker()) this.sound.buzz();
       this.sound.setLightLevel(room.lightLevel());
@@ -280,13 +314,18 @@ export class Game {
       this.hovered = { ...found, since: t, doorHoverSent: false };
     }
     const h = this.hovered;
+    if (h && h.info.kind === 'anomaly' && t - h.since >= 3 && (h.gazeReportAt === undefined || (room.spec.anomaly?.id === 'borrowed_clock' && t - h.gazeReportAt >= 1))) {
+      h.gazeReportAt = t;
+      this.send({ type: 'looked_at', roomId: room.spec.id, objectId: h.info.id, seconds: round(t - h.since), t });
+    }
     if (h && h.info.kind === 'door' && !h.doorHoverSent && t - h.since >= 1.5) {
       h.doorHoverSent = true;
       this.send({ type: 'door_hovered', roomId: room.spec.id, doorId: h.info.id, seconds: round(t - h.since), t });
     }
     if (this.busy || this.hud.inspecting || !h) this.hud.setPrompt(null);
+    else if (h.info.kind === 'anomaly') this.hud.setPrompt('E', h.info.name);
     else if (h.info.kind === 'inspect') this.hud.setPrompt('E', `Inspect ${h.info.name.toLowerCase()}`);
-    else if (h.info.kind === 'button') this.hud.setPrompt('E', 'Press');
+    else if (h.info.kind === 'button') this.hud.setPrompt('E', h.info.verb ?? 'Press');
     else if (h.info.kind === 'door')
       room.doors.find((d) => d.door.id === h.info.id)?.locked
         ? this.hud.setPrompt('E', `${h.info.name[0]!.toUpperCase()}${h.info.name.slice(1)} is locked`)

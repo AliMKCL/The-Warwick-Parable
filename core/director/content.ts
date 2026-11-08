@@ -59,6 +59,7 @@ export function buildRoomMessages(ctx: ContentContext, slots: Slot[]): { message
   const { data, layout } = ctx;
   const p = data.prompts;
   const catalogue = data.props
+    .filter((r) => r.fits.some((f) => f !== 'fixture')) // fixtures (the lift) are placed by the layout, never by the model
     .map((r) => `| ${r.id} | ${r.name.toLowerCase()} | ${r.text ? r.text.style : 'no text'} |`)
     .join('\n');
   const system = fill(p.roomSystem, { world: p.world.trim(), catalogue });
@@ -91,7 +92,7 @@ export function buildRoomMessages(ctx: ContentContext, slots: Slot[]): { message
     behaviour: ctx.behaviour.length ? ctx.behaviour.map((s) => `- ${s}`).join('\n') : '- Nothing recorded yet.',
     min_slots: Math.min(3, slots.length),
     slots: slotLines.join('\n'),
-    exits: exits.map((d) => `- ${d.id}: on the ${WALL[d.side]} wall`).join('\n'),
+    exits: exits.map((d) => `- ${d.id}: on the ${WALL[d.side]} wall${d.fixedLabel ? ` (labelled "${d.label}"; keep that label)` : ''}`).join('\n'),
   });
 
   const propIds = [...new Set(slots.flatMap(allowed))];

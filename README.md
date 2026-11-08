@@ -36,7 +36,8 @@ Add to the URL: `?seed=123` to replay a run, `?debug=1` for frame rate and room 
 `?post=0` to turn off post-processing, `?dpr=2` for full Retina resolution,
 `?observe=8` seconds to watch the player before generating the next rooms,
 `?ambience=warm` to see every room in one mood, `?mute=1` to start muted,
-`?rooms=5` for a shorter run (default 7 rooms, counting the first).
+`?rooms=5` for a shorter run (default 7 rooms, counting the first),
+`?layout=lift_lobby,l_gallery` to force room types (see "The lift lobby" below).
 
 A run ends in the final room: its single door leads to the player's file. Demo notes: `docs/demo.md`.
 
@@ -72,3 +73,58 @@ the prompts in `data/prompts/`, fallback text in `data/templates.json`.
 See `docs/progress.md` for what is done and what is next, `docs/voice.md` for the narrator voice,
 `docs/speed.md` to cut the wait between rooms,
 and `CLAUDE.md` for the full project context (written for AI coding sessions, useful for people too).
+
+## Anomaly encounters
+
+Change `MAX_ANOMALIES_PER_RUN` in `core/anomalies/config.ts` to set the maximum
+number of distinct anomalies encountered during one run. The default is `6`.
+Set it to `0` to disable encounters. Restart the development server or rebuild
+a production bundle after changing the value.
+
+The seed and chosen route select from sixteen encounters. An eligible room has
+a 65% chance of receiving one, with at most one anomaly per room and an ordinary
+room between encounters. Opening and ending rooms stay ordinary. A default
+seven-room run therefore has room for up to three encounters. Longer runs can
+reach the configured cap. Some encounters also require a compatible rule or
+prior choice. Unvisited branches never consume the budget.
+
+The blue door, ceiling cabinet, false exit, numbered footprints, floor meeting,
+delayed mirror, queueing plant, borrowed clock, disputed ticket, route copier,
+wandering light, hold telephone, weather drawer, permission machine, visit
+receipt and moving silhouette each have authored interactions and narrator
+responses. Recorded encounters also feed subsequent model narration. These
+encounters work with template narration when the model is offline.
+
+The permission machine offers a fold-out break seat for STAY. The copier shows
+a textual route record with a second inspection, and the mirror combines a live
+reflection with an animated chair silhouette. These fit the existing procedural
+wall slots.
+
+## Room layouts and the Choice Room
+
+L-shaped galleries turn around one corner. U-shaped galleries have two wings
+joined by a passage around a central wall. Both rotate to match the arrival
+direction and use the same prop placement and exit checks as other rooms.
+
+Each run schedules at most one `choice_room` after the opening, using the run
+seed. The location is shared by every route. It never takes a gamble room, the
+room behind a gamble (that room needs a task for a won 50/50 to skip) or the
+final room (the finale is written by the model), so a normal 7-room run, whose
+gambles are in rooms 1, 3 and 5, has none; shorter (`?rooms=3`, `?rooms=4`)
+and longer (`?rooms=10`) runs do. Its two exits have stable IDs and markings,
+blue **A** (`d1`) and orange **B** (`d2`). The existing `door_chosen` event
+reports the player's selection.
+
+## The lift lobby
+
+A lift faces the player as they enter, with a call button beside it, and a
+door labelled MAINTENANCE in a side wall is the only way on (the model cannot
+rename it). The lift never comes: its floor indicator creeps down and stalls
+(rule `lift_wait`), and the narrator hints at another way after 45–70 s.
+Pressing the call button five times reads as impulsive, finding the door alone
+as decisive, waiting for the hint as hesitant. At most once per run; never a
+gamble room or the final room; no messy/ceiling variant or anomaly on top.
+
+`?layout=lift_lobby,l_gallery,u_gallery` forces room types, each in the first
+room it fits (room 1 is a gamble room in a normal run, so a forced lift lobby
+comes after it).

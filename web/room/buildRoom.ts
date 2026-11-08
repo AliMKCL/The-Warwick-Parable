@@ -1,9 +1,13 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
+import { CHOICE_ROOM } from '../../core/room/layouts';
 import { DIR, footprintRect, isFloor, OPPOSITE, yawForFacing } from '../../core/room/geometry';
 import type { Door, GameData, RoomSpec, Side } from '../../core/room/types';
 import { buildProp, type InteractInfo } from './buildProp';
 import { MaterialLibrary, surfaceMaterials } from './materials';
+import { ANOMALY_ANCHOR } from '../../core/anomalies/catalog';
+import { buildAnomaly, type AnomalyView } from './buildAnomaly';
+import { addMess, mountOnCeiling, planWallDetails, windowKey } from './dressRoom';
 import { textMaterial } from './textTexture';
 
 export interface Rect { minX: number; maxX: number; minZ: number; maxZ: number }
@@ -23,6 +27,7 @@ export interface DoorView {
 
 export interface RoomView {
   spec: RoomSpec;
+  anomaly?: AnomalyView;
   group: THREE.Group;
   colliders: Rect[];
   interactables: THREE.Object3D[];
@@ -40,6 +45,8 @@ export interface RoomView {
   setLights(level: number, seconds: number): void;
   lightLevel(): number;
   setLocked(doorIds: string[]): void;
+  /** Redraw the text on a prop (the lift's floor indicator). */
+  setPropText(propId: string, text: string): void;
   dispose(): void;
 }
 
@@ -51,6 +58,8 @@ export function buildRoom(spec: RoomSpec, data: GameData, materials: MaterialLib
   const H = layout.ceiling;
   const amb = data.ambience[spec.ambience] ?? Object.values(data.ambience)[0]!;
   const mats = surfaceMaterials(amb);
+  const recipes = new Map(data.props.map((p) => [p.id, p]));
+  const { windows, fixtures } = planWallDetails(spec, recipes);
   const owned: { dispose(): void }[] = Object.values(mats);
   const group = new THREE.Group();
   group.name = spec.id;
@@ -62,6 +71,11 @@ export function buildRoom(spec: RoomSpec, data: GameData, materials: MaterialLib
   const ceilQuads: THREE.BufferGeometry[] = [];
   const doors: DoorView[] = [];
   const interactables: THREE.Object3D[] = [];
+  const windowPanes: THREE.BufferGeometry[] = [];
+  const railPieces: THREE.BufferGeometry[] = [];
+  const railMat = new THREE.MeshStandardMaterial({ color: new THREE.Color(amb.wall).multiplyScalar(0.64), roughness: 0.84 });
+  const paneMat = new THREE.MeshBasicMaterial({ vertexColors: true, toneMapped: false, fog: false });
+  owned.push(railMat, paneMat);
 
   for (let cz = 0; cz < layout.depth; cz++) {
     for (let cx = 0; cx < layout.width; cx++) {
@@ -73,15 +87,27 @@ export function buildRoom(spec: RoomSpec, data: GameData, materials: MaterialLib
         if (isFloor(layout, cx + dx, cz + dz)) continue;
         const frame = wallFrame(cx, cz, side);
         const door = doorAt.get(`${cx},${cz},${side}`);
-        if (door) {
+        if (door && !(layout.archetype === CHOICE_ROOM && door.entrance)) {
           // Wall above the door, then the door itself.
           wallQuads.push(place(quad(1, H - DOOR_H - 0.06).translate(0, (H + DOOR_H + 0.06) / 2, 0), frame));
           wallQuads.push(place(quad(0.05, DOOR_H + 0.06).translate(-0.475, (DOOR_H + 0.06) / 2, 0), frame));
           wallQuads.push(place(quad(0.05, DOOR_H + 0.06).translate(0.475, (DOOR_H + 0.06) / 2, 0), frame));
           doors.push(buildDoor(door, frame));
         } else {
-          wallQuads.push(place(quad(1, H).translate(0, H / 2, 0), frame));
+          const key = windowKey(cx, cz, side);
+          if (windows.has(key)) {
+            addWindow(frame);
+          } else {
+            wallQuads.push(place(quad(1, H).translate(0, H / 2, 0), frame));
+          }
           trimPieces.push(place(new THREE.BoxGeometry(1, 0.09, 0.014).translate(0, 0.045, 0.007), frame));
+          railPieces.push(place(new THREE.BoxGeometry(1, 0.065, 0.023).translate(0, 0.91, 0.012), frame));
+          railPieces.push(place(new THREE.BoxGeometry(1, 0.048, 0.02).translate(0, H - 0.19, 0.01), frame));
+          if (fixtures.has(key)) {
+            railPieces.push(place(new THREE.BoxGeometry(0.23, 0.27, 0.04).translate(-0.18, 1.25, 0.025), frame));
+            trimPieces.push(place(new THREE.BoxGeometry(0.03, 0.48, 0.024).translate(-0.18, 1.12, 0.035), frame));
+            trimPieces.push(place(new THREE.BoxGeometry(0.1, 0.055, 0.014).translate(-0.18, 1.29, 0.051), frame));
+          }
         }
       }
     }
@@ -93,23 +119,34 @@ export function buildRoom(spec: RoomSpec, data: GameData, materials: MaterialLib
   const trim = mergedMesh(trimPieces, mats.trim);
   walls.receiveShadow = floor.receiveShadow = ceiling.receiveShadow = true;
   walls.castShadow = true;
-  group.add(walls, floor, ceiling, trim);
+  group.add(walls, floor, ceiling, trim, mergedMesh(railPieces, railMat));
+  if (windowPanes.length) group.add(mergedMesh(windowPanes, paneMat));
 
   // ---- props ----
   const colliders: Rect[] = [];
-  const recipes = new Map(data.props.map((p) => [p.id, p]));
+  const propObjects = new Map<string, THREE.Object3D>();
   for (const placed of spec.props) {
     const recipe = recipes.get(placed.recipe);
     if (!recipe) continue;
     const { object, owned: o } = buildProp(placed, recipe, materials);
     owned.push(...o);
+    if (spec.variant === 'ceiling') mountOnCeiling(object, H);
     group.add(object);
+    propObjects.set(placed.id, object);
     if (object.userData.interact) interactables.push(object);
-    if (recipe.solid && !recipe.fits.every((f) => f === 'wall_mounted')) {
+    if (spec.variant !== 'ceiling' && recipe.solid && !recipe.fits.every((f) => f === 'wall_mounted')) {
       colliders.push(footprintRect(placed.x, placed.z, placed.rotY, recipe.size[0], recipe.size[2]));
     }
   }
   for (const d of doors) interactables.push(d.pivot);
+
+  const anomaly = spec.anomaly ? buildAnomaly(spec, data, materials, group, doors, owned) : undefined;
+  if (spec.anomaly) {
+    const a = spec.anomaly.anchor;
+    colliders.push(footprintRect(a.x, a.z, a.rotY, ANOMALY_ANCHOR.size[0], ANOMALY_ANCHOR.size[2]));
+  }
+
+  if (spec.variant === 'messy') addMess(spec, group, colliders, owned);
 
   // ---- lights ----
   const panels: THREE.Mesh[] = [];
@@ -163,6 +200,7 @@ export function buildRoom(spec: RoomSpec, data: GameData, materials: MaterialLib
 
   return {
     spec,
+    anomaly,
     group,
     colliders,
     interactables,
@@ -192,6 +230,18 @@ export function buildRoom(spec: RoomSpec, data: GameData, materials: MaterialLib
         d.indicator?.color.set(d.locked ? '#b3261e' : '#2f8f4e');
         d.indicator?.emissive.set(d.locked ? '#ff3b30' : '#34c759');
       }
+    },
+    setPropText(id, text) {
+      const placed = spec.props.find((p) => p.id === id);
+      const recipe = placed && recipes.get(placed.recipe);
+      const plane = propObjects.get(id)?.userData.textPlane as THREE.Mesh | undefined;
+      if (!plane || !recipe?.text) return;
+      const old = plane.material as THREE.MeshStandardMaterial;
+      const mat = textMaterial(text, recipe.text.style, recipe.text.size);
+      plane.material = mat;
+      owned.push(mat.map!, mat);
+      old.map?.dispose();
+      old.dispose();
     },
     update(dt) {
       if (levelT < 1) {
@@ -232,11 +282,38 @@ export function buildRoom(spec: RoomSpec, data: GameData, materials: MaterialLib
     return new THREE.Mesh(geo, mat);
   }
 
+  function addWindow(frame: THREE.Matrix4) {
+    const width = 0.84, bottom = 1.12, top = 2.37;
+    const height = top - bottom, mid = (top + bottom) / 2;
+    const margin = (1 - width) / 2;
+    wallQuads.push(place(quad(1, bottom).translate(0, bottom / 2, 0), frame));
+    wallQuads.push(place(quad(1, H - top).translate(0, (H + top) / 2, 0), frame));
+    for (const sign of [-1, 1]) {
+      wallQuads.push(place(quad(margin, height).translate(sign * (width + margin) / 2, mid, 0), frame));
+      railPieces.push(place(new THREE.BoxGeometry(0.055, height + 0.1, 0.145)
+        .translate(sign * width / 2, mid, -0.035), frame));
+    }
+    for (const y of [bottom, top]) {
+      railPieces.push(place(new THREE.BoxGeometry(width + 0.055, 0.055, 0.145)
+        .translate(0, y, -0.035), frame));
+    }
+    railPieces.push(place(new THREE.BoxGeometry(0.026, height, 0.12).translate(0, mid, -0.052), frame));
+    railPieces.push(place(new THREE.BoxGeometry(width + 0.12, 0.035, 0.19).translate(0, bottom - 0.025, -0.012), frame));
+
+    // The window has a sealed luminous backing. There is no exterior geometry.
+    const pane = quad(width, height).translate(0, mid, -0.1);
+    const upper = new THREE.Color('#ffffff'), lower = new THREE.Color('#bdd9e5');
+    const colors = [...upper.toArray(), ...upper.toArray(), ...lower.toArray(), ...lower.toArray()];
+    pane.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
+    windowPanes.push(place(pane, frame));
+  }
+
   function buildDoor(door: Door, frame: THREE.Matrix4): DoorView {
     const root = new THREE.Group();
     root.applyMatrix4(frame);
     const frameMat = materials.get('door_frame');
-    const leafMat = materials.get(door.entrance ? 'door_paint' : 'door_paint');
+    const leafMat = door.color ? materials.get('door_paint').clone() : materials.get('door_paint');
+    if (door.color) { leafMat.color.set(door.color); owned.push(leafMat); }
     for (const [w, h, x, y] of [
       [0.06, DOOR_H + 0.06, -0.48, (DOOR_H + 0.06) / 2],
       [0.06, DOOR_H + 0.06, 0.48, (DOOR_H + 0.06) / 2],
@@ -263,6 +340,13 @@ export function buildRoom(spec: RoomSpec, data: GameData, materials: MaterialLib
     handle.position.set(DOOR_W - 0.1, 1.0, 0.045);
     pivot.add(leaf, handle);
     root.add(pivot);
+    if (door.concealed) {
+      const cover = new THREE.Mesh(new THREE.BoxGeometry(1.04, 2.7, 0.08), mats.wall);
+      cover.position.set(0, 1.35, 0.14);
+      cover.name = 'concealed-exit';
+      owned.push(cover.geometry);
+      root.add(cover);
+    }
 
     // Beyond the door: a dark passage, so an open door shows depth, not the void.
     const passageGeo = new THREE.BoxGeometry(1.0, DOOR_H + 0.06, 2.2);
@@ -278,8 +362,14 @@ export function buildRoom(spec: RoomSpec, data: GameData, materials: MaterialLib
       const plaqueGeo = new THREE.PlaneGeometry(0.56, 0.17);
       owned.push(plaqueGeo);
       const plaque = new THREE.Mesh(plaqueGeo, mat);
-      plaque.position.set(0, DOOR_H + 0.25, 0.006);
-      root.add(plaque);
+      if (layout.archetype === CHOICE_ROOM) {
+        plaque.position.set(DOOR_W / 2, 1.56, 0.024);
+        plaque.scale.set(1.35, 2.3, 1);
+        pivot.add(plaque);
+      } else {
+        plaque.position.set(0, DOOR_H + 0.25, 0.006);
+        root.add(plaque);
+      }
     }
 
     let indicator: THREE.MeshStandardMaterial | undefined;

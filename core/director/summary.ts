@@ -1,3 +1,4 @@
+import { definition } from '../anomalies/catalog';
 import type { GameEvent } from '../protocol';
 import type { GameData, RoomSpec } from '../room/types';
 
@@ -13,6 +14,10 @@ export function describeVisit(room: RoomSpec, events: GameEvent[], data: GameDat
   const left = mine.find((e) => e.type === 'door_chosen')?.t;
   const name = (objectId: string) => propLabel(room, objectId, data);
   const lines: string[] = [];
+  if (room.anomaly) {
+    lines.push(`The room contained ${definition(room.anomaly.id).name}.`);
+    for (const e of mine) if (e.type === 'anomaly_action') lines.push(`At ${definition(e.anomalyId).name}, the player chose ${e.action === 'stay' ? 'permission to stay' : e.action === 'erase' ? 'to retrace their footprints' : definition(e.anomalyId).action.toLowerCase()}.`);
+  }
 
   if (left !== undefined) lines.push(`Stayed ${secs(left - entered)}.`);
   const firstAct = mine.find((e) => e.type === 'inspected' || e.type === 'pressed' || e.type === 'door_chosen');
@@ -21,8 +26,9 @@ export function describeVisit(room: RoomSpec, events: GameEvent[], data: GameDat
   const presses = mine.filter((e) => e.type === 'pressed');
   if (presses.length) {
     lines.push(`Pressed the ${name(presses[0]!.objectId)} after ${secs(presses[0]!.t - entered)}${presses.length > 1 ? `, then ${presses.length - 1} more time(s)` : ''}.`);
-  } else if (room.props.some((p) => data.props.find((r) => r.id === p.recipe)?.interact === 'button')) {
-    lines.push('Never pressed the button.');
+  } else {
+    const button = room.props.find((p) => data.props.find((r) => r.id === p.recipe)?.interact === 'button');
+    if (button) lines.push(`Never pressed the ${name(button.id)}.`);
   }
 
   const inspected = unique(mine.filter((e) => e.type === 'inspected').map((e) => name(e.objectId)));
@@ -49,6 +55,7 @@ export function describeVisit(room: RoomSpec, events: GameEvent[], data: GameDat
 }
 
 function propLabel(room: RoomSpec, objectId: string, data: GameData): string {
+  if (room.anomaly && objectId.startsWith(`anomaly:${room.anomaly.id}`)) return definition(room.anomaly.id).name.toLowerCase();
   const p = room.props.find((x) => x.id === objectId);
   if (!p) return 'something';
   const recipe = data.props.find((r) => r.id === p.recipe);

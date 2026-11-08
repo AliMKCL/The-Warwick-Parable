@@ -6,6 +6,7 @@ import type { GameData } from '../room/types';
 import { Run, type RunOptions } from './run';
 
 export interface CoreOptions {
+  maxAnomalies?: number;
   llm?: LlmClient;
   waitMs?: number;
   observeMs?: number;
@@ -13,6 +14,8 @@ export interface CoreOptions {
   runLength?: number;
   /** Rooms generated at the same time (see RunOptions.concurrency). */
   concurrency?: number;
+  /** Debug: force room types for rooms 1, 2, 3… (see RunOptions). */
+  forceArchetypes?: RunOptions['forceArchetypes'];
 }
 
 /**
@@ -35,7 +38,10 @@ export function createCore(data: GameData, opts: CoreOptions = {}): CorePort & {
     observeMs: opts.observeMs,
     runLength: opts.runLength,
     concurrency: opts.concurrency,
+    forceArchetypes: opts.forceArchetypes,
     onStatus: (doors) => emit({ type: 'gen_status', doors, model: run?.modelOff ? 'off' : 'on' }),
+    maxAnomalies: opts.maxAnomalies,
+    onAnomaly: (effect) => emit({ type: 'anomaly_effect', effect }),
     onEffect: (effect) => emit({ type: 'rule_effect', effect }),
     onSay: say,
     onProfile: (profile) => emit({ type: 'profile', profile }),
@@ -130,7 +136,7 @@ export function createCore(data: GameData, opts: CoreOptions = {}): CorePort & {
           // Give the entry line time to be read before the rule speaks.
           setTimeout(() => markIntroduced(), Math.min(9000, 1200 + (outcome.length + room.narrator.onEnter.length) * 35));
         })();
-      } else if (event.type === 'pressed') {
+      } else if (event.type === 'pressed' && r.current?.props.find((p) => p.id === event.objectId)?.recipe === 'button_pedestal') {
         const lines = data.templates.narratorPress;
         say(lines[r.events.filter((e) => e.type === 'pressed').length % lines.length]!);
       } else if (event.type === 'door_hovered' && event.seconds >= 1.5) {

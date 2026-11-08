@@ -3,6 +3,7 @@ import { createLlmClient } from '../core/llm/client';
 import { Game } from './game';
 import { Loop } from './render/loop';
 import { gameData } from '../core/data';
+import { ARCHETYPES } from '../core/room/layouts';
 import { Recorder } from './telemetry/recorder';
 import { endSession, logEvent, startSession, telemetryConfigured, type SelfRatings, type Trait } from './telemetry/telemetry';
 
@@ -16,6 +17,7 @@ import { endSession, logEvent, startSession, telemetryConfigured, type SelfRatin
  *   ?ambience=warm  draw every room in one mood (cold, warm, sickly, dim)
  *   ?mute=1     start with sound off (M toggles it)
  *   ?rooms=5    rooms per run, counting the first (default 7)
+ *   ?layout=lift_lobby,l_gallery,u_gallery  force room types for rooms 1, 2, 3… in turn (to see a specific room)
  */
 const params = new URLSearchParams(location.search);
 const seed = Number(params.get('seed')) || Math.floor(Math.random() * 1e9);
@@ -28,6 +30,7 @@ const game = new Game(canvas, {
   observeMs: params.has('observe') ? Number(params.get('observe')) * 1000 : undefined,
   forceAmbience: params.get('ambience') ?? undefined,
   runLength: Number(params.get('rooms')) || undefined,
+  forceArchetypes: parseLayouts(params.get('layout')),
   concurrency: __LLM_PARALLEL__,
   mute: params.get('mute') === '1',
 });
@@ -185,6 +188,7 @@ Object.assign(window, {
       return {
         room: r && {
           id: r.id, index: r.index, archetype: r.layout.archetype, doors: r.layout.doors,
+          anomaly: r.anomaly, variant: r.variant,
           props: r.props.map((p) => ({ id: p.id, recipe: p.recipe, x: p.x, z: p.z })),
         },
         player: { x: game.player.position.x, z: game.player.position.z, yaw: game.player.yaw },
@@ -231,3 +235,9 @@ Object.assign(window, {
     },
   },
 });
+
+/** `?layout=lift_lobby,l_gallery`: room types to force, ignoring unknown names. */
+function parseLayouts(v: string | null): (typeof ARCHETYPES)[number][] | undefined {
+  const list = (v ?? '').split(',').map((x) => x.trim()).filter((x): x is (typeof ARCHETYPES)[number] => (ARCHETYPES as readonly string[]).includes(x));
+  return list.length ? list : undefined;
+}

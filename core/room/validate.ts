@@ -1,3 +1,4 @@
+import { ANOMALY_ANCHOR } from '../anomalies/catalog';
 import { cellKey, DIR, footprintCells, isFloor, reachable } from './geometry';
 import type { GameData, Layout, RoomSpec } from './types';
 
@@ -9,7 +10,7 @@ import type { GameData, Layout, RoomSpec } from './types';
 export function validateRoom(spec: RoomSpec, data: GameData): string[] {
   const problems: string[] = [];
   const { layout } = spec;
-  const recipes = new Map(data.props.map((p) => [p.id, p]));
+  const recipes = new Map([...data.props, ANOMALY_ANCHOR].map((p) => [p.id, p]));
 
   const entrances = layout.doors.filter((d) => d.entrance);
   if (entrances.length !== 1) problems.push(`expected 1 entrance, found ${entrances.length}`);
@@ -23,7 +24,7 @@ export function validateRoom(spec: RoomSpec, data: GameData): string[] {
 
   const blocked = new Set<string>();
   const doorCells = new Set(layout.doors.map((d) => cellKey(d.cx, d.cz)));
-  for (const p of spec.props) {
+  for (const p of [...spec.props, ...(spec.anomaly ? [spec.anomaly.anchor] : [])]) {
     const recipe = recipes.get(p.recipe);
     if (!recipe) {
       problems.push(`unknown prop ${p.recipe}`);

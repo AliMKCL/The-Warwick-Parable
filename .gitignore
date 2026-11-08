@@ -2,6 +2,7 @@ node_modules/
 dist/
 .env.local
 .env.*.local
+.env.local.bak
 test-results/
 playwright-report/
 artifacts/

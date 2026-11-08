@@ -1,4 +1,4 @@
-import { cellKey, placeInSlot } from './geometry';
+import { cellKey, footprintCells, placeInSlot, yawForFacing } from './geometry';
 import { reachabilityProblems } from './validate';
 import type { GameData, Layout, PlacedProp } from './types';
 
@@ -32,6 +32,25 @@ export function placeAssignments(layout: Layout, assignments: Assignment[], data
   const props: PlacedProp[] = [];
   const rejected: PlaceResult['rejected'] = [];
 
+  // Fixtures (a lift, its call button) go first, exactly where the layout put them; slot props fit around them.
+  for (const f of layout.fixtures ?? []) {
+    const recipe = recipes.get(f.recipe);
+    if (!recipe) continue;
+    const rotY = yawForFacing(f.face);
+    if (recipe.solid) for (const [cx, cz] of footprintCells(f.x, f.z, rotY, recipe.size[0], recipe.size[2])) blocked.add(cellKey(cx, cz));
+    props.push({
+      id: f.id,
+      recipe: f.recipe,
+      slot: 'fixture',
+      x: round(f.x),
+      y: round(f.y),
+      z: round(f.z),
+      rotY: round(rotY),
+      surfaceText: recipe.text ? f.surfaceText : undefined,
+      inspectText: recipe.inspectable ? f.inspectText : undefined,
+    });
+  }
+
   for (const a of assignments) {
     const reject = (reason: string) => rejected.push({ assignment: a, reason });
     const recipe = recipes.get(a.recipe);
@@ -53,7 +72,7 @@ export function placeAssignments(layout: Layout, assignments: Assignment[], data
 
     usedSlots.add(slot.id);
     props.push({
-      id: `p${props.length + 1}`,
+      id: `p${props.filter((p) => p.slot !== 'fixture').length + 1}`,
       recipe: recipe.id,
       slot: slot.id,
       x: round(at.x),

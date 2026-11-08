@@ -23,6 +23,13 @@ Read this first when picking up the work. Newest entries at the top.
 
 ## Log
 
+### Kaan's rooms back, plus the lift lobby (8 Nov)
+- Restored Kaan's three commits from the reverted PR #3 on top of PRs #4 and #5: anomalies (`core/anomalies`), messy / upside-down room variants, L and U rooms, and the two-door choice room. Divyansh's office tasks were left out (they replace rooms 1–5).
+- The choice room now avoids gamble rooms, the room behind a gamble, and the final room, so a 7-room run has none; it appears in shorter and longer runs.
+- New lift lobby: a lift that never comes and a MAINTENANCE door (rule `lift_wait`). At most once per run.
+- Fixed: a hub could be the final room and give the finale two doors. Fixed the anomaly browser test, whose `**/llm/**` route also blocked `/core/llm/client.ts`.
+- `?layout=` forces room types. 81 unit tests; `tests/e2e/shaped-rooms.spec.ts` and `anomalies.spec.ts` walk the new rooms.
+
 ### Dossier fixes: exploration, untested traits, consistent title (8 Nov 2026)
 - Exploration is now per room: "You inspected something in 1 of 5 rooms you entered (3 of 14 objects)", scored on the share of rooms. Only rooms the player entered count, and only props placed on purpose (`featured`: the model's chosen slots, or a template room's chosen pieces), not filler desks and partitions. Rooms that required inspecting are left out.
 - A trait with no real test this run (e.g. patience with no countdown) shows "You did: not tested this run" in grey with a rough estimate; it has no gap, never gets the red highlight and is never the headline.

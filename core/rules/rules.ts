@@ -1,9 +1,10 @@
 import type { Profile } from '../profile/profile';
 import type { GameEvent, RuleEffect } from '../protocol';
-import type { GameData, RoomSpec } from '../room/types';
+import { LIFT } from '../room/layouts';
+import type { GameData, Layout, RoomSpec } from '../room/types';
 import { pick, randInt, type Rng } from '../util/random';
 
-export type RuleId = 'lights_dim_on_idle' | 'inspect_to_unlock' | 'exit_timer' | 'narrator_suggests' | 'gamble';
+export type RuleId = 'lights_dim_on_idle' | 'inspect_to_unlock' | 'exit_timer' | 'narrator_suggests' | 'gamble' | 'lift_wait';
 
 /** Labels drawn on a gamble room's two doors, so the stakes are visible as well as spoken. */
 export const GAMBLE_LABELS = { safe: 'CERTAIN', risky: '50/50' } as const;
@@ -14,7 +15,8 @@ export interface RoomRule {
   id: RuleId;
   /** lights: idleSeconds · unlock: count · timer: seconds · suggests: door, lie (1/0)
    *  gamble: safe, risky (door ids), seconds (0 = no clock), outcome ('shortcut' | 'setback', decided in advance by seed),
-   *          stakes (the line that spells them out) */
+   *          stakes (the line that spells them out)
+   *  lift: door (the maintenance door), hintSeconds */
   params: Record<string, number | string>;
   /** Spoken when the rule starts or first triggers. */
   line: string;
@@ -33,6 +35,8 @@ export function describeRule(r: Pick<RoomRule, 'id' | 'params'>): string {
       return `A countdown of ${r.params.seconds} s starts on entry. When it ends, all exits but one lock. "rule_line" announces the countdown; "rule_done_line" is said when it runs out.`;
     case 'gamble':
       return `This room is a gamble between its two exits. Door ${r.params.safe} is CERTAIN: the next room, as planned. Door ${r.params.risky} is a 50/50: it either saves time (skips the next room's task) or adds a detour room.${Number(r.params.seconds) ? ` The player has ${r.params.seconds} s before the 50/50 door locks.` : ''} The narrator states these stakes separately, so "narrator_enter" should only set the scene, and "rule_line" should be a short dry remark about luck. Do not contradict the stakes.`;
+    case 'lift_wait':
+      return `This is a lift lobby. A lift with a floor indicator stands opposite the entrance, with a call button beside it. The lift never arrives: the indicator creeps down and stalls a floor or two away. The only way on is a plain door labelled MAINTENANCE in a side wall (${r.params.door}); its label is fixed. "rule_line" is said on entry and assures the player the lift is coming. "rule_done_line" is said if they are still waiting after ${r.params.hintSeconds} s, and hints at another way without naming the door. Do not mention the maintenance door anywhere else, but you may write on the walls about the lift.`;
     case 'narrator_suggests':
       return `The narrator recommends one exit: set "suggest_door" and use "rule_line" to recommend it.${Number(r.params.lie) ? ' The narrator is lying: the recommendation is self-serving, and a later room will reveal this.' : ' The advice is sincere.'}`;
   }
@@ -81,6 +85,12 @@ export function chooseRule(profile: Profile, rng: Rng, index: number, previous?:
   }
 }
 
+/** The lift lobby always runs the lift rule (and never any other). */
+export function liftRule(layout: Layout, rng: Rng): Omit<RoomRule, 'line' | 'doneLine'> {
+  const door = layout.doors.find((d) => !d.entrance)?.id ?? 'd1';
+  return { id: 'lift_wait', params: { door, hintSeconds: randInt(rng, 45, 70) } };
+}
+
 /** Template lines when the model is unavailable. */
 export function templateRuleLines(rule: Omit<RoomRule, 'line' | 'doneLine'>, room: RoomSpec, data: GameData, rng: Rng): Pick<RoomRule, 'line' | 'doneLine'> {
   const lines = data.templates.rules[rule.id];
@@ -108,6 +118,7 @@ const timers = globalThis as unknown as { setTimeout(fn: () => void, ms: number)
 /** A rule running in the current room: reacts to events and changes the world through effects. */
 export class RuleRuntime {
   private timer: unknown;
+  private floorTimer: unknown;
   private state: Record<string, unknown> = {};
   private stopped = false;
 
@@ -119,10 +130,16 @@ export class RuleRuntime {
     const exits = ctx.room.layout.doors.filter((d) => !d.entrance).map((d) => d.id);
     switch (rule.id) {
       case 'inspect_to_unlock': {
-        const inspectable = ctx.room.props.filter((p) => ctx.data.props.find((r) => r.id === p.recipe)?.inspectable).length;
+        const inspectable = ctx.room.props.filter((p) => ctx.data.props.find((r) => r.id === p.recipe)?.inspectable).length + (ctx.room.anomaly ? 1 : 0);
         this.state.need = Math.min(Number(rule.params.count), inspectable);
-        this.state.seen = new Set<string>();
-        if (Number(this.state.need) > 0) {
+        this.state.seen = new Set(history.flatMap((e) => {
+          if (!('roomId' in e) || e.roomId !== ctx.room.id) return [];
+          if (e.type === 'inspected') return [e.objectId];
+          if (e.type === 'anomaly_action' && e.action === 'use' && e.anomalyId === ctx.room.anomaly?.id) return [`anomaly:${e.anomalyId}`];
+          return [];
+        }));
+        this.state.open = (this.state.seen as Set<string>).size >= Number(this.state.need);
+        if (Number(this.state.need) > 0 && !this.state.open) {
           ctx.emit({ kind: 'doors', locked: exits });
           ctx.say(rule.line);
         }
@@ -148,6 +165,24 @@ export class RuleRuntime {
           this.state.startedAt = t;
           this.timer = timers.setTimeout(() => this.expireGamble(), seconds * 1000);
         }
+        break;
+      }
+      case 'lift_wait': {
+        ctx.say(rule.line);
+        this.state.startedAt = t;
+        this.state.presses = 0;
+        // The indicator creeps down floor by floor, then hovers between the last two. It never arrives.
+        let step = 0;
+        const tick = () => {
+          if (this.stopped) return;
+          step++;
+          const n = LIFT.floors.length;
+          const text = step < n ? LIFT.floors[step]! : LIFT.floors[n - 1 - ((step - n + 1) % 2)]!;
+          ctx.emit({ kind: 'display', prop: LIFT.doors, text });
+          this.floorTimer = timers.setTimeout(tick, step < n - 1 ? 3500 : 5000);
+        };
+        this.floorTimer = timers.setTimeout(tick, 3500);
+        this.timer = timers.setTimeout(() => this.liftHint(), Number(rule.params.hintSeconds) * 1000);
         break;
       }
       case 'lights_dim_on_idle': {
@@ -185,8 +220,8 @@ export class RuleRuntime {
         break;
       case 'inspect_to_unlock': {
         const seen = this.state.seen as Set<string>;
-        if (e.type === 'inspected' && !this.state.open) {
-          seen.add(e.objectId);
+        if ((e.type === 'inspected' || (e.type === 'anomaly_action' && e.action === 'use' && e.anomalyId === room.anomaly?.id)) && !this.state.open) {
+          seen.add(e.type === 'inspected' ? e.objectId : `anomaly:${e.anomalyId}`);
           if (seen.size >= Number(this.state.need)) {
             this.state.open = true;
             ctx.emit({ kind: 'doors', locked: [] });
@@ -214,6 +249,18 @@ export class RuleRuntime {
           else ctx.profile.adjust('impulsivity', -0.05, this.state.expired ? 'let the gamble run out and took the certain door' : 'chose the certain door over the 50/50', room, e.t);
         }
         break;
+      case 'lift_wait':
+        if (e.type === 'pressed' && e.objectId === LIFT.call) {
+          const n = Number(this.state.presses) + 1;
+          this.state.presses = n;
+          if (n === 3) ctx.say(pick(ctx.rng, ctx.data.templates.rules.lift_wait.tried ?? ['It heard you the first time.']));
+          if (n === 5) ctx.profile.adjust('impulsivity', 0.12, 'kept pressing the button for a lift that never came', room, e.t);
+        } else if (e.type === 'door_chosen' && e.doorId === rule.params.door) {
+          const waited = e.t - Number(this.state.startedAt ?? e.t);
+          if (!this.state.hinted) ctx.profile.adjust('hesitation', -0.08, `gave up on the lift and found the maintenance door after ${Math.round(waited)} s`, room, e.t);
+          else ctx.profile.adjust('compliance', 0.05, 'took the other way once the narrator hinted at it', room, e.t);
+        }
+        break;
       case 'narrator_suggests':
         if (e.type === 'door_chosen') {
           const followed = e.doorId === rule.params.door;
@@ -226,6 +273,26 @@ export class RuleRuntime {
     }
   }
 
+  borrowTime(t: number, seconds: number): boolean {
+    if (this.stopped || this.rule.id !== 'exit_timer' || this.state.expired || this.state.borrowed || this.state.startedAt === undefined) return false;
+    const remaining = Number(this.state.startedAt) + Number(this.rule.params.seconds) - t;
+    if (remaining <= 0) return false;
+    this.state.borrowed = true;
+    this.state.borrowedSeconds = seconds;
+    timers.clearTimeout(this.timer);
+    this.timer = timers.setTimeout(() => this.expire(), (remaining + seconds) * 1000);
+    this.ctx.emit({ kind: 'timer', seconds: remaining + seconds, label: 'Doors close in' });
+    return true;
+  }
+
+  private liftHint() {
+    if (this.stopped || this.state.hinted) return;
+    const { ctx } = this;
+    this.state.hinted = true;
+    ctx.profile.adjust('hesitation', 0.12, `waited ${this.rule.params.hintSeconds} s for a lift that never came`, ctx.room, Number(this.state.startedAt ?? 0) + Number(this.rule.params.hintSeconds));
+    ctx.say(this.rule.doneLine);
+  }
+
   private expire() {
     if (this.stopped) return;
     const { ctx } = this;
@@ -236,7 +303,7 @@ export class RuleRuntime {
     const keep = exits.find((id) => !hovered[id]) ?? exits[0]!;
     ctx.emit({ kind: 'timer', seconds: null, label: '' });
     ctx.emit({ kind: 'doors', locked: exits.filter((id) => id !== keep) });
-    ctx.profile.adjust('hesitation', 0.14, 'let the countdown run out', ctx.room, Number(this.state.startedAt ?? 0) + Number(this.rule.params.seconds));
+    ctx.profile.adjust('hesitation', 0.14, 'let the countdown run out', ctx.room, Number(this.state.startedAt ?? 0) + Number(this.rule.params.seconds) + Number(this.state.borrowedSeconds ?? 0));
     ctx.say(this.rule.doneLine);
   }
 
@@ -252,5 +319,6 @@ export class RuleRuntime {
   stop() {
     this.stopped = true;
     timers.clearTimeout(this.timer);
+    timers.clearTimeout(this.floorTimer);
   }
 }

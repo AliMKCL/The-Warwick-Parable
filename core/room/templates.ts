@@ -3,8 +3,15 @@ import { placeInSlot } from './geometry';
 import type { Assignment } from './place';
 import type { GameData, Layout, PropRecipe, Slot, TextStyle } from './types';
 
+const GALLERY_PROPS: Partial<Record<Slot['kind'], string[]>> = {
+  wall: ['bench_waiting', 'plant_potted', 'coat_rack', 'filing_cabinet', 'box_stack', 'water_cooler'],
+  wall_mounted: ['poster_wall', 'memo_board', 'clock_wall', 'sign_wall'],
+};
+
 /** Which props suit which archetype, by slot kind. The template filler and the model prompt both use this. */
 export const PREFERRED: Record<string, Partial<Record<Slot['kind'] | 'desk' | 'partition', string[]>>> = {
+  l_gallery: GALLERY_PROPS,
+  u_gallery: GALLERY_PROPS,
   waiting_room: {
     wall: ['bench_waiting', 'plant_potted', 'water_cooler', 'coat_rack', 'trash_bin', 'plant_dead', 'vending_machine'],
     wall_mounted: ['sign_wall', 'poster_wall', 'clock_wall', 'memo_board'],
@@ -19,6 +26,10 @@ export const PREFERRED: Record<string, Partial<Record<Slot['kind'] | 'desk' | 'p
     partition: ['partition_low'],
     wall: ['filing_cabinet', 'bookshelf', 'copier', 'box_stack', 'plant_potted', 'water_cooler'],
     wall_mounted: ['whiteboard', 'poster_wall', 'memo_board', 'clock_wall', 'sign_wall'],
+  },
+  lift_lobby: {
+    wall: ['bench_waiting', 'plant_potted', 'trash_bin', 'water_cooler', 'plant_dead'],
+    wall_mounted: ['sign_wall', 'poster_wall', 'clock_wall', 'memo_board'],
   },
   hub: {
     center: ['table_round', 'water_cooler', 'plant_potted'],
@@ -62,12 +73,11 @@ export function templateAssignments(
       continue;
     }
     const isStructural = slot.tags.includes('desk') || slot.tags.includes('partition');
-    if (!isStructural && rng() < 0.25) continue; // breathing room
+    if (!isStructural && rng() < 0.12) continue; // breathing room
     let options = candidatesFor(slot, layout.archetype, data).filter(
-      (p) => isStructural || (counts.get(p.id) ?? 0) < 2,
+      (p) => isStructural || (counts.get(p.id) ?? 0) < (slot.kind === 'wall_mounted' ? 3 : 2),
     );
     if (opts.plainOnly) {
-      if (slot.kind === 'wall_mounted') continue;
       const plain = options.filter((p) => !p.text);
       if (plain.length) options = plain;
     }
@@ -91,7 +101,7 @@ export function templateAssignments(
 
   function textFor(style: TextStyle, r: Rng, index: number): string {
     const pool = {
-      sign: t.signs, poster: t.posters, screen: t.screens, whiteboard: t.whiteboards, paper: t.papers, label: t.labels,
+      sign: t.signs, poster: t.posters, screen: t.screens, whiteboard: t.whiteboards, paper: t.papers, label: t.labels, led: t.labels,
     }[style];
     const fresh = pool.filter((x) => !usedText.has(x));
     const text = pick(r, fresh.length ? fresh : pool);

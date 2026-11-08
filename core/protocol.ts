@@ -9,6 +9,7 @@ import type { RoomSpec } from './room/types';
 
 /** What the player did. Sent adapter -> core. `t` is seconds since the run started. */
 export type GameEvent =
+  | { type: 'anomaly_action'; roomId: string; anomalyId: import('./anomalies/catalog').AnomalyId; action: 'use' | 'stay' | 'erase'; t: number }
   /** `selfRatings`: the player's own 1–5 ratings from the start screen, compared with what they did on the dossier. */
   | { type: 'run_started'; seed: number; t: number; selfRatings?: SelfRatings }
   | { type: 'room_entered'; roomId: string; t: number }
@@ -31,7 +32,9 @@ export type RuleEffect =
   /** These exits are locked; all others are open. */
   | { kind: 'doors'; locked: string[] }
   /** Show a countdown, or hide it with seconds = null. */
-  | { kind: 'timer'; seconds: number | null; label: string };
+  | { kind: 'timer'; seconds: number | null; label: string }
+  /** Redraw the text on a prop (the lift's floor indicator). */
+  | { kind: 'display'; prop: string; text: string };
 
 /** The hidden player profile, for the debug overlay and the final dossier. */
 export interface ProfileSnapshot {
@@ -83,7 +86,10 @@ export interface Pattern {
 }
 
 /** What core tells the adapter. Sent core -> adapter. */
+export interface AnomalyEffect { roomId: string; stage: number; text: string; choice?: string }
+
 export type CoreMessage =
+  | { type: 'anomaly_effect'; effect: AnomalyEffect }
   | { type: 'load_room'; spec: RoomSpec }
   | { type: 'narrator_line'; lineId: string; text: string; final: boolean }
   | { type: 'gen_status'; model: 'on' | 'off'; doors: { door: string; status: string; ms?: number; error?: string }[] }

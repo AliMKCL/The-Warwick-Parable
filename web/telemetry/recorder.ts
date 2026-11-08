@@ -4,7 +4,7 @@ import type { TelemetryEvent, Trait, TraitValue } from './telemetry';
 
 /** What the player did with something they aimed at, at the moment they did it (before any animation). */
 export interface Act {
-  kind: 'inspect' | 'button' | 'door' | 'locked';
+  kind: 'inspect' | 'button' | 'door' | 'locked' | 'anomaly';
   id: string;
   /** For doors: whether it was locked when tried. */
   locked?: boolean;
@@ -32,6 +32,8 @@ interface RoomState {
   narratorAt?: number;
   lockTaskAt?: number;
   lockTaskDone?: boolean;
+  /** Lift lobby: the narrator has hinted that the lift isn't coming. */
+  liftHinted?: boolean;
   dark: boolean;
   left: boolean;
 }
@@ -181,6 +183,10 @@ export class Recorder {
           r.narratorAt = this.deps.now();
           this.log({ type: 'pressure_start', meta: { source: 'narrator', suggested: r.spec.rule.params.door } });
         }
+        if (m.final && r && !r.left && r.spec.rule?.id === 'lift_wait' && m.text === r.spec.rule.doneLine && !r.liftHinted) {
+          r.liftHinted = true;
+          this.log({ type: 'hint', choice: 'lift_hint', meta: { rule: 'lift_wait' } });
+        }
         break;
       case 'rule_effect': {
         if (!r || r.left) return;
@@ -240,6 +246,7 @@ export class Recorder {
     }
     if (rule?.id === 'exit_timer') return r.timer ? { trait: 'patience', value: r.timer.expired ? 'wait' : 'now' } : null;
     if (rule?.id === 'inspect_to_unlock') return null;
+    if (rule?.id === 'lift_wait') return { trait: 'patience', value: r.liftHinted ? 'wait' : 'now' };
     if (!this.inspectableIds(r.spec).length) return null;
     return { trait: 'exploration', value: r.inspected.size > 0 ? 'explore' : 'skip' };
   }

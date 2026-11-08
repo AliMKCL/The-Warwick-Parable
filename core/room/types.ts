@@ -23,7 +23,7 @@ export interface PropPart {
   mat: string;
 }
 
-export type TextStyle = 'sign' | 'poster' | 'screen' | 'paper' | 'whiteboard' | 'label';
+export type TextStyle = 'sign' | 'poster' | 'screen' | 'paper' | 'whiteboard' | 'label' | 'led';
 
 export interface TextSurface {
   /** Centre of the text plane, local to the prop; the plane faces +z. */
@@ -32,7 +32,8 @@ export interface TextSurface {
   style: TextStyle;
 }
 
-export type SlotKind = 'floor' | 'wall' | 'wall_mounted' | 'center';
+/** 'fixture': placed by the layout at an exact spot, never in a slot (see Layout.fixtures). */
+export type SlotKind = 'floor' | 'wall' | 'wall_mounted' | 'center' | 'fixture';
 
 export interface PropRecipe {
   id: string;
@@ -50,6 +51,8 @@ export interface PropRecipe {
   mountHeight?: number;
   text?: TextSurface;
   interact?: 'button';
+  /** Prompt verb for a button, e.g. "Call the lift" (default "Press"). */
+  verb?: string;
   parts: PropPart[];
 }
 
@@ -86,6 +89,8 @@ export interface AmbiencePreset {
 // ---------- Layout (made by the generator, no model) ----------
 
 export interface Door {
+  color?: string;
+  concealed?: boolean;
   id: string;
   cx: number;
   cz: number;
@@ -94,6 +99,8 @@ export interface Door {
   label: string;
   /** The way in: locked behind the player. */
   entrance: boolean;
+  /** The label is part of the room's design (e.g. MAINTENANCE): the model may not rename it. */
+  fixedLabel?: boolean;
 }
 
 export interface Slot {
@@ -122,6 +129,22 @@ export interface Layout {
   slots: Slot[];
   /** Where the player stands on arrival, and the direction they face (radians, 0 = facing -z). */
   spawn: { x: number; z: number; yaw: number };
+  /** Props the layout puts at exact spots (e.g. a lift), placed before any slot is filled. */
+  fixtures?: Fixture[];
+}
+
+/** A prop at an exact position, rotated with the layout. Its id is stable so a rule can refer to it. */
+export interface Fixture {
+  id: string;
+  recipe: string;
+  x: number;
+  z: number;
+  /** Height of the prop's origin. */
+  y: number;
+  /** Which way the prop's front faces. */
+  face: Side;
+  surfaceText?: string;
+  inspectText?: string;
 }
 
 // ---------- Room spec (what the adapter draws) ----------
@@ -149,6 +172,8 @@ export interface PlacedProp {
 }
 
 export interface RoomSpec {
+  variant?: 'messy' | 'ceiling';
+  anomaly?: import('../anomalies/anomalies').AnomalySpec;
   id: string;
   index: number;
   seed: number;
@@ -169,7 +194,7 @@ export interface RoomSpec {
   /** How long generation took, for the debug overlay. */
   genMs?: number;
   /** The mechanic running in this room, if any (see core/rules). */
-  rule?: { id: 'lights_dim_on_idle' | 'inspect_to_unlock' | 'exit_timer' | 'narrator_suggests' | 'gamble'; params: Record<string, number | string>; line: string; doneLine: string };
+  rule?: { id: 'lights_dim_on_idle' | 'inspect_to_unlock' | 'exit_timer' | 'narrator_suggests' | 'gamble' | 'lift_wait'; params: Record<string, number | string>; line: string; doneLine: string };
   /** Set when the player arrived through a gamble's 50/50 door: what the coin decided. */
   gambleResult?: 'shortcut' | 'setback';
   /** A story thread this room opens, and the id of one it pays off. */
@@ -210,7 +235,7 @@ export interface TextTemplates {
   narratorEnter: Record<string, string[]>;
   narratorDoor: string[];
   narratorPress: string[];
-  rules: Record<'lights_dim_on_idle' | 'inspect_to_unlock' | 'exit_timer' | 'narrator_suggests' | 'gamble', { line: string[]; done: string[]; tried?: string[] }>;
+  rules: Record<'lights_dim_on_idle' | 'inspect_to_unlock' | 'exit_timer' | 'narrator_suggests' | 'gamble' | 'lift_wait', { line: string[]; done: string[]; tried?: string[] }>;
   /** Gamble rooms: the stakes said before the choice, and what the coin decided. */
   gamble: { timedLine: string[]; safeDoor: string[]; riskyDoor: string[]; shortcut: string[]; setback: string[]; shortcutEnd: string[] };
 }

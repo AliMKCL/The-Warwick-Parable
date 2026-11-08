@@ -1,6 +1,6 @@
 import { pick, randInt, type Rng } from '../util/random';
 import { DIR, ROTATE_CW } from './geometry';
-import type { Door, Layout, Side, Slot } from './types';
+import type { Door, Fixture, Layout, Side, Slot } from './types';
 
 /**
  * Seeded layout generators. Each builds its room with the entrance on the
@@ -8,8 +8,9 @@ import type { Door, Layout, Side, Slot } from './types';
  * rotated so the entrance lines up with the door the player came through.
  */
 
-export const ARCHETYPES = ['waiting_room', 'corridor', 'open_office', 'hub'] as const;
-export type Archetype = (typeof ARCHETYPES)[number];
+export const ARCHETYPES = ['waiting_room', 'corridor', 'open_office', 'hub', 'l_gallery', 'u_gallery', 'lift_lobby'] as const;
+export const CHOICE_ROOM = 'choice_room';
+export type Archetype = (typeof ARCHETYPES)[number] | typeof CHOICE_ROOM;
 
 export interface LayoutOptions {
   archetype: Archetype;
@@ -21,6 +22,9 @@ export interface LayoutOptions {
   /** Door labels to draw from. */
   doorLabels: string[];
 }
+
+/** Ids the lift lobby's rule refers to (see core/rules, lift_wait). */
+export const LIFT = { doors: 't_lift', call: 't_call', exitLabel: 'MAINTENANCE', floors: ['9', '8', '7', '6', '5', '4', '3'] } as const;
 
 export function generateLayout(opts: LayoutOptions): Layout {
   const canonical = BUILDERS[opts.archetype](opts);
@@ -89,6 +93,70 @@ const BUILDERS: Record<Archetype, (o: LayoutOptions) => Layout> = {
     b.spawnAt(ex);
     return b.done();
   },
+
+  l_gallery(o) {
+    const w = randInt(o.rng, 9, 11), d = randInt(o.rng, 8, 10);
+    const b = new Builder('l_gallery', w, d, 3.0, o);
+    for (let z = 0; z < d - 4; z++) {
+      for (let x = 4; x < w; x++) b.solid(x, z);
+    }
+    const entrance = b.entrance(w - 2);
+    b.door('n', randInt(o.rng, 1, 2));
+    if (o.exits >= 2) b.door('e', d - 3);
+    if (o.exits >= 3) b.door('w', d - 3);
+    b.wallSlots();
+    b.spawnAt(entrance, Math.PI * 0.42);
+    return b.done();
+  },
+
+  u_gallery(o) {
+    const w = randInt(o.rng, 10, 12), d = randInt(o.rng, 8, 10);
+    const b = new Builder('u_gallery', w, d, 3.0, o);
+    for (let z = 0; z < d - 5; z++) {
+      for (let x = 3; x < w - 3; x++) b.solid(x, z);
+    }
+    const entrance = b.entrance(Math.floor(w / 2));
+    const [first, second] = o.rng() < 0.5 ? [1, w - 2] : [w - 2, 1];
+    b.door('n', first);
+    if (o.exits >= 2) b.door('n', second);
+    if (o.exits >= 3) b.door('e', d - 3);
+    b.wallSlots();
+    b.spawnAt(entrance);
+    return b.done();
+  },
+
+  /**
+   * A lift lobby: a lift facing the player with a call button beside it, and
+   * a maintenance door in a side wall. The lift never comes; the maintenance
+   * door is the only way on. (After the office-task lift.)
+   */
+  lift_lobby(o) {
+    const w = 8, d = randInt(o.rng, 7, 8);
+    const b = new Builder('lift_lobby', w, d, 3.0, o);
+    const ex = b.entrance(randInt(o.rng, 1, 2));
+    const side: Side = o.rng() < 0.5 ? 'e' : 'w';
+    const row = randInt(o.rng, 2, d - 3);
+    b.door(side, row, { label: LIFT.exitLabel, fixedLabel: true });
+    const lx = w / 2;
+    b.fixture({ id: LIFT.doors, recipe: 'lift_doors', x: lx, z: 0.15, face: 's', y: 0, surfaceText: LIFT.floors[0] }, cells(lx - 2, 0, lx + 1, 1));
+    b.fixture({ id: LIFT.call, recipe: 'lift_call', x: lx + 1.35, z: 0.03, face: 's', y: 1.15 });
+    // Keep furniture away from the maintenance door so it stays easy to miss but never blocked.
+    const wx = side === 'e' ? w - 1 : 0;
+    b.reserve(cells(wx, row - 1, wx, row + 1));
+    b.wallSlots();
+    b.spawnAt(ex);
+    return b.done();
+  },
+
+  [CHOICE_ROOM](o) {
+    const b = new Builder(CHOICE_ROOM, 7, 6, 3.0, o);
+    const entrance = b.entrance(3);
+    b.door('n', 1, { label: 'A', color: '#1e62b6' });
+    b.door('n', 5, { label: 'B', color: '#c46119' });
+    b.wallSlots(['wall_mounted']);
+    b.spawnAt(entrance);
+    return b.done();
+  },
 };
 
 // ---------- builder ----------
@@ -97,6 +165,9 @@ class Builder {
   private cells: string[][];
   private doors: Door[] = [];
   private slots: Slot[] = [];
+  private fixtures: Fixture[] = [];
+  /** Cells kept free of wall slots (around fixtures and special doors). */
+  private reserved = new Set<string>();
   private spawn = { x: 0, z: 0, yaw: 0 };
   private labels: string[];
 
@@ -111,6 +182,16 @@ class Builder {
     this.labels = [...o.doorLabels];
   }
 
+  /** A prop at an exact spot; `reserve` keeps wall slots off the cells around it. */
+  fixture(f: Fixture, reserve: [number, number][] = []) {
+    this.fixtures.push(f);
+    this.reserve(reserve);
+  }
+
+  reserve(cellList: [number, number][]) {
+    for (const [cx, cz] of cellList) this.reserved.add(`${cx},${cz}`);
+  }
+
   solid(cx: number, cz: number) {
     this.cells[cz]![cx] = '#';
   }
@@ -122,11 +203,13 @@ class Builder {
     return cx;
   }
 
-  door(side: Side, index: number) {
+  /** An exit on `side` at position `index` along that wall; returns its id. */
+  door(side: Side, index: number, marking?: Pick<Door, 'label' | 'color' | 'fixedLabel'>): string {
     const [cx, cz] = this.edgeCell(side, index);
     const n = this.doors.filter((x) => !x.entrance).length + 1;
-    const label = this.labels.length ? this.labels.splice(Math.floor(this.o.rng() * this.labels.length), 1)[0]! : String(n);
-    this.doors.push({ id: `d${n}`, cx, cz, side, label, entrance: false });
+    const label = marking?.label ?? (this.labels.length ? this.labels.splice(Math.floor(this.o.rng() * this.labels.length), 1)[0]! : String(n));
+    this.doors.push({ id: `d${n}`, cx, cz, side, label, entrance: false, ...marking });
+    return `d${n}`;
   }
 
   exits(count: number, sides: Side[]) {
@@ -171,8 +254,8 @@ class Builder {
     }
   }
 
-  spawnAt(entranceX: number) {
-    this.spawn = { x: entranceX + 0.5, z: this.d - 0.75, yaw: 0 };
+  spawnAt(entranceX: number, yaw = 0) {
+    this.spawn = { x: entranceX + 0.5, z: this.d - 0.75, yaw };
   }
 
   done(): Layout {
@@ -185,6 +268,7 @@ class Builder {
       doors: this.doors,
       slots: this.slots,
       spawn: this.spawn,
+      ...(this.fixtures.length ? { fixtures: this.fixtures } : {}),
     };
   }
 
@@ -208,9 +292,17 @@ class Builder {
       }
       // Corner cells are shared by two walls; leave them to the first wall that claims them.
       if (this.slots.some((s) => s.side && covers(s, cx, cz))) return false;
+      if (this.reserved.has(`${cx},${cz}`)) return false;
     }
     return true;
   }
+}
+
+/** Every cell in the rectangle [x0..x1] x [z0..z1]. */
+function cells(x0: number, z0: number, x1: number, z1: number): [number, number][] {
+  const out: [number, number][] = [];
+  for (let z = z0; z <= z1; z++) for (let x = x0; x <= x1; x++) out.push([x, z]);
+  return out;
 }
 
 function covers(s: Slot, cx: number, cz: number): boolean {
@@ -243,6 +335,7 @@ export function rotateCW(l: Layout): Layout {
       face: s.face && ROTATE_CW[s.face],
     })),
     spawn: { x: D - l.spawn.z, z: l.spawn.x, yaw: l.spawn.yaw - Math.PI / 2 },
+    ...(l.fixtures ? { fixtures: l.fixtures.map((f) => ({ ...f, x: D - f.z, z: f.x, face: ROTATE_CW[f.face] })) } : {}),
   };
 }
 

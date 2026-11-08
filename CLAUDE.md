@@ -21,8 +21,8 @@ cp .env.example .env.local      # MODEL_BACKEND, PARALLEL_ROOMS, OPENROUTER_* / 
 npm install
 npm run check:llm               # model reachable, JSON output, speed
 npm run try:room                # scripted player + real model: prints the next room, rule, profile, narrator lines
-npm run dev                     # http://127.0.0.1:5188  (?debug=1 ?seed= ?rooms=5 ?post=0 ?ambience= ?mute=1 ?observe=)
-npm test                        # vitest: core + telemetry (56 tests)
+npm run dev                     # http://127.0.0.1:5188  (?debug=1 ?seed= ?rooms=5 ?post=0 ?ambience= ?mute=1 ?observe= ?layout=)
+npm test                        # vitest: core + telemetry (81 tests)
 npm run typecheck               # tsc for web + core, plus core purity check
 npm run test:e2e                # Playwright; see "Working from Claude's sandbox" below
 npm run mock:llm                # fake Ollama + fake ElevenLabs on :11999
@@ -46,9 +46,13 @@ npm run analyze                 # Supabase play data → per-player metrics + po
   (world bible + narrator voice guide). Browser loads `.md` via `?raw`; Node tools use `tools/data-node.ts`.
 
 ## Core modules
-- `core/room/`: types (RoomSpec, Layout, PropRecipe…), `layouts.ts` (4 archetypes: waiting_room, corridor,
-  open_office, hub; built with the entrance on the south wall, then rotated so it matches the door the player
-  came through), `place.ts` (slot placement that drops anything that collides, covers a door or cuts off an
+- `core/room/`: types (RoomSpec, Layout, PropRecipe…), `layouts.ts` (7 archetypes: waiting_room, corridor,
+  open_office, hub, l_gallery, u_gallery (Kaan), lift_lobby; plus Kaan's two-door choice_room, placed by
+  `choiceRoomFor` in run.ts; built with the entrance on the south wall, then rotated so it matches the door the
+  player came through). Layouts can carry `fixtures` (props at exact spots: the lift and its call button).
+  A hub is never the final room (it always has 2+ exits). `variants.ts` (Kaan: rare messy / upside-down rooms);
+  `core/anomalies/` (Kaan: one-off encounters, up to MAX_ANOMALIES_PER_RUN). Lift lobby and choice room get
+  neither. `place.ts` (slot placement that drops anything that collides, covers a door or cuts off an
   exit), `validate.ts`, `templates.ts` (fallback furnishing and text). 1 m grid; prop front faces +z.
 - `core/run/run.ts`: the Run. On entering a room it plans the room behind each exit (layout immediately),
   watches the player for `observeMs` (8 s, or until they linger at a door), then generates content for one
@@ -69,7 +73,9 @@ npm run analyze                 # Supabase play data → per-player metrics + po
   (events → plain sentences), `prompts.ts` (fill, story stages, RUN_LENGTH=7), `dossier.ts` (verdict + Dossier).
 - `core/profile/profile.ts`: traits hesitation/curiosity/compliance/impulsivity, start 0.5, moved only by
   evidence with per-room caps; every change logged with a reason (shown in the dossier and sent to the model).
-- `core/rules/rules.ts`: lights_dim_on_idle, inspect_to_unlock, exit_timer, narrator_suggests (may lie), gamble.
+- `core/rules/rules.ts`: lights_dim_on_idle, inspect_to_unlock, exit_timer, narrator_suggests (may lie), gamble,
+  lift_wait (only in, and always in, the lift lobby: indicator never arrives via the `display` effect, hint
+  after 45–70 s; the waiting-room button logic in profile/core applies to `button_pedestal` only).
   Chosen against the player's tendencies, never repeated back to back, none in the first or last room.
   Gambles are placed by `gamblePlan` in `run.ts`, not chosen: 3 rooms in a 7-room run (1, 3, 5; never adjacent;
   none in runs of 4 rooms or fewer), the middle one on a 15 s clock that then locks the 50/50 door. Two exits, labels

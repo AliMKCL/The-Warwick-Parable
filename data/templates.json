@@ -129,6 +129,17 @@
     "Welcome. Please make yourself comfortable. Not too comfortable."
   ],
   "narratorEnter": {
+    "l_gallery": [
+      "The gallery continues around the corner.",
+      "A corner. Whatever is round it already knows you're coming."
+    ],
+    "u_gallery": [
+      "The gallery wraps around the central wall.",
+      "Two ways round. They meet again. Most things do."
+    ],
+    "choice_room": [
+      "There are two doors. Choose either one."
+    ],
     "waiting_room": [
       "Another waiting room. You seem to collect them.",
       "Have a seat. Or don't. I'll be watching either way."
@@ -144,6 +155,10 @@
     "hub": [
       "Several ways out. Choose carefully. Or don't.",
       "So many doors. You must feel very important."
+    ],
+    "lift_lobby": [
+      "A lift. Finally, something that does the walking for you.",
+      "The lift lobby. Please wait. You're good at that."
     ]
   },
   "narratorDoor": [
@@ -209,6 +224,20 @@
       "done": [
         "Time's up. The 50/50 door is closed. Certain it is.",
         "Too late to gamble. Only the certain door is left."
+      ]
+    },
+    "lift_wait": {
+      "line": [
+        "The lift will be with you shortly.",
+        "Please call the lift. It is on its way. It is always on its way."
+      ],
+      "done": [
+        "Perhaps there is another way down. Perhaps it says so on a door.",
+        "Nobody takes the lift here. Nobody has for years. Have you tried looking around?"
+      ],
+      "tried": [
+        "Pressing it again tells the lift you are serious. The lift is not.",
+        "It heard you the first time."
       ]
     }
   },
