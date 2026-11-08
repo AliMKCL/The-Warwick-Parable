@@ -9,7 +9,9 @@ import type { LayoutInput } from '../core/testrooms/config';
 import { Player } from './player/player';
 import { createPost, type Post } from './render/post';
 import { createRenderer } from './render/renderer';
-import { buildRoom, type RoomView } from './room/buildRoom';
+import { buildRoom, type DoorView, type RoomView } from './room/buildRoom';
+import { corridorStory, createCorridor } from '../core/corridors/corridor';
+import { connectedColliders, crossed, joinRooms, walkableIn } from './room/connections';
 import type { InteractInfo } from './room/buildProp';
 import { MaterialLibrary } from './room/materials';
 import { Hud } from './ui/hud';
@@ -43,6 +45,18 @@ export interface GameOptions {
 const REACH = 2.6;
 const CENTER = new THREE.Vector2(0, 0);
 
+interface Passage {
+  view: RoomView;
+  from: RoomView;
+  door: DoorView;
+  entrance: DoorView;
+  exit: DoorView;
+  entered: boolean;
+  fromDisposed: boolean;
+  exitRequested: boolean;
+  next?: RoomView;
+}
+
 /**
  * The Three.js adapter. It draws whatever RoomSpec core sends, moves the
  * player, and reports what the player does. It never decides what happens.
@@ -56,11 +70,14 @@ export class Game {
   readonly voice = new Voice(__TTS__);
   core: ReturnType<typeof createCore> = createCore(gameData);
   private genStatus = '';
+  private lastTransfer = '';
   profile?: ProfileSnapshot;
   private moving = true;
   private post?: Post;
   private materials = new MaterialLibrary(gameData.materials);
   room?: RoomView;
+  private passage?: Passage;
+  private behind?: { view: RoomView; closing: DoorView; entrance: DoorView };
   private startedAt = 0;
   private busy = false;
   private raycaster = new THREE.Raycaster();
@@ -100,7 +117,7 @@ export class Game {
   /** Start a run. With no model (or an unreachable one), rooms are filled from templates. */
   begin(llm?: LlmClient, selfRatings?: SelfRatings) {
     this.sound.start();
-    this.core = createCore(gameData, { llm, observeMs: this.opts.observeMs, runLength: this.opts.runLength, concurrency: this.opts.concurrency, maxAnomalies: this.opts.maxAnomalies, forceArchetypes: this.opts.forceArchetypes, layout: this.opts.layout });
+    this.core = createCore(gameData, { corridors: true, llm, observeMs: this.opts.observeMs, runLength: this.opts.runLength, concurrency: this.opts.concurrency, maxAnomalies: this.opts.maxAnomalies, forceArchetypes: this.opts.forceArchetypes, layout: this.opts.layout });
     this.core.onMessage((m) => this.handle(m));
     this.startedAt = performance.now();
     this.send({ type: 'run_started', seed: this.opts.seed, t: 0, ...(selfRatings ? { selfRatings } : {}) });
@@ -123,7 +140,28 @@ export class Game {
     if (!h || this.busy || !this.room) return;
     const roomId = this.room.spec.id;
     const t = this.time;
-    this.tap?.act({ kind: h.info.kind, id: h.info.id, locked: h.info.kind === 'door' ? !!this.room.doors.find((d) => d.door.id === h.info.id)?.locked : undefined });
+    if (this.passage?.entered) {
+      if (h.info.kind === 'door') {
+        if (!this.passage.next) this.passage.view.setPropText('interlock', 'TRANSFER IN PROGRESS\nPLEASE WAIT');
+        this.passage.exitRequested = true;
+        this.send({ type: 'corridor_exit_requested', roomId, t });
+        this.openPassageExit();
+      } else if (h.info.kind === 'inspect' || h.info.kind === 'button') {
+        if (h.info.kind === 'inspect') {
+          this.sound.rustle();
+          this.hud.showInspect(h.info.name, h.info.text ?? '');
+          this.player.enabled = false;
+        } else {
+          this.sound.button();
+          this.passage.view.setPropText(h.info.id, 'ACKNOWLEDGED');
+        }
+        this.send({ type: 'corridor_interacted', roomId, objectId: h.info.id, t });
+      } else if (h.info.kind === 'locked') this.sound.rattle();
+      return;
+    }
+    // Opening an exit is reversible until the player actually crosses its threshold.
+    if (h.info.kind !== 'door' || this.room.doors.find((d) => d.door.id === h.info.id)?.locked)
+      this.tap?.act({ kind: h.info.kind, id: h.info.id, locked: h.info.kind === 'door' ? true : undefined });
     switch (h.info.kind) {
       case 'anomaly':
         if (this.room.spec.anomaly) {
@@ -167,6 +205,7 @@ export class Game {
         break;
       }
       case 'locked':
+        this.sound.rattle();
         break;
     }
   }
@@ -174,7 +213,28 @@ export class Game {
   private async openDoor(doorId: string) {
     const view = this.room?.doors.find((d) => d.door.id === doorId);
     if (!view || !this.room) return;
+    if (!this.core.run()?.finished) {
+      if (this.passage?.door === view) return;
+      if (this.passage) {
+        this.passage.door.target = 0;
+        this.passage.door.passage.visible = true;
+        this.removeView(this.passage.view);
+      }
+      const spec = createCorridor(this.room.spec, view.door, corridorStory(this.room.spec, view.door, this.core.run()!.events, gameData));
+      const corridor = buildRoom(spec, gameData, this.materials);
+      const entrance = corridor.doors.find((d) => d.door.entrance)!;
+      const exit = corridor.doors.find((d) => !d.door.entrance)!;
+      exit.indicator?.color.set('#bf8b20');
+      exit.indicator?.emissive.set('#ffb52e');
+      joinRooms(this.room, view, corridor, entrance);
+      this.scene.add(corridor.group);
+      this.passage = { view: corridor, from: this.room, door: view, entrance, exit, entered: false, fromDisposed: false, exitRequested: false };
+      view.target = 1;
+      this.sound.doorOpen();
+      return;
+    }
     this.busy = true;
+    this.tap?.act({ kind: 'door', id: doorId, locked: false });
     view.target = 1;
     this.sound.doorOpen();
     await wait(380);
@@ -186,7 +246,12 @@ export class Game {
   private handle(m: CoreMessage) {
     this.tap?.message(m);
     if (m.type === 'load_room') void this.loadRoom(m.spec);
+    else if (m.type === 'corridor_ready') {
+      if (m.timing) this.lastTransfer = `transfer ${(m.timing.corridorMs / 1000).toFixed(1)}s · exit wait ${(m.timing.exitWaitMs / 1000).toFixed(1)}s · ${m.spec.source}`;
+      this.prepareArrival(m.spec);
+    }
     else if (m.type === 'narrator_line') {
+      if (m.interrupt) { this.hud.clearNarration(); this.voice.stop(); }
       this.hud.narrate(m.lineId, m.text, m.final);
       if (m.final) this.voice.speak(m.text);
     }
@@ -223,12 +288,121 @@ export class Game {
 
   /** Show a rule's effect. Core decides; this only draws it. */
   applyEffect(e: RuleEffect) {
+    if (this.passage?.entered) return;
     const room = this.room;
     if (!room) return;
     if (e.kind === 'lights') room.setLights(e.level, e.seconds);
     else if (e.kind === 'doors') room.setLocked(e.locked);
     else if (e.kind === 'timer') this.hud.timer(e.seconds, e.label);
     else if (e.kind === 'display') room.setPropText(e.prop, e.text);
+  }
+
+  private removeView(view: RoomView) {
+    this.scene.remove(view.group);
+    view.dispose();
+  }
+
+  private ambience(view: RoomView) {
+    this.scene.fog = view.fog;
+    this.scene.background = view.background;
+    this.renderer.toneMappingExposure = view.exposure;
+    if (view.grade) this.post?.setGrade(view.grade);
+    this.sound.setAmbience(view.sound);
+    this.sound.setLightLevel(1);
+  }
+
+  private prepareArrival(spec: RoomSpec) {
+    const p = this.passage;
+    if (!p || !p.entered || p.next) return;
+    if (this.opts.forceAmbience) spec = { ...spec, ambience: this.opts.forceAmbience };
+    const view = buildRoom(spec, gameData, this.materials, true);
+    const entrance = view.doors.find((d) => d.door.entrance)!;
+    joinRooms(p.view, p.exit, view, entrance);
+    p.next = view;
+    p.view.setPropText('interlock', 'TRANSFER CLEARED\nPROCEED');
+    p.exit.indicator?.color.set('#2f8f4e');
+    p.exit.indicator?.emissive.set('#34c759');
+    this.scene.add(view.group);
+    this.voice.prefetch(spec.narrator.onEnter);
+    if (spec.rule?.line) this.voice.prefetch(spec.rule.line);
+    if (p.exitRequested) this.openPassageExit();
+  }
+
+  private openPassageExit() {
+    const p = this.passage;
+    if (!p?.next || p.exit.target === 1) return;
+    p.exit.target = 1;
+    this.sound.doorOpen();
+  }
+
+  /** Physical threshold crossings, with no fade or camera teleport. */
+  private updatePassage() {
+    const p = this.passage;
+    if (p && !p.entered && !p.door.locked && p.door.open > 0.8 && crossed(p.from, p.door, this.player.position)) {
+      p.entered = true;
+      p.door.target = 0;
+      p.door.locked = p.entrance.locked = true;
+      this.hovered = undefined;
+      this.hud.timer(null, '');
+      this.player.eyeHeight = 1.62;
+      this.ambience(p.view);
+      this.sound.rattle();
+      // Refresh the receipt with actions taken between opening the door and crossing it.
+      const story = corridorStory(p.from.spec, p.door.door, this.core.run()!.events, gameData);
+      for (const object of p.view.interactables) {
+        const info = object.userData.interact as InteractInfo | undefined;
+        if (info?.id === 'receipt') info.text = story.receipt;
+        if (info?.id === 'archive') info.text = story.archive;
+      }
+      this.tap?.act({ kind: 'door', id: p.door.door.id, locked: false });
+      this.send({ type: 'door_chosen', roomId: p.from.spec.id, doorId: p.door.door.id, t: this.time });
+    }
+    if (p?.entered && !p.fromDisposed && p.door.open < 0.01) {
+      p.entrance.open = p.entrance.target = 0;
+      p.entrance.pivot.rotation.y = 0;
+      p.entrance.pivot.visible = true;
+      this.removeView(p.from);
+      p.fromDisposed = true;
+    }
+    if (p?.entered && p.next && p.exit.open > 0.8 && crossed(p.view, p.exit, this.player.position)) {
+      const next = p.next;
+      const entrance = next.doors.find((d) => d.door.entrance)!;
+      p.exit.target = 0;
+      p.exit.locked = entrance.locked = true;
+      if (!p.fromDisposed) this.removeView(p.from);
+      if (this.behind) this.removeView(this.behind.view);
+      // Rebase all visible geometry together to keep the active room's coordinates small.
+      const offset = next.group.position.clone();
+      p.view.group.position.sub(offset);
+      next.group.position.set(0, 0, 0);
+      this.player.translate(-offset.x, -offset.z);
+      this.behind = { view: p.view, closing: p.exit, entrance };
+      this.room = next;
+      this.passage = undefined;
+      this.hovered = undefined;
+      this.wasIdle = false;
+      this.moving = true;
+      this.ambience(next);
+      this.send({ type: 'corridor_exited', roomId: p.from.spec.id, t: this.time });
+      this.send({ type: 'room_entered', roomId: next.spec.id, t: this.time });
+    }
+    if (this.behind && this.behind.closing.open < 0.01) {
+      const { view, entrance } = this.behind;
+      entrance.open = entrance.target = 0;
+      entrance.pivot.rotation.y = 0;
+      entrance.pivot.visible = true;
+      this.removeView(view);
+      this.behind = undefined;
+    }
+  }
+
+  /** The visible passage and props, also used by integration tests without bypassing collision. */
+  corridorState() {
+    const p = this.passage;
+    if (!p) return undefined;
+    return { entered: p.entered, ready: !!p.next, x: p.view.group.position.x, z: p.view.group.position.z,
+      layout: p.view.spec.layout, props: p.view.spec.props, door: p.door.door, exitOpen: p.exit.open,
+      sealed: p.entrance.locked, fromDisposed: p.fromDisposed };
   }
 
   private async loadRoom(spec: RoomSpec) {
@@ -265,18 +439,27 @@ export class Game {
   }
 
   update(dt: number, t: number) {
-    const room = this.room;
+    const p = this.passage;
+    const views = p ? [p.fromDisposed ? undefined : p.from, p.view, p.next] : [this.room];
+    if (this.behind) views.push(this.behind.view);
+    const live = views.filter((v): v is RoomView => !!v);
+    if (live.length) {
+      this.player.update(dt, (cx, cz) => walkableIn(live, cx, cz), connectedColliders(live));
+      for (const view of live) view.update(dt, t);
+      this.updatePassage();
+    }
+    const room = this.passage?.entered ? this.passage.view : this.room;
     if (room) {
-      this.player.update(dt, room.isWalkable, room.colliders);
-      room.update(dt, t);
       const erased = room.anomaly?.update(dt, t, this.player.position, this.hovered?.info.id);
       if (erased && room.spec.anomaly) this.send({ type: 'anomaly_action', roomId: room.spec.id, anomalyId: room.spec.anomaly.id, action: 'erase', t: this.time });
       if (this.player.stepped) this.sound.footstep();
       if (room.consumeFlicker()) this.sound.buzz();
       this.sound.setLightLevel(room.lightLevel());
       this.updateHover(room);
-      this.trackIdle(room);
-      this.trackMotion(room);
+      if (!this.passage?.entered) {
+        this.trackIdle(room);
+        this.trackMotion(room);
+      }
     }
     this.frames++;
     if (t - this.fpsTime >= 1) {
@@ -298,6 +481,9 @@ export class Game {
     const hits = this.raycaster.intersectObject(room.group, true);
     let found: { info: InteractInfo; object: THREE.Object3D } | undefined;
     for (const hit of hits) {
+      let visible: THREE.Object3D | null = hit.object;
+      while (visible && visible.visible) visible = visible.parent;
+      if (visible) continue;
       let o: THREE.Object3D | null = hit.object;
       while (o && !o.userData.interact) o = o.parent;
       if (o) found = { info: o.userData.interact as InteractInfo, object: o };
@@ -307,7 +493,7 @@ export class Game {
     const t = this.time;
     if (prev && prev.info.id !== found?.info.id) {
       const seconds = t - prev.since;
-      if (seconds >= 0.6 && prev.info.kind !== 'door' && prev.info.kind !== 'locked')
+      if (!this.passage?.entered && seconds >= 0.6 && prev.info.kind !== 'door' && prev.info.kind !== 'locked')
         this.send({ type: 'looked_at', roomId: room.spec.id, objectId: prev.info.id, seconds: round(seconds), t });
     }
     if (!found) {
@@ -320,7 +506,7 @@ export class Game {
       h.gazeReportAt = t;
       this.send({ type: 'looked_at', roomId: room.spec.id, objectId: h.info.id, seconds: round(t - h.since), t });
     }
-    if (h && h.info.kind === 'door' && !h.doorHoverSent && t - h.since >= 1.5) {
+    if (!this.passage?.entered && h && h.info.kind === 'door' && !h.doorHoverSent && t - h.since >= 1.5) {
       h.doorHoverSent = true;
       this.send({ type: 'door_hovered', roomId: room.spec.id, doorId: h.info.id, seconds: round(t - h.since), t });
     }
@@ -328,6 +514,10 @@ export class Game {
     else if (h.info.kind === 'anomaly') this.hud.setPrompt('E', h.info.name);
     else if (h.info.kind === 'inspect') this.hud.setPrompt('E', `Inspect ${h.info.name.toLowerCase()}`);
     else if (h.info.kind === 'button') this.hud.setPrompt('E', h.info.verb ?? 'Press');
+    else if (this.passage?.entered && h.info.kind === 'door' && !this.passage.next)
+      this.passage.exitRequested
+        ? this.hud.setPrompt(null, 'Transfer interlock engaged. The door will open when ready; you can still explore.')
+        : this.hud.setPrompt('E', 'Request transfer — interlock engaged');
     else if (h.info.kind === 'door')
       room.doors.find((d) => d.door.id === h.info.id)?.locked
         ? this.hud.setPrompt('E', `${h.info.name[0]!.toUpperCase()}${h.info.name.slice(1)} is locked`)
@@ -380,6 +570,7 @@ export class Game {
       r ? `room ${r.index} ${r.layout.archetype} ${r.layout.width}x${r.layout.depth} · ${r.ambience} · ${r.source}${r.genMs ? ` ${(r.genMs / 1000).toFixed(1)}s` : ''}` : 'no room',
       r ? `"${r.title}"` : '',
       this.genStatus,
+      this.lastTransfer,
       `pos ${p.x.toFixed(1)}, ${p.z.toFixed(1)}  yaw ${this.player.yaw.toFixed(2)}`,
       `events ${this.core.run()?.events.length ?? 0}${r?.rule ? ` · rule ${r.rule.id}` : ''}`,
       this.profile ? Object.entries(this.profile.traits).map(([k, v]) => `${k.slice(0, 4)} ${v.toFixed(2)}`).join('  ') : '',

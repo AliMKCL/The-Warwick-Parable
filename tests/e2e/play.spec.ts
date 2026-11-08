@@ -1,3 +1,4 @@
+import { traversePassage } from './corridor-helpers';
 import { expect, test, type Page } from '@playwright/test';
 
 const W = (page: Page) => page.evaluate(() => (window as any).__WHACK__.state());
@@ -66,6 +67,7 @@ test('walk through generated rooms', async ({ page }) => {
     // A rule that starts while we walk up (e.g. inspect_to_unlock) may have locked it again.
     await page.evaluate(() => (window as any).__WHACK__.effect({ kind: 'doors', locked: [] }));
     await page.evaluate(() => (window as any).__WHACK__.interact());
+    await traversePassage(page);
     await waitForRoom(page, i + 1);
     const now = await W(page);
     if (process.env.EXPECT_MODEL) expect(now.source, `room ${i + 1} source`).toBe(now.room.archetype === 'choice_room' ? 'template' : 'model');

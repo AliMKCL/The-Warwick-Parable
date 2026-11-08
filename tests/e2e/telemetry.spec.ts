@@ -1,3 +1,4 @@
+import { traversePassage } from './corridor-helpers';
 import { expect, test, type Page } from '@playwright/test';
 
 // Needs VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY set (any values); Supabase itself is faked here.
@@ -43,6 +44,7 @@ test('records sessions and events without touching the game', async ({ page }) =
     await page.evaluate((id) => (window as any).__WHACK__.useDoor(id), exit.id);
     await page.waitForTimeout(400);
     await page.evaluate(() => (window as any).__WHACK__.interact());
+    await traversePassage(page);
     if (i < 2) await waitForRoom(page, i + 1);
   }
   await page.waitForFunction(() => (window as any).__WHACK__.state().ended, null, { timeout: 60_000 });
@@ -74,6 +76,7 @@ test('plays normally when Supabase is unreachable', async ({ page }) => {
   await page.evaluate((id) => (window as any).__WHACK__.useDoor(id), exit.id);
   await page.waitForTimeout(400);
   await page.evaluate(() => (window as any).__WHACK__.interact());
+  await traversePassage(page);
   await waitForRoom(page, 1);
   expect(warnings.length).toBeGreaterThan(0);
   expect(errors).toEqual([]);

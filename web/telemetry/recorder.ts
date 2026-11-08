@@ -173,6 +173,7 @@ export class Recorder {
     const r = this.room;
     switch (m.type) {
       case 'load_room':
+      case 'corridor_ready':
         this.specs.set(m.spec.id, m.spec);
         break;
       case 'profile':

@@ -42,6 +42,34 @@ Add to the URL: `?seed=123` to replay a run, `?debug=1` for frame rate and room 
 
 A run ends in the final room: its single door leads to the player's file. Demo notes: `docs/demo.md`.
 
+Ordinary exits open into playable transfer corridors. Press **E** to open a
+door, then walk through it; crossing commits the choice and seals the door
+behind you. The corridor has two bends, light-filled windows, a route receipt,
+an archive notice and an optional acknowledgement button. The narrator refers
+to the chosen door and actions recorded in the previous room. These authored
+callbacks work immediately, including when the model is offline.
+
+The next room starts generating after a brief observation period in the previous
+room (3 seconds by default, or sooner on door focus). Crossing into a corridor
+cancels the other branches and continues the chosen request without restarting it.
+If you reach the exit early, an amber interlock and a notice explain the wait;
+you can still walk and inspect objects. After requesting entry, the door opens
+automatically when ready. The light turns green and the narrator acknowledges
+release. There is no black loading screen or required corridor interaction.
+
+Timing defaults live in `core/corridors/corridor.ts`: `ROOM_OBSERVE_MS` is 3000,
+`CORRIDOR_PREPARE_MS` is 45000 from corridor entry, and `CORRIDOR_EXIT_WAIT_MS`
+allows up to 10000 additional milliseconds after the first exit request. The
+first deadline reached uses a complete template room; model failures also fall
+back safely. Repeated requests do not extend the wait. These are initial tuning
+values, not measured model latency guarantees. `?debug=1` shows the last transfer's
+time from corridor entry to readiness, exit wait and model/template source to help tune them.
+
+Corridors do not consume test/filler slots or anomaly counts, and their
+interactions do not affect room test scores. The next room's test starts only
+after you enter it. Corridor narration uses the final choice and recent actions,
+so early background generation does not prevent immediate contextual reactions.
+
 Writing is in plain files: the world and narrator voice in `data/themes/office.md`,
 the prompts in `data/prompts/`, fallback text in `data/templates.json`.
 

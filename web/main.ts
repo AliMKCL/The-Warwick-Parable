@@ -196,6 +196,7 @@ Object.assign(window, {
           props: r.props.map((p) => ({ id: p.id, recipe: p.recipe, x: p.x, z: p.z })),
         },
         player: { x: game.player.position.x, z: game.player.position.z, yaw: game.player.yaw },
+        corridor: game.corridorState(),
         hovered: game.hovered?.info,
         events: game.core.run()?.events.map((e) => e.type) ?? [],
         source: r?.source,

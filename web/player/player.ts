@@ -44,6 +44,13 @@ export class Player {
     this.sync();
   }
 
+  /** Change coordinate origin together with the scene; preserve look direction and walking cadence. */
+  translate(x: number, z: number) {
+    this.position.x += x;
+    this.position.z += z;
+    this.sync();
+  }
+
   update(dt: number, walkable: (cx: number, cz: number) => boolean, colliders: Rect[]) {
     let fx = 0, fz = 0;
     if (this.enabled) {

@@ -1,3 +1,4 @@
+import { traversePassage } from './corridor-helpers';
 import { expect, test } from '@playwright/test';
 import { Run } from '../../core/run/run';
 import { loadGameData } from '../../tools/data-node';
@@ -39,6 +40,7 @@ test('all sixteen encounters render and accept a raycast interaction', async ({
     await page.evaluate(() => (window as any).__WHACK__.useDoor('d1'));
     await page.waitForTimeout(100);
     await page.evaluate(() => (window as any).__WHACK__.interact());
+    await traversePassage(page);
     await page.waitForFunction(
       () => (window as any).__WHACK__.state().room?.index === 1,
     );

@@ -18,6 +18,9 @@ export type GameEvent =
   | { type: 'pressed'; roomId: string; objectId: string; t: number }
   | { type: 'door_hovered'; roomId: string; doorId: string; seconds: number; t: number }
   | { type: 'door_chosen'; roomId: string; doorId: string; t: number }
+  | { type: 'corridor_interacted'; roomId: string; objectId: string; t: number }
+  | { type: 'corridor_exit_requested'; roomId: string; t: number }
+  | { type: 'corridor_exited'; roomId: string; t: number }
   | { type: 'idle'; roomId: string; seconds: number; t: number }
   | { type: 'went_back'; fromRoomId: string; toRoomId: string; t: number }
   /** The player started or stopped moving (sent after ~1.5 s of stillness, and on the first step after it). */
@@ -91,7 +94,8 @@ export interface AnomalyEffect { roomId: string; stage: number; text: string; ch
 export type CoreMessage =
   | { type: 'anomaly_effect'; effect: AnomalyEffect }
   | { type: 'load_room'; spec: RoomSpec }
-  | { type: 'narrator_line'; lineId: string; text: string; final: boolean }
+  | { type: 'corridor_ready'; spec: RoomSpec; timing?: { corridorMs: number; exitWaitMs: number } }
+  | { type: 'narrator_line'; lineId: string; text: string; final: boolean; interrupt?: boolean }
   | { type: 'gen_status'; model: 'on' | 'off'; doors: { door: string; status: string; ms?: number; error?: string }[] }
   | { type: 'rule_effect'; effect: RuleEffect }
   | { type: 'profile'; profile: ProfileSnapshot }

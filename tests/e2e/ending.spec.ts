@@ -1,3 +1,4 @@
+import { traversePassage } from './corridor-helpers';
 import { expect, test, type Page } from '@playwright/test';
 
 const W = (page: Page) => page.evaluate(() => (window as any).__WHACK__.state());
@@ -28,6 +29,7 @@ test('a full run ends with the dossier', async ({ page }) => {
     await page.evaluate((id) => (window as any).__WHACK__.useDoor(id), exit.id);
     await page.waitForTimeout(400);
     await page.evaluate(() => (window as any).__WHACK__.interact());
+    await traversePassage(page);
     if (i < 3) {
       await page.waitForFunction((n) => (window as any).__WHACK__.state().room?.index === n, i + 1, { timeout: 60_000 });
       await page.waitForTimeout(1500);

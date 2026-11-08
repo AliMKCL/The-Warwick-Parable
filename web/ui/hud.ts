@@ -19,6 +19,16 @@ export class Hud {
   private current?: { id: string; shownAt: number; done: boolean; text: string };
   private queue: string[] = [];
 
+  /** Drop obsolete room commentary when crossing into a new narrative space. */
+  clearNarration() {
+    clearInterval(this.typing);
+    clearTimeout(this.hideTimer);
+    this.current = undefined;
+    this.queue = [];
+    this.subtitle.textContent = '';
+    this.subtitle.classList.remove('show');
+  }
+
   setPrompt(key: string | null, text = '') {
     this.reticle.classList.toggle('active', !!key);
     this.prompt.innerHTML = key ? `<kbd>${key}</kbd>${escapeHtml(text)}` : escapeHtml(text);
