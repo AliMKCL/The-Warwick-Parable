@@ -81,7 +81,7 @@ describe('core port', () => {
     await tick(30);
     const lines = msgs.filter((m) => m.type === 'narrator_line') as Extract<CoreMessage, { type: 'narrator_line' }>[];
     expect(lines.some((l) => !l.final && l.text === 'Interesting')).toBe(true);
-    expect(lines.at(-1)!.text).toBe('You took your time. The building noticed.');
+    expect(lines.at(-1)!.text).toBe(core.run()!.current!.narrator.onEnter);
     expect(msgs.filter((m) => m.type === 'load_room')).toHaveLength(2);
   });
 });

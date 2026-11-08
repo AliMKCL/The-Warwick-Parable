@@ -145,6 +145,7 @@ export interface PlacedProp {
 }
 
 export interface RoomSpec {
+  variant?: 'messy' | 'ceiling';
   anomaly?: import('../anomalies/anomalies').AnomalySpec;
   id: string;
   index: number;

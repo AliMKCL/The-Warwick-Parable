@@ -4,6 +4,7 @@ import { LlmError, type LlmClient } from '../llm/client';
 import { OPPOSITE } from '../room/geometry';
 import { ARCHETYPES, generateLayout, type Archetype } from '../room/layouts';
 import { placeAssignments } from '../room/place';
+import { applyRoomVariant } from '../room/variants';
 import { templateAssignments } from '../room/templates';
 import type { Door, GameData, Layout, RoomSpec } from '../room/types';
 import { createRng, deriveSeed, pick } from '../util/random';
@@ -202,10 +203,12 @@ export class Run {
     this.rule = undefined;
     const previous = this.current;
     const choice = [...this.events].reverse().find((e) => e.type === 'door_chosen' && e.roomId === previous?.id);
-    attachAnomaly(room, this.rooms, this.events, this.data, this.last, this.seed, this.opts.maxAnomalies);
+    applyRoomVariant(room, this.rooms, this.last);
+    if (!room.variant) attachAnomaly(room, this.rooms, this.events, this.data, this.last, this.seed, this.opts.maxAnomalies);
     if (previous?.anomaly?.id === 'blue_door' && choice?.type === 'door_chosen' && choice.doorId === previous.anomaly.doorId) {
-      room.narrator.onEnter = `Returned to your file. ${previous.anomaly.record} You may wish to reconsider the wording.`;
-      room.fact = previous.anomaly.record;
+      const callback = `Returned to your file. ${previous.anomaly.record} You may wish to reconsider the wording.`;
+      room.narrator.onEnter = room.variant ? `${room.narrator.onEnter} ${callback}` : callback;
+      room.fact = [room.fact, previous.anomaly.record].filter(Boolean).join(' ');
     }
     this.anomaly = new AnomalyRuntime(room, this.events, (e) => this.opts.onAnomaly?.(e),
       (line) => this.opts.onSay?.(line), (t) => this.rule?.borrowTime(t, 8) ?? false);

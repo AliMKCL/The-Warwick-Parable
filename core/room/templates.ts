@@ -62,12 +62,11 @@ export function templateAssignments(
       continue;
     }
     const isStructural = slot.tags.includes('desk') || slot.tags.includes('partition');
-    if (!isStructural && rng() < 0.25) continue; // breathing room
+    if (!isStructural && rng() < 0.12) continue; // breathing room
     let options = candidatesFor(slot, layout.archetype, data).filter(
-      (p) => isStructural || (counts.get(p.id) ?? 0) < 2,
+      (p) => isStructural || (counts.get(p.id) ?? 0) < (slot.kind === 'wall_mounted' ? 3 : 2),
     );
     if (opts.plainOnly) {
-      if (slot.kind === 'wall_mounted') continue;
       const plain = options.filter((p) => !p.text);
       if (plain.length) options = plain;
     }
