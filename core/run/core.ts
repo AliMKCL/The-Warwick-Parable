@@ -6,6 +6,7 @@ import type { GameData } from '../room/types';
 import { Run, type RunOptions } from './run';
 
 export interface CoreOptions {
+  maxAnomalies?: number;
   llm?: LlmClient;
   waitMs?: number;
   observeMs?: number;
@@ -33,6 +34,8 @@ export function createCore(data: GameData, opts: CoreOptions = {}): CorePort & {
     observeMs: opts.observeMs,
     runLength: opts.runLength,
     onStatus: (doors) => emit({ type: 'gen_status', doors, model: run?.modelOff ? 'off' : 'on' }),
+    maxAnomalies: opts.maxAnomalies,
+    onAnomaly: (effect) => emit({ type: 'anomaly_effect', effect }),
     onEffect: (effect) => emit({ type: 'rule_effect', effect }),
     onSay: say,
     onProfile: (profile) => emit({ type: 'profile', profile }),

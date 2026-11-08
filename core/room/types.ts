@@ -86,6 +86,8 @@ export interface AmbiencePreset {
 // ---------- Layout (made by the generator, no model) ----------
 
 export interface Door {
+  color?: string;
+  concealed?: boolean;
   id: string;
   cx: number;
   cz: number;
@@ -143,6 +145,7 @@ export interface PlacedProp {
 }
 
 export interface RoomSpec {
+  anomaly?: import('../anomalies/anomalies').AnomalySpec;
   id: string;
   index: number;
   seed: number;

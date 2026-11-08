@@ -4,6 +4,8 @@ import { DIR, footprintRect, isFloor, OPPOSITE, yawForFacing } from '../../core/
 import type { Door, GameData, RoomSpec, Side } from '../../core/room/types';
 import { buildProp, type InteractInfo } from './buildProp';
 import { MaterialLibrary, surfaceMaterials } from './materials';
+import { ANOMALY_ANCHOR } from '../../core/anomalies/catalog';
+import { buildAnomaly, type AnomalyView } from './buildAnomaly';
 import { textMaterial } from './textTexture';
 
 export interface Rect { minX: number; maxX: number; minZ: number; maxZ: number }
@@ -23,6 +25,7 @@ export interface DoorView {
 
 export interface RoomView {
   spec: RoomSpec;
+  anomaly?: AnomalyView;
   group: THREE.Group;
   colliders: Rect[];
   interactables: THREE.Object3D[];
@@ -111,6 +114,12 @@ export function buildRoom(spec: RoomSpec, data: GameData, materials: MaterialLib
   }
   for (const d of doors) interactables.push(d.pivot);
 
+  const anomaly = spec.anomaly ? buildAnomaly(spec, data, materials, group, doors, owned) : undefined;
+  if (spec.anomaly) {
+    const a = spec.anomaly.anchor;
+    colliders.push(footprintRect(a.x, a.z, a.rotY, ANOMALY_ANCHOR.size[0], ANOMALY_ANCHOR.size[2]));
+  }
+
   // ---- lights ----
   const panels: THREE.Mesh[] = [];
   const panelGeo = new THREE.PlaneGeometry(1.2, 0.6);
@@ -163,6 +172,7 @@ export function buildRoom(spec: RoomSpec, data: GameData, materials: MaterialLib
 
   return {
     spec,
+    anomaly,
     group,
     colliders,
     interactables,
@@ -236,7 +246,8 @@ export function buildRoom(spec: RoomSpec, data: GameData, materials: MaterialLib
     const root = new THREE.Group();
     root.applyMatrix4(frame);
     const frameMat = materials.get('door_frame');
-    const leafMat = materials.get(door.entrance ? 'door_paint' : 'door_paint');
+    const leafMat = door.color ? materials.get('door_paint').clone() : materials.get('door_paint');
+    if (door.color) { leafMat.color.set(door.color); owned.push(leafMat); }
     for (const [w, h, x, y] of [
       [0.06, DOOR_H + 0.06, -0.48, (DOOR_H + 0.06) / 2],
       [0.06, DOOR_H + 0.06, 0.48, (DOOR_H + 0.06) / 2],
@@ -263,6 +274,13 @@ export function buildRoom(spec: RoomSpec, data: GameData, materials: MaterialLib
     handle.position.set(DOOR_W - 0.1, 1.0, 0.045);
     pivot.add(leaf, handle);
     root.add(pivot);
+    if (door.concealed) {
+      const cover = new THREE.Mesh(new THREE.BoxGeometry(1.04, 2.7, 0.08), mats.wall);
+      cover.position.set(0, 1.35, 0.14);
+      cover.name = 'concealed-exit';
+      owned.push(cover.geometry);
+      root.add(cover);
+    }
 
     // Beyond the door: a dark passage, so an open door shows depth, not the void.
     const passageGeo = new THREE.BoxGeometry(1.0, DOOR_H + 0.06, 2.2);

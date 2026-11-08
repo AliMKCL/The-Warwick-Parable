@@ -9,6 +9,7 @@ import type { RoomSpec } from './room/types';
 
 /** What the player did. Sent adapter -> core. `t` is seconds since the run started. */
 export type GameEvent =
+  | { type: 'anomaly_action'; roomId: string; anomalyId: import('./anomalies/catalog').AnomalyId; action: 'use' | 'stay' | 'erase'; t: number }
   | { type: 'run_started'; seed: number; t: number }
   | { type: 'room_entered'; roomId: string; t: number }
   | { type: 'looked_at'; roomId: string; objectId: string; seconds: number; t: number }
@@ -47,7 +48,10 @@ export interface Evidence {
 }
 
 /** What core tells the adapter. Sent core -> adapter. */
+export interface AnomalyEffect { roomId: string; stage: number; text: string; choice?: string }
+
 export type CoreMessage =
+  | { type: 'anomaly_effect'; effect: AnomalyEffect }
   | { type: 'load_room'; spec: RoomSpec }
   | { type: 'narrator_line'; lineId: string; text: string; final: boolean }
   | { type: 'gen_status'; model: 'on' | 'off'; doors: { door: string; status: string; ms?: number; error?: string }[] }

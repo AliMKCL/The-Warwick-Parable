@@ -23,7 +23,8 @@ function partGeometry(part: PropPart): THREE.BufferGeometry {
 }
 
 export interface InteractInfo {
-  kind: 'inspect' | 'button' | 'door' | 'locked';
+  kind: 'inspect' | 'button' | 'door' | 'locked' | 'anomaly';
+  action?: 'use' | 'stay';
   id: string;
   name: string;
   text?: string;

@@ -71,3 +71,29 @@ the prompts in `data/prompts/`, fallback text in `data/templates.json`.
 
 See `docs/progress.md` for what is done and what is next, `docs/voice.md` for the narrator voice,
 and `CLAUDE.md` for the full project context (written for AI coding sessions, useful for people too).
+
+## Anomaly encounters
+
+Change `MAX_ANOMALIES_PER_RUN` in `core/anomalies/config.ts` to set the maximum
+number of distinct anomalies encountered during one run. The default is `6`.
+Set it to `0` to disable encounters. Restart the development server or rebuild
+a production bundle after changing the value.
+
+The seed and chosen route select from sixteen encounters. An eligible room has
+a 65% chance of receiving one, with at most one anomaly per room and an ordinary
+room between encounters. Opening and ending rooms stay ordinary. A default
+seven-room run therefore has room for up to three encounters. Longer runs can
+reach the configured cap. Some encounters also require a compatible rule or
+prior choice. Unvisited branches never consume the budget.
+
+The blue door, ceiling cabinet, false exit, numbered footprints, floor meeting,
+delayed mirror, queueing plant, borrowed clock, disputed ticket, route copier,
+wandering light, hold telephone, weather drawer, permission machine, visit
+receipt and moving silhouette each have authored interactions and narrator
+responses. Recorded encounters also feed subsequent model narration. These
+encounters work with template narration when the model is offline.
+
+The permission machine offers a fold-out break seat for STAY. The copier shows
+a textual route record with a second inspection, and the mirror combines a live
+reflection with an animated chair silhouette. These fit the existing procedural
+wall slots.

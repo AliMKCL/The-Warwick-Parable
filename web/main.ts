@@ -106,6 +106,7 @@ Object.assign(window, {
       return {
         room: r && {
           id: r.id, index: r.index, archetype: r.layout.archetype, doors: r.layout.doors,
+          anomaly: r.anomaly,
           props: r.props.map((p) => ({ id: p.id, recipe: p.recipe, x: p.x, z: p.z })),
         },
         player: { x: game.player.position.x, z: game.player.position.z, yaw: game.player.yaw },

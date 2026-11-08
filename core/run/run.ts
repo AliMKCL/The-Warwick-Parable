@@ -10,6 +10,8 @@ import { createRng, deriveSeed, pick } from '../util/random';
 import type { GameEvent, ProfileSnapshot, RuleEffect } from '../protocol';
 import { Profile } from '../profile/profile';
 import { chooseRule, RuleRuntime, templateRuleLines, type RoomRule, type RuleId } from '../rules/rules';
+import { attachAnomaly, AnomalyRuntime } from '../anomalies/anomalies';
+import type { AnomalyEffect } from '../protocol';
 import { RUN_LENGTH } from '../director/prompts';
 
 const timers = globalThis as unknown as {
@@ -37,6 +39,8 @@ interface Plan {
 type RuleSpec = NonNullable<RoomSpec['rule']>;
 
 export interface RunOptions {
+  maxAnomalies?: number;
+  onAnomaly?: (effect: AnomalyEffect) => void;
   llm?: LlmClient;
   /** How long a door waits for an unfinished room before falling back to templates. */
   waitMs?: number;
@@ -78,6 +82,7 @@ export class Run {
   /** Story threads the model has planted, and whether a later room paid them off. */
   readonly threads: { id: string; text: string; room: number; resolvedIn?: number }[] = [];
   private rule?: RuleRuntime;
+  private anomaly?: AnomalyRuntime;
   /** Trait scores at the moment the player entered each room. */
   readonly traitHistory: Record<'hesitation' | 'curiosity' | 'compliance' | 'impulsivity', number>[] = [];
 
@@ -105,10 +110,12 @@ export class Run {
   }
 
   record(event: GameEvent): void {
+    if ('roomId' in event && event.roomId !== this.current?.id) return;
     this.events.push(event);
     const before = this.profile.evidence.length;
     this.profile.observe(event, this.current, this.events);
     this.rule?.onEvent(event);
+    this.anomaly?.onEvent(event);
     if (this.profile.evidence.length !== before) this.opts.onProfile?.(this.profile.snapshot());
     if (event.type === 'door_hovered') {
       this.prioritise(event.doorId);
@@ -150,7 +157,7 @@ export class Run {
   story(): string[] {
     return this.rooms.map((r) => {
       const resolved = r.thread?.resolves ? this.threads.find((t) => t.id === r.thread!.resolves) : undefined;
-      return `Room ${r.index} "${r.title}"${r.fact ? `: ${r.fact}` : ''}${resolved ? ` (paid off thread: ${resolved.text})` : ''}`;
+      return `Room ${r.index} "${r.title}"${r.anomaly ? ` (contained ${r.anomaly.id})` : ''}${r.fact ? `: ${r.fact}` : ''}${resolved ? ` (paid off thread: ${resolved.text})` : ''}`;
     });
   }
 
@@ -193,6 +200,15 @@ export class Run {
   private enter(room: RoomSpec) {
     this.rule?.stop();
     this.rule = undefined;
+    const previous = this.current;
+    const choice = [...this.events].reverse().find((e) => e.type === 'door_chosen' && e.roomId === previous?.id);
+    attachAnomaly(room, this.rooms, this.events, this.data, this.last, this.seed, this.opts.maxAnomalies);
+    if (previous?.anomaly?.id === 'blue_door' && choice?.type === 'door_chosen' && choice.doorId === previous.anomaly.doorId) {
+      room.narrator.onEnter = `Returned to your file. ${previous.anomaly.record} You may wish to reconsider the wording.`;
+      room.fact = previous.anomaly.record;
+    }
+    this.anomaly = new AnomalyRuntime(room, this.events, (e) => this.opts.onAnomaly?.(e),
+      (line) => this.opts.onSay?.(line), (t) => this.rule?.borrowTime(t, 8) ?? false);
     this.rooms.push(room);
     this.traitHistory.push({ ...this.profile.traits });
     if (room.thread?.plant) this.threads.push({ id: `t${this.threads.length + 1}`, text: room.thread.plant, room: room.index });
