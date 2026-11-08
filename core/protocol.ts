@@ -5,7 +5,8 @@
  * only draws RoomSpecs and reports what the player did. All types here are
  * plain JSON so they can travel over a WebSocket unchanged.
  */
-import type { RoomSpec } from './room/types';
+import type { PathStats } from './profile/path';
+import type { RoomSpec, SelectionNote } from './room/types';
 
 /** What the player did. Sent adapter -> core. `t` is seconds since the run started. */
 export type GameEvent =
@@ -89,6 +90,8 @@ export interface TaskEvent {
 /** The hidden player profile, for the debug overlay and the final dossier. */
 export interface ProfileSnapshot {
   traits: Record<TraitName, number>;
+  /** Posterior standard deviation per trait: how unsure the estimate still is (0.2 = no evidence yet). */
+  sd?: Record<TraitName, number>;
   evidence: Evidence[];
 }
 export type TraitName = 'hesitation' | 'curiosity' | 'compliance' | 'impulsivity';
@@ -212,6 +215,10 @@ export interface Dossier {
   verdict: Verdict;
   verdictSource: 'model' | 'template';
   traits: Record<TraitName, number>;
+  /** Posterior standard deviation per trait: ± how sure the file is (core/profile/bayes.ts). */
+  certainty?: Record<TraitName, number>;
+  /** Which test-selection method the run used. */
+  selection?: 'adaptive' | 'weighted';
   /** The strongest moments behind each trait. */
   moments: Record<TraitName, Evidence[]>;
   rooms: {
@@ -230,6 +237,10 @@ export interface Dossier {
     profile: string[];
     seed: number;
     size: string;
+    /** Why the scheduler drew this room's test. */
+    selection?: SelectionNote;
+    /** How the player walked through the room (distance fields + path analysis). */
+    path?: PathStats;
   }[];
   threads: { text: string; room: number; resolvedIn?: number }[];
   stats: { inspected: number; pressed: number; stoodStill: number; doorsTried: number };

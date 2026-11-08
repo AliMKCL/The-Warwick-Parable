@@ -524,6 +524,8 @@ export class Game {
     if (this.behind) views.push(this.behind.view);
     const live = views.filter((v): v is RoomView => !!v);
     if (live.length) {
+      // Advance movement and each room once, using world-space collision across doorways.
+      // A second room-local update doubles walking speed and breaks translated corridors.
       this.player.update(dt, (cx, cz) => walkableIn(live, cx, cz), connectedColliders(live));
       for (const view of live) view.update(dt, t);
       this.updatePassage();
@@ -534,7 +536,6 @@ export class Game {
       if (event) this.sound.play(event === 'paper_gust' ? 'paper' : event === 'falling_art' ? 'clunk' : 'pop');
     }
     if (room) {
-      this.player.update(dt, room.isWalkable, room.colliders);
       if (this.shakeLeft > 0) {
         // A short, small shake (the buzzer): no flashing, just the view jolting.
         this.shakeLeft -= dt;
@@ -542,7 +543,6 @@ export class Game {
         this.player.camera.position.x += (Math.random() - 0.5) * k;
         this.player.camera.position.y += (Math.random() - 0.5) * k;
       }
-      room.update(dt, t);
       this.sample(room, dt);
       const erased = room.anomaly?.update(dt, t, this.player.position, this.hovered?.info.id);
       if (erased && room.spec.anomaly) this.send({ type: 'anomaly_action', roomId: room.spec.id, anomalyId: room.spec.anomaly.id, action: 'erase', t: this.time });
@@ -667,7 +667,10 @@ export class Game {
       this.lastTransfer,
       `pos ${p.x.toFixed(1)}, ${p.z.toFixed(1)}  yaw ${this.player.yaw.toFixed(2)}`,
       `events ${this.core.run()?.events.length ?? 0}${r?.rule ? ` · rule ${r.rule.id}` : ''}`,
-      this.profile ? Object.entries(this.profile.traits).map(([k, v]) => `${k.slice(0, 4)} ${v.toFixed(2)}`).join('  ') : '',
+      this.profile ? Object.entries(this.profile.traits).map(([k, v]) => `${k.slice(0, 4)} ${v.toFixed(2)}${this.profile!.sd ? `±${this.profile!.sd[k as keyof typeof this.profile.traits].toFixed(2)}` : ''}`).join('  ') : '',
+      r?.selection?.trait ? `test picked for ${r.selection.trait}: ${r.selection.bits} bits, ${Math.round(r.selection.chance * 100)}% chance` : '',
+      this.core.run()?.paths.at(-1) ? `last path: ${this.core.run()!.paths.at(-1)!.walked} m, ${Math.round(this.core.run()!.paths.at(-1)!.coverage * 100)}% floor, ${this.core.run()!.paths.at(-1)!.reversals} turn-backs` : '',
+      this.core.run()?.fields?.buildMs !== undefined ? `distance fields ${this.core.run()!.fields!.buildMs!.toFixed(2)} ms` : '',
       this.profile?.evidence.at(-1) ? `last: ${this.profile.evidence.at(-1)!.trait} ${this.profile.evidence.at(-1)!.delta > 0 ? '+' : ''}${this.profile.evidence.at(-1)!.delta} ${this.profile.evidence.at(-1)!.reason}` : '',
     ].join('\n');
   }

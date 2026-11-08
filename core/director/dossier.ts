@@ -118,6 +118,8 @@ export function buildDossier(run: Run, verdict: Verdict, source: 'model' | 'temp
     verdict: aligned.verdict,
     verdictSource: source,
     traits: { ...run.profile.traits },
+    certainty: run.profile.sd(),
+    selection: run.layout.selection,
     moments: topMoments(run.profile.evidence),
     rooms: run.rooms.map((r, i) => ({
       index: r.index,
@@ -133,6 +135,8 @@ export function buildDossier(run: Run, verdict: Verdict, source: 'model' | 'temp
       profile: r.provenance?.profile ?? [],
       seed: r.seed,
       size: `${r.layout.width}×${r.layout.depth} m`,
+      ...(r.selection ? { selection: r.selection } : {}),
+      ...(run.paths.find((p) => p.room === r.index) ? { path: run.paths.find((p) => p.room === r.index) } : {}),
     })),
     threads: run.threads.map(({ text, room, resolvedIn }) => ({ text, room, resolvedIn })),
     stats: {

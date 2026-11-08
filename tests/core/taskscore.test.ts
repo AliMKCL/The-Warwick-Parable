@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs';
+import { readFileSync, writeFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { gameData } from '../../core/data';
 import { buildDossier, templateVerdict } from '../../core/director/dossier';
@@ -298,8 +298,13 @@ describe('said / did with tasks', () => {
 });
 
 describe('the dossier', () => {
+  // A snapshot of whole scripted runs: any change to how a run plays (new rooms, test selection, the profile)
+  // changes it. After such a change, check the scoring layer still adds nothing without task results, then
+  // re-capture with UPDATE_GOLDEN=1 npx vitest run tests/core/taskscore.test.ts
   it('with no task results, the dossier and said/did are identical to before the scoring layer', async () => {
-    const golden = JSON.parse(readFileSync(new URL('./fixtures/no-tasks-golden.json', import.meta.url), 'utf8'));
+    const file = new URL('./fixtures/no-tasks-golden.json', import.meta.url);
+    if (process.env.UPDATE_GOLDEN) writeFileSync(file, JSON.stringify(await goldenOutput(), null, 1) + '\n');
+    const golden = JSON.parse(readFileSync(file, 'utf8'));
     expect(await goldenOutput()).toEqual(golden);
   });
 

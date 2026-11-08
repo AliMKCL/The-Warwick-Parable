@@ -5,6 +5,7 @@ import { ORDINARY, up } from './shared';
 /** A countdown; when it ends, every exit but one locks (the one the player paid least attention to). */
 export const countdown: TestKind = {
   id: 'exit_timer',
+  measures: [{ trait: 'hesitation', a: 7, b: 0.55 }, { trait: 'impulsivity', a: 5, b: 0.5 }],
   candidates: ORDINARY.map((archetype) => ({ archetype, exits: [2, 3] as [number, number] })),
   weight: (t) => 1 + 4 * up(t.hesitation),
   params: ({ rng }) => ({ seconds: randInt(rng, 25, 40) }),

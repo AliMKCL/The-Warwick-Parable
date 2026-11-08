@@ -1,5 +1,6 @@
 import type { Evidence, GameEvent, ProfileSnapshot, TraitName } from '../protocol';
 import type { GameData, RoomSpec } from '../room/types';
+import { EVIDENCE_ITEM, EVIDENCE_UNIT, TraitPosterior, type Item } from './bayes';
 
 export const TRAITS: TraitName[] = ['hesitation', 'curiosity', 'compliance', 'impulsivity'];
 
@@ -15,9 +16,19 @@ export const TRAIT_WORDS: Record<TraitName, [low: string, high: string]> = {
  * The hidden profile. Every trait starts at 0.5 and moves only on clear
  * evidence. Each change is logged with its reason, so the ending can show
  * the player exactly what was noticed.
+ *
+ * Underneath, each trait is a Bayesian posterior (core/profile/bayes.ts):
+ * `traits` is its mean and `sd()` how unsure it still is. Evidence is read as
+ * item responses, so the first clue moves a trait about as far as its nudge,
+ * later ones less as the estimate firms up, and contradicting clues cancel
+ * instead of see-sawing. The test scheduler uses the posterior to pick the
+ * test that would teach it the most (expected information gain).
  */
 export class Profile {
   traits: Record<TraitName, number> = { hesitation: 0.5, curiosity: 0.5, compliance: 0.5, impulsivity: 0.5 };
+  readonly posterior: Record<TraitName, TraitPosterior> = {
+    hesitation: new TraitPosterior(), curiosity: new TraitPosterior(), compliance: new TraitPosterior(), impulsivity: new TraitPosterior(),
+  };
   evidence: Evidence[] = [];
   /** Per-room caps, so one room can't swing a trait too far. */
   private roomTotals = new Map<string, number>();
@@ -30,8 +41,40 @@ export class Profile {
     const allowed = Math.sign(delta) * Math.min(Math.abs(delta), Math.max(0, capPerRoom - Math.abs(used)));
     if (Math.abs(allowed) < 0.005) return;
     this.roomTotals.set(key, used + allowed);
-    this.traits[trait] = clamp(this.traits[trait] + allowed);
-    this.evidence.push({ t: round(t), room: room.index, trait, delta: round(allowed), reason });
+    this.respond(trait, allowed > 0 ? 1 : 0, EVIDENCE_ITEM, Math.abs(allowed) / EVIDENCE_UNIT, reason, room.index, t);
+  }
+
+  /**
+   * One item response straight into the posterior: `y` is the outcome, `item`
+   * its 2PL parameters, `weight` how many responses it counts as. Logged with
+   * the change it made to the estimate.
+   */
+  respond(trait: TraitName, y: 0 | 1, item: Item, weight: number, reason: string, room: number, t: number) {
+    const before = this.traits[trait];
+    this.posterior[trait].observe(y, item, weight);
+    this.traits[trait] = clamp(this.posterior[trait].mean());
+    const shift = this.traits[trait] - before;
+    // Very late evidence can move a firm estimate by less than a hundredth; it is still listed, with its direction.
+    const delta = Math.abs(shift) >= 0.005 ? round(shift) : (y ? 0.01 : -0.01);
+    this.evidence.push({ t: round(t), room, trait, delta, reason });
+  }
+
+  /**
+   * A test ran but its outcome was middling (the countdown neither expired nor
+   * was beaten early): half a "yes" and half a "no" on the test's own item.
+   * That pulls the estimate towards the item's 50/50 point and makes it surer,
+   * so the scheduler doesn't keep picking a test that already answered.
+   * Not listed as evidence: nothing was noticed, which is the finding.
+   */
+  neutral(trait: TraitName, item: Item, weight = 1) {
+    this.posterior[trait].observe(1, item, weight / 2);
+    this.posterior[trait].observe(0, item, weight / 2);
+    this.traits[trait] = clamp(this.posterior[trait].mean());
+  }
+
+  /** Posterior standard deviation per trait (0.2 before any evidence). */
+  sd(): Record<TraitName, number> {
+    return Object.fromEntries(TRAITS.map((k) => [k, round3(this.posterior[k].sd())])) as Record<TraitName, number>;
   }
 
   /** Update from one event. `events` is the full log so far (including this event). */
@@ -103,7 +146,7 @@ export class Profile {
   }
 
   snapshot(): ProfileSnapshot {
-    return { traits: { ...this.traits }, evidence: [...this.evidence] };
+    return { traits: { ...this.traits }, sd: this.sd(), evidence: [...this.evidence] };
   }
 }
 
@@ -116,6 +159,9 @@ export function describe(trait: TraitName, v: number): string {
 
 function clamp(v: number) {
   return Math.max(0.02, Math.min(0.98, v));
+}
+function round3(n: number) {
+  return Math.round(n * 1000) / 1000;
 }
 function round(n: number) {
   return Math.round(n * 100) / 100;

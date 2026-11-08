@@ -5,6 +5,7 @@ import { ORDINARY, up } from './shared';
 /** Lights dim when the player stands still, and come back when they move. */
 export const lights: TestKind = {
   id: 'lights_dim_on_idle',
+  measures: [{ trait: 'hesitation', a: 6, b: 0.5 }, { trait: 'compliance', a: 3, b: 0.5 }],
   candidates: ORDINARY.map((archetype) => ({ archetype, exits: [1, 3] as [number, number] })),
   weight: (t) => 0.8 + 3 * up(t.hesitation) + 1.5 * up(t.curiosity),
   params: ({ rng }) => ({ idleSeconds: randInt(rng, 4, 7) }),

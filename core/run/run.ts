@@ -6,7 +6,9 @@ import { CHOICE_ROOM, FINALE_HALL, generateLayout, orient, type Archetype } from
 import { placeAssignments } from '../room/place';
 import { applyRoomVariant } from '../room/variants';
 import { templateAssignments } from '../room/templates';
-import type { Door, GameData, Layout, RoomSpec } from '../room/types';
+import type { Door, GameData, Layout, RoomSpec, SelectionNote } from '../room/types';
+import { roomFields, type RoomFields } from '../room/fields';
+import { describePath, pathEvidence, PathTracker, type PathStats } from '../profile/path';
 import { createRng, deriveSeed, pick } from '../util/random';
 import type { GameEvent, ProfileSnapshot, RuleEffect, SelfRatings, TaskEvent, TaskResult } from '../protocol';
 import { Profile } from '../profile/profile';
@@ -43,6 +45,8 @@ interface Plan {
   test?: string;
   /** The rule this room will run, made from its test when the room was planned. */
   rule?: Omit<RoomRule, 'line' | 'doneLine'>;
+  /** Why its test was drawn. */
+  selection?: SelectionNote;
 }
 
 /** One gamble the player faced, for the dossier and the said/did comparison. */
@@ -142,6 +146,11 @@ export class Run {
   /** Run clock when each room's rule started, by room id. */
   readonly ruleStarts = new Map<string, number>();
   private anomaly?: AnomalyRuntime;
+  /** How the player walked through each room they left (core/profile/path.ts), in order. */
+  readonly paths: PathStats[] = [];
+  /** Distance fields of the current room, built on entry. */
+  fields?: RoomFields;
+  private tracker?: PathTracker;
   /** Trait scores at the moment the player entered each room. */
   readonly traitHistory: Record<'hesitation' | 'curiosity' | 'compliance' | 'impulsivity', number>[] = [];
 
@@ -173,6 +182,7 @@ export class Run {
     if ('roomId' in event && event.roomId !== this.current?.id) return;
     // Position samples and raw input feed the running test and the baseline only, not the event log.
     if (event.type === 'move' || event.type === 'input') {
+      if (event.type === 'move') this.tracker?.move(event.x, event.z, event.t);
       if (this.current?.index === 0) {
         const data = event.type === 'move' ? this.baselineMove(event.x, event.z, event.t) : { key: event.key, ...(event.target ? { target: event.target } : {}) };
         this.taskLog.emit('baseline', event.type, data, event.t);
@@ -182,9 +192,17 @@ export class Run {
     }
     this.events.push(event);
     const before = this.profile.evidence.length;
+    if (event.type === 'room_entered' && this.fields && this.current) this.tracker = new PathTracker(this.current, this.fields, event.t);
+    if (event.type === 'door_chosen' && this.tracker && this.current) {
+      const path = this.tracker.finish(event.doorId, event.t);
+      this.tracker = undefined;
+      this.paths.push(path);
+      pathEvidence(path, this.profile, this.current, event.t);
+    }
     this.profile.observe(event, this.current, this.events);
     this.rule?.onEvent(event);
     this.anomaly?.onEvent(event);
+    if (event.type === 'door_chosen' && this.current) this.settleTest(this.current);
     if (this.profile.evidence.length !== before) this.opts.onProfile?.(this.profile.snapshot());
     if (event.type === 'door_hovered') {
       this.prioritise(event.doorId);
@@ -220,6 +238,7 @@ export class Run {
     timers.clearTimeout(timer);
     let spec = result === 'timeout' ? this.finishPreparation(doorId)! : result;
     spec = this.settleGamble(doorId, spec);
+    if (plan.selection && spec.test === plan.test) spec.selection = plan.selection;
     this.decorate(spec);
     return spec;
   }
@@ -290,7 +309,22 @@ export class Run {
     if (noticed.length) lines.push(`Noticed: ${noticed.join('; ')}.`);
     const measured = this.taskResults.filter((r) => r.room === room.index).flatMap((r) => r.notes);
     if (measured.length) lines.push(`Measured: ${measured.join(' ')}`);
+    const path = this.paths.find((p) => p.room === room.index);
+    const walked = path && describePath(path);
+    if (walked) lines.push(walked);
     return lines;
+  }
+
+  /**
+   * Leaving a test room whose test ran: any trait the test measures that got no
+   * evidence in the room gets a neutral response (core/profile/profile.ts
+   * `neutral`), so a test with a middling outcome still counts as asked.
+   */
+  private settleTest(room: RoomSpec) {
+    const kind = room.rule && this.ruleStarts.has(room.id) ? TESTS[room.rule.id] : undefined;
+    for (const m of kind?.measures ?? []) {
+      if (!this.profile.evidence.some((e) => e.room === room.index && e.trait === m.trait)) this.profile.neutral(m.trait, m);
+    }
   }
 
   /** The player's own baseline from the waiting room (walking speed, input rate…), for tests that compare against it. */
@@ -385,6 +419,9 @@ export class Run {
       (line) => this.opts.onSay?.(line), (t) => this.rule?.borrowTime(t, 8) ?? false);
     this.rooms.push(room);
     this.traitHistory.push({ ...this.profile.traits });
+    // Walking distance to every exit from every cell, once per room: position samples are then read by table lookup.
+    this.fields = roomFields(room, this.data, () => this.now());
+    this.tracker = undefined;
     if (room.thread?.plant) this.threads.push({ id: `t${this.threads.length + 1}`, text: room.thread.plant, room: room.index });
     const resolved = this.threads.find((t) => t.id === room.thread?.resolves);
     if (resolved && resolved.resolvedIn === undefined) resolved.resolvedIn = room.index;
@@ -424,6 +461,7 @@ export class Run {
     const p: Plan = { doorId: door.id, index, seed, layout, entranceLabel: door.label, status: 'queued', done, resolve, slot: pick.slot };
     if (pick.test) {
       p.test = pick.test.id;
+      p.selection = pick.selection;
       const params = own ? own.params : pick.test.params({ layout, rng: createRng(deriveSeed(seed, 'test-params')), profile: this.profile, used: usedCounts(this.rooms) });
       if (params) p.rule = { id: pick.test.id, params };
     }

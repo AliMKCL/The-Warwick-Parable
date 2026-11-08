@@ -88,7 +88,8 @@ run**, mapped to 1–5 (`1 + 4 × share`):
 - **No change without task results:** with no task results in the run, all
   of the above is skipped and the output is exactly as without this layer
   (`tests/core/fixtures/no-tasks-golden.json`, captured from runs whose pool
-  has no office tasks, proves it; re-capture it when the run itself changes). The one-observation
+  has no office tasks, proves it; when the run itself changes, re-capture it with
+  `UPDATE_GOLDEN=1 npx vitest run tests/core/taskscore.test.ts`). The one-observation
   rule therefore only applies in runs where a task has reported.
 
 Measured-only traits (helpfulness, learning, adaptability, calibration, trust,
