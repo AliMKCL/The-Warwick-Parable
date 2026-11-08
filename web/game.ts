@@ -29,6 +29,8 @@ export interface GameOptions {
   mute?: boolean;
   /** Rooms per run, counting the first (default 7). */
   runLength?: number;
+  /** Rooms generated at once (LLM_PARALLEL in .env.local). */
+  concurrency?: number;
 }
 
 const REACH = 2.6;
@@ -91,7 +93,7 @@ export class Game {
   /** Start a run. With no model (or an unreachable one), rooms are filled from templates. */
   begin(llm?: LlmClient, selfRatings?: SelfRatings) {
     this.sound.start();
-    this.core = createCore(gameData, { llm, observeMs: this.opts.observeMs, runLength: this.opts.runLength });
+    this.core = createCore(gameData, { llm, observeMs: this.opts.observeMs, runLength: this.opts.runLength, concurrency: this.opts.concurrency });
     this.core.onMessage((m) => this.handle(m));
     this.startedAt = performance.now();
     this.send({ type: 'run_started', seed: this.opts.seed, t: 0, ...(selfRatings ? { selfRatings } : {}) });
@@ -169,7 +171,7 @@ export class Game {
     else if (m.type === 'profile') this.profile = m.profile;
     else if (m.type === 'run_ended') void this.endRun(m.dossier);
     else if (m.type === 'gen_status')
-      this.genStatus = `model ${m.model} · ` + m.doors.map((d) => `${d.door}:${d.status}${d.ms ? ` ${(d.ms / 1000).toFixed(1)}s` : ''}`).join(' ');
+      this.genStatus = `model ${m.model} ×${this.opts.concurrency ?? 1} · ` + m.doors.map((d) => `${d.door}:${d.status}${d.ms ? ` ${(d.ms / 1000).toFixed(1)}s` : ''}`).join(' ');
   }
 
   dossier?: Dossier;

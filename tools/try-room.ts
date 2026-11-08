@@ -12,13 +12,13 @@ import type { CoreMessage } from '../core/protocol';
 import type { RoomSpec } from '../core/room/types';
 import { createCore } from '../core/run/core';
 import { loadGameData } from './data-node';
-import { llmConfigFromEnv, loadProjectEnv } from './env';
+import { llmConfigFromEnv, loadProjectEnv, parallelFromEnv } from './env';
 
 loadProjectEnv();
 const data = loadGameData();
 const llm = createLlmClient(llmConfigFromEnv(), { fetch: (u, i) => fetch(u, i as RequestInit), now: () => performance.now() });
 const seed = Number(process.argv[2]) || Math.floor(Math.random() * 1e6);
-const core = createCore(data, { llm, observeMs: 0, waitMs: 60_000 });
+const core = createCore(data, { llm, observeMs: 0, waitMs: 60_000, concurrency: parallelFromEnv() });
 const msgs: CoreMessage[] = [];
 core.onMessage((m) => msgs.push(m));
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
@@ -62,6 +62,8 @@ async function main() {
   }
 
   const status = core.run()!.plansStatus();
+  const all = core.run()!.plansStatus();
+  console.log(`Generating ${parallelFromEnv()} room(s) at a time. Behind this room's ${exits.length} doors: ${all.map((p) => `${p.door} ${p.status}${p.ms ? ` ${(p.ms / 1000).toFixed(1)} s` : ''}`).join(', ')}`);
   console.log(`Room behind "${exits[0]!.label}": ${room.source === 'model' ? '✓ written by the model' : '✗ fell back to templates'} in ${genSeconds.toFixed(1)} s`);
   const err = core.run()!.rooms.length && status.find((p) => p.error)?.error;
   if (err) console.log(`  model problem: ${err}`);

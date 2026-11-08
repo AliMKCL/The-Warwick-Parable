@@ -63,8 +63,12 @@ export function createLlmClient(config: LlmConfig, deps: LlmDeps): LlmClient {
           max_tokens: req.maxTokens,
           temperature: req.temperature ?? 0.8,
           response_format: { type: 'json_schema', json_schema: { name: req.schemaName, schema: req.schema, strict: true } },
+          ...(config.noThinking ? { chat_template_kwargs: { enable_thinking: false } } : {}),
+          ...config.extraBody,
         }))) as OpenAiChatResponse;
-        content = data.choices?.[0]?.message?.content ?? '';
+        const msg = data.choices?.[0]?.message;
+        // Some servers put the JSON in reasoning_content when the model insists on thinking.
+        content = msg?.content?.trim() ? msg.content : (msg?.reasoning_content ?? '');
         timings = {
           totalMs: deps.now() - started,
           promptTokens: data.usage?.prompt_tokens,
@@ -85,7 +89,8 @@ export function createLlmClient(config: LlmConfig, deps: LlmDeps): LlmClient {
       const body = ollama
         ? { model: config.model, messages: req.messages, stream: true, think: false, keep_alive: '30m',
             options: { temperature: req.temperature ?? 0.9, num_predict: req.maxTokens } }
-        : { model: config.model, messages: req.messages, stream: true, max_tokens: req.maxTokens, temperature: req.temperature ?? 0.9 };
+        : { model: config.model, messages: req.messages, stream: true, max_tokens: req.maxTokens, temperature: req.temperature ?? 0.9,
+            ...(config.noThinking ? { chat_template_kwargs: { enable_thinking: false } } : {}), ...config.extraBody };
       const url = ollama ? `${base}/api/chat` : `${base}/v1/chat/completions`;
       let res;
       try {
@@ -205,6 +210,6 @@ async function call(
 interface OllamaChatResponse { message?: { content?: string }; prompt_eval_count?: number; eval_count?: number; eval_duration?: number }
 interface OllamaStreamChunk { message?: { content?: string }; done?: boolean; eval_count?: number }
 interface OllamaTags { models?: { name: string }[] }
-interface OpenAiChatResponse { choices?: { message?: { content?: string } }[]; usage?: { prompt_tokens?: number; completion_tokens?: number } }
+interface OpenAiChatResponse { choices?: { message?: { content?: string; reasoning_content?: string } }[]; usage?: { prompt_tokens?: number; completion_tokens?: number } }
 interface OpenAiStreamChunk { choices?: { delta?: { content?: string } }[] }
 interface OpenAiModels { data?: { id: string }[] }

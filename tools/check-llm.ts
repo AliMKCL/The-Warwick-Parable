@@ -57,8 +57,11 @@ function fmt(n: number | undefined, unit = '') {
 }
 
 async function main() {
-  console.log(`Model server: ${config.provider} at ${config.baseUrl}`);
-  console.log(`Model:        ${config.model}\n`);
+  console.log(`Rooms written by: ${config.label}  (${config.baseUrl})\n`);
+  if (config.problem) {
+    console.error(`✗ ${config.problem}. Fix it in .env.local.`);
+    process.exit(1);
+  }
 
   const ping = await client.ping();
   if (!ping.ok) {
@@ -66,12 +69,15 @@ async function main() {
     console.error(
       config.provider === 'ollama'
         ? '  Start Ollama (open the Ollama app, or run `ollama serve`) and try again.'
-        : '  Start the server in LM Studio (Developer tab → Start server) and try again.',
+        : /openrouter/.test(config.baseUrl)
+          ? '  Check your internet connection and OPENROUTER_API_KEY.'
+          : '  Start the server in LM Studio (Developer tab → Start server) and try again.',
     );
     process.exit(1);
   }
   if (!ping.hasModel) {
-    console.error(`✗ Server is up but "${config.model}" is not installed. Installed: ${ping.models.join(', ') || 'none'}`);
+    const near = ping.models.filter((m) => m.toLowerCase().includes(config.model.split(/[/:]/).pop()!.slice(0, 8).toLowerCase())).slice(0, 8);
+    console.error(`✗ Server is up but "${config.model}" is not available there.${near.length ? ` Similar: ${near.join(', ')}` : ''}`);
     if (config.provider === 'ollama') console.error(`  Run: ollama pull ${config.model}`);
     process.exit(1);
   }

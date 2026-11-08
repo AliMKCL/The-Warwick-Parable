@@ -17,7 +17,7 @@ The original design plan is the Claude doc "Procedural Narrative Game — Build 
 
 ## Run and test
 ```
-cp .env.example .env.local      # LLM_PROVIDER, LLM_BASE_URL, LLM_MODEL (+ ElevenLabs keys if used)
+cp .env.example .env.local      # MODEL_BACKEND, PARALLEL_ROOMS, OPENROUTER_* / OLLAMA_* / LMSTUDIO_*, ELEVENLABS_*
 npm install
 npm run check:llm               # model reachable, JSON output, speed
 npm run try:room                # scripted player + real model: prints the next room, rule, profile, narrator lines
@@ -118,6 +118,27 @@ npm run analyze                 # Supabase play data → per-player metrics + po
 - Cloud workspace has `/usr/bin/google-chrome` but no GPU: run Playwright with `CHROME_PATH=/usr/bin/google-chrome`,
   and use `post=0` in URLs for speed (about 1 fps with post-processing). kenney.nl and other asset sites are blocked.
 - Package-lock includes the darwin-arm64 optional binaries, so Ali's `npm install` works.
+
+## Model settings
+- `tools/llm-env.ts` `resolveLlmEnv()` is the single reader for model settings (used by vite.config and the
+  Node tools): `MODEL_BACKEND` (openrouter | ollama | lmstudio), `PARALLEL_ROOMS`, `OPENROUTER_API_KEY`,
+  `OPENROUTER_MODEL`, `OLLAMA_URL`, `OLLAMA_MODEL`, `LMSTUDIO_URL`, `LMSTUDIO_MODEL`. Old `LLM_*` names are
+  still read when `MODEL_BACKEND` is unset (tests and the mock use them). `npm run dev` prints
+  "Rooms written by: …" and logs proxy errors as `[rooms] …`; the start screen shows the exact reason when the
+  model is unreachable (otherwise the run silently uses templates).
+
+## Generation speed
+- `PARALLEL_ROOMS` (env, default 1) → `concurrency` in Run: rooms behind all doors are generated at once.
+  Must match the server (Ollama `OLLAMA_NUM_PARALLEL` via `launchctl setenv`, or LM Studio "Max Concurrent
+  Predictions"); higher than the server just queues there and loses lingered-door-first ordering.
+- LM Studio path: provider `openai`, `noThinking` is set automatically for localhost servers
+  (`chat_template_kwargs.enable_thinking=false`), and JSON is also accepted from `reasoning_content`.
+- Cloud: OpenRouter via provider `openai`, base `https://openrouter.ai/api`, model `qwen/qwen3.6-35b-a3b`.
+  `core/llm/cloud.ts` adds `provider.require_parameters` and `reasoning.effort: none` (`extraBody`); the Vite
+  proxy adds `Authorization: Bearer LLM_API_KEY` server-side. `LLM_OPENROUTER=1` forces the extras (used with the mock).
+- Setup walkthrough for Ali: `docs/speed.md`. Ali chose parallel generation and a faster engine; he did not want
+  shorter observation, fewer slots, or the transition corridor. The Ollama MLX build (`qwen3.6:35b-a3b-nvfp4`)
+  felt slower to him than `qwen3.6:35b-a3b` (with LLM_PARALLEL=3 at first, since set back to 1); cloud was then added.
 
 ## Decisions worth keeping
 - No hand-written rooms, ever (track theme). Fallbacks are generated too (layout generator + templates).

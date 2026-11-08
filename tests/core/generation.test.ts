@@ -85,3 +85,25 @@ describe('core port', () => {
     expect(msgs.filter((m) => m.type === 'load_room')).toHaveLength(2);
   });
 });
+
+describe('parallel generation', () => {
+  it('generates every door at once when the server allows it', async () => {
+    const run = new Run(12, gameData, { llm: fakeLlm({ delayMs: 60 }), observeMs: 0, concurrency: 3, runLength: 60 });
+    // Walk until a room has 3 exits.
+    run.start();
+    while (run.current!.layout.doors.filter((d) => !d.entrance).length < 3) await run.next('d1');
+    await tick(5);
+    const status = run.plansStatus();
+    expect(status.filter((p) => p.status === 'generating')).toHaveLength(3);
+    const t0 = Date.now();
+    await run.next(status.at(-1)!.door);
+    expect(Date.now() - t0).toBeLessThan(150); // one request's time, not three
+  });
+
+  it('keeps one at a time by default, lingered-at door first', async () => {
+    const run = new Run(13, gameData, { llm: fakeLlm({ delayMs: 30 }), observeMs: 0 });
+    run.start();
+    await tick(5);
+    expect(run.plansStatus().filter((p) => p.status === 'generating')).toHaveLength(1);
+  });
+});

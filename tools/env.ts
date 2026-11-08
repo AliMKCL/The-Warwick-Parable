@@ -1,5 +1,6 @@
 import { existsSync } from 'node:fs';
-import type { LlmConfig, LlmProvider } from '../core/llm/types';
+import type { LlmConfig } from '../core/llm/types';
+import { resolveLlmEnv } from './llm-env';
 
 /** Loads .env then .env.local (later wins) into process.env, like Vite does. */
 export function loadProjectEnv(): void {
@@ -8,12 +9,11 @@ export function loadProjectEnv(): void {
   }
 }
 
-export function llmConfigFromEnv(): LlmConfig {
-  const provider = (process.env.LLM_PROVIDER || 'ollama') as LlmProvider;
-  return {
-    provider,
-    baseUrl: process.env.LLM_BASE_URL || (provider === 'ollama' ? 'http://127.0.0.1:11434' : 'http://127.0.0.1:1234'),
-    model: process.env.LLM_MODEL || 'qwen3.6:35b-a3b',
-    apiKey: process.env.LLM_API_KEY || undefined,
-  };
+export function llmConfigFromEnv(): LlmConfig & { label: string; problem?: string } {
+  return resolveLlmEnv(process.env);
+}
+
+/** Rooms generated at the same time (LLM_PARALLEL). */
+export function parallelFromEnv(): number {
+  return resolveLlmEnv(process.env).parallel;
 }
