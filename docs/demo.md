@@ -16,7 +16,7 @@ model writes everything in it from what you have done so far. At the end, the bu
 - [ ] Backup: a screen recording of one good run (Cmd+Shift+5 → Record Entire Screen).
 
 ## How to play it on stage (about 5 minutes)
-1. **Start screen (15 s).** "No room exists until you reach it." Click to begin.
+1. **Start screen (15 s).** "Meet the stranger you've been all along." Click to begin.
 2. **The waiting room (45 s).** There is a button. *Wait* before pressing it, visibly. Read the notice board. That hesitation is being recorded.
 3. **Room 1 (60 s).** Point out a sign or screen that mentions what you just did. Inspect two things. If the doors are locked, the room wants your attention; if a countdown starts, it's pressuring a hesitant player.
 4. **Rooms 2–3 (90 s).** Linger at one door so the narrator comments, then take a different one. If the narrator recommends a door, ignore it.

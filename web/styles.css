@@ -68,7 +68,7 @@ html, body, #app { margin: 0; width: 100%; height: 100%; overflow: hidden; }
   margin: 0; font-size: clamp(44px, 7.5vw, 76px); font-weight: 700; line-height: 0.95;
   letter-spacing: -0.03em; text-wrap: balance; color: var(--ink);
 }
-#start .start-head p { margin: 14px 0 0; font-size: 17px; letter-spacing: 0.01em; color: var(--ink-2); }
+#start .start-head p { margin: 14px 0 0; font-size: 17px; letter-spacing: 0.01em; color: var(--ink-2); text-wrap: balance; }
 
 /* the self-rating form */
 #research {
