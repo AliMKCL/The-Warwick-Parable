@@ -1,0 +1,551 @@
+[
+ {
+  "seed": 11,
+  "style": "bold",
+  "rated": true,
+  "view": {
+   "verdict": {
+    "name": "The Button-Presser",
+    "summary": "Impulsive, by every measure we have. The clearest sign: you pressed the button 2 s after arriving. The building has adjusted itself accordingly.",
+    "hesitation": "Also noted: you gave up on the lift and found the maintenance door after 3 s.",
+    "curiosity": "Also noted: you pressed before looking at anything.",
+    "compliance": "Also noted: you ignored the narrator's recommendation.",
+    "impulsivity": "Noted: you pressed the button 2 s after arriving.",
+    "closing": "Your file is complete. The building will remember you, even if you do not remember it."
+   },
+   "measured": {
+    "risk": {
+     "score": 4.2,
+     "evidence": "No gambles this run; estimated from how quickly you acted.",
+     "n": 0,
+     "estimated": true
+    },
+    "patience": {
+     "score": 1,
+     "n": 2,
+     "estimated": false,
+     "evidence": "You left before all 2 countdowns ended."
+    },
+    "social": {
+     "score": 3.7,
+     "n": 3,
+     "estimated": false,
+     "evidence": "You pressed the button and ignored the narrator's recommended door."
+    },
+    "exploration": {
+     "score": 1,
+     "n": 8,
+     "estimated": false,
+     "evidence": "You didn't inspect anything in any of the 8 rooms you entered (42 objects were there)."
+    }
+   },
+   "saidDid": {
+    "rows": [
+     {
+      "trait": "risk",
+      "label": "I take risks",
+      "said": 5,
+      "did": null,
+      "estimate": 4,
+      "gap": null,
+      "evidence": "No gambles this run; estimated from how quickly you acted.",
+      "estimated": true
+     },
+     {
+      "trait": "patience",
+      "label": "I am patient",
+      "said": 1,
+      "did": 1,
+      "estimate": 1,
+      "gap": 0,
+      "evidence": "You left before all 2 countdowns ended.",
+      "estimated": false
+     },
+     {
+      "trait": "social",
+      "label": "I do what I'm told",
+      "said": 3,
+      "did": 4,
+      "estimate": 4,
+      "gap": -1,
+      "evidence": "You pressed the button and ignored the narrator's recommended door.",
+      "estimated": false
+     },
+     {
+      "trait": "exploration",
+      "label": "I explore everything",
+      "said": 4,
+      "did": 1,
+      "estimate": 1,
+      "gap": 3,
+      "evidence": "You didn't inspect anything in any of the 8 rooms you entered (42 objects were there).",
+      "estimated": false
+     }
+    ],
+    "headline": "You said you explore everything. You didn't inspect anything in any of the 8 rooms you entered (42 objects were there).",
+    "detail": "You said 4/5. You did 1/5.",
+    "headlineTrait": "exploration"
+   },
+   "verdictConflicts": [],
+   "patterns": [],
+   "gambles": [],
+   "traits": {
+    "hesitation": 0.4661048069883842,
+    "curiosity": 0.2255381877612928,
+    "compliance": 0.3625089432325197,
+    "impulsivity": 0.8052160477332927
+   }
+  }
+ },
+ {
+  "seed": 12,
+  "style": "careful",
+  "rated": true,
+  "view": {
+   "verdict": {
+    "name": "The Reader",
+    "summary": "Curious, by every measure we have. The clearest sign: you took the door the narrator recommended (the narrator was lying). The building has adjusted itself accordingly.",
+    "hesitation": "Noted: you took 70 s to leave the room.",
+    "curiosity": "Noted: you inspected the water cooler.",
+    "compliance": "Noted: you took the door the narrator recommended (the narrator was lying).",
+    "impulsivity": "Also noted: you took time to read three things.",
+    "closing": "Your file is complete. The building will remember you, even if you do not remember it."
+   },
+   "measured": {
+    "risk": {
+     "score": 2.2,
+     "evidence": "No gambles this run; estimated from how quickly you acted.",
+     "n": 0,
+     "estimated": true
+    },
+    "patience": {
+     "score": 5,
+     "n": 1,
+     "estimated": false,
+     "evidence": "You waited out the countdown."
+    },
+    "social": {
+     "score": 3,
+     "n": 2,
+     "estimated": false,
+     "evidence": "You never pressed the button and took the narrator's recommended door."
+    },
+    "exploration": {
+     "score": 5,
+     "n": 5,
+     "estimated": false,
+     "evidence": "You inspected something in 5 of 5 rooms you entered (26 of 26 objects). Rooms that required inspecting aren't counted."
+    }
+   },
+   "saidDid": {
+    "rows": [
+     {
+      "trait": "risk",
+      "label": "I take risks",
+      "said": 5,
+      "did": null,
+      "estimate": 2,
+      "gap": null,
+      "evidence": "No gambles this run; estimated from how quickly you acted.",
+      "estimated": true
+     },
+     {
+      "trait": "patience",
+      "label": "I am patient",
+      "said": 1,
+      "did": 5,
+      "estimate": 5,
+      "gap": -4,
+      "evidence": "You waited out the countdown.",
+      "estimated": false
+     },
+     {
+      "trait": "social",
+      "label": "I do what I'm told",
+      "said": 3,
+      "did": 3,
+      "estimate": 3,
+      "gap": 0,
+      "evidence": "You never pressed the button and took the narrator's recommended door.",
+      "estimated": false
+     },
+     {
+      "trait": "exploration",
+      "label": "I explore everything",
+      "said": 4,
+      "did": 5,
+      "estimate": 5,
+      "gap": -1,
+      "evidence": "You inspected something in 5 of 5 rooms you entered (26 of 26 objects). Rooms that required inspecting aren't counted.",
+      "estimated": false
+     }
+    ],
+    "headline": "You said you aren't patient. You waited out the countdown.",
+    "detail": "You said 1/5. You did 5/5.",
+    "headlineTrait": "patience"
+   },
+   "verdictConflicts": [],
+   "patterns": [],
+   "gambles": [],
+   "traits": {
+    "hesitation": 0.784376195541317,
+    "curiosity": 0.8314312281878911,
+    "compliance": 0.5174094288609354,
+    "impulsivity": 0.30743341363996374
+   }
+  }
+ },
+ {
+  "seed": 13,
+  "style": "mixed",
+  "rated": true,
+  "view": {
+   "verdict": {
+    "name": "The Reader",
+    "summary": "Curious, by every measure we have. The clearest sign: you pressed the button 2 s after arriving. The building has adjusted itself accordingly.",
+    "hesitation": "Nothing worth recording. Which is itself a record.",
+    "curiosity": "Noted: you pressed before looking at anything.",
+    "compliance": "Noted: you took the door the narrator recommended (the narrator was lying).",
+    "impulsivity": "Also noted: you pressed the button 2 s after arriving.",
+    "closing": "Your file is complete. The building will remember you, even if you do not remember it."
+   },
+   "measured": {
+    "risk": {
+     "score": 2.8,
+     "evidence": "No gambles this run; estimated from how quickly you acted.",
+     "n": 0,
+     "estimated": true
+    },
+    "patience": {
+     "score": 1,
+     "n": 1,
+     "estimated": false,
+     "evidence": "You left before the countdown ended."
+    },
+    "social": {
+     "score": 5,
+     "n": 2,
+     "estimated": false,
+     "evidence": "You pressed the button and took the narrator's recommended door."
+    },
+    "exploration": {
+     "score": 5,
+     "n": 7,
+     "estimated": false,
+     "evidence": "You inspected something in 7 of 7 rooms you entered (48 of 48 objects)."
+    }
+   },
+   "saidDid": {
+    "rows": [
+     {
+      "trait": "risk",
+      "label": "I take risks",
+      "said": 5,
+      "did": null,
+      "estimate": 3,
+      "gap": null,
+      "evidence": "No gambles this run; estimated from how quickly you acted.",
+      "estimated": true
+     },
+     {
+      "trait": "patience",
+      "label": "I am patient",
+      "said": 1,
+      "did": 1,
+      "estimate": 1,
+      "gap": 0,
+      "evidence": "You left before the countdown ended.",
+      "estimated": false
+     },
+     {
+      "trait": "social",
+      "label": "I do what I'm told",
+      "said": 3,
+      "did": 5,
+      "estimate": 5,
+      "gap": -2,
+      "evidence": "You pressed the button and took the narrator's recommended door.",
+      "estimated": false
+     },
+     {
+      "trait": "exploration",
+      "label": "I explore everything",
+      "said": 4,
+      "did": 5,
+      "estimate": 5,
+      "gap": -1,
+      "evidence": "You inspected something in 7 of 7 rooms you entered (48 of 48 objects).",
+      "estimated": false
+     }
+    ],
+    "headline": "You rated yourself 3/5 on \"I do what I'm told\". You pressed the button and took the narrator's recommended door.",
+    "detail": "You said 3/5. You did 5/5.",
+    "headlineTrait": "social"
+   },
+   "verdictConflicts": [],
+   "patterns": [],
+   "gambles": [],
+   "traits": {
+    "hesitation": 0.5098899565239919,
+    "curiosity": 0.7972934484679387,
+    "compliance": 0.6374910567674804,
+    "impulsivity": 0.44276618692744757
+   }
+  }
+ },
+ {
+  "seed": 14,
+  "style": "careful",
+  "rated": false,
+  "view": {
+   "verdict": {
+    "name": "The Reader",
+    "summary": "Curious, by every measure we have. The clearest sign: you took the door the narrator recommended. The building has adjusted itself accordingly.",
+    "hesitation": "Noted: you took 70 s to leave the room.",
+    "curiosity": "Noted: you inspected the dead plant.",
+    "compliance": "Noted: you took the door the narrator recommended.",
+    "impulsivity": "Also noted: you took time to read three things.",
+    "closing": "Your file is complete. The building will remember you, even if you do not remember it."
+   },
+   "measured": {
+    "risk": {
+     "score": 1,
+     "n": 1,
+     "estimated": false,
+     "evidence": "You chose the certain door."
+    },
+    "patience": {
+     "score": 5,
+     "n": 1,
+     "estimated": false,
+     "evidence": "You waited out the countdown."
+    },
+    "social": {
+     "score": 3,
+     "n": 2,
+     "estimated": false,
+     "evidence": "You never pressed the button and took the narrator's recommended door."
+    },
+    "exploration": {
+     "score": 5,
+     "n": 6,
+     "estimated": false,
+     "evidence": "You inspected something in 6 of 6 rooms you entered (43 of 43 objects). Rooms that required inspecting aren't counted."
+    }
+   },
+   "verdictConflicts": [],
+   "patterns": [],
+   "gambles": [
+    {
+     "room": 2,
+     "choice": "safe",
+     "outcome": "certain",
+     "timed": false,
+     "expired": false
+    }
+   ],
+   "traits": {
+    "hesitation": 0.784376195541317,
+    "curiosity": 0.8314312281878911,
+    "compliance": 0.5174094288609354,
+    "impulsivity": 0.3017129272579464
+   }
+  }
+ },
+ {
+  "seed": 15,
+  "style": "bold",
+  "rated": true,
+  "view": {
+   "verdict": {
+    "name": "The Button-Presser",
+    "summary": "Impulsive, by every measure we have. The clearest sign: you pressed the button 2 s after arriving. The building has adjusted itself accordingly.",
+    "hesitation": "Nothing worth recording. Which is itself a record.",
+    "curiosity": "Also noted: you pressed before looking at anything.",
+    "compliance": "Also noted: you ignored the narrator's recommendation.",
+    "impulsivity": "Noted: you pressed the button 2 s after arriving.",
+    "closing": "Your file is complete. The building will remember you, even if you do not remember it."
+   },
+   "measured": {
+    "risk": {
+     "score": 4.2,
+     "evidence": "No gambles this run; estimated from how quickly you acted.",
+     "n": 0,
+     "estimated": true
+    },
+    "patience": {
+     "score": 1,
+     "n": 0,
+     "estimated": true,
+     "evidence": "No countdown this run. Rough estimate from your 4 s per room."
+    },
+    "social": {
+     "score": 3,
+     "n": 2,
+     "estimated": false,
+     "evidence": "You pressed the button and ignored the narrator's recommended door."
+    },
+    "exploration": {
+     "score": 1,
+     "n": 5,
+     "estimated": false,
+     "evidence": "You didn't inspect anything in any of the 5 rooms you entered (36 objects were there). Rooms that required inspecting aren't counted."
+    }
+   },
+   "saidDid": {
+    "rows": [
+     {
+      "trait": "risk",
+      "label": "I take risks",
+      "said": 5,
+      "did": null,
+      "estimate": 4,
+      "gap": null,
+      "evidence": "No gambles this run; estimated from how quickly you acted.",
+      "estimated": true
+     },
+     {
+      "trait": "patience",
+      "label": "I am patient",
+      "said": 1,
+      "did": null,
+      "estimate": 1,
+      "gap": null,
+      "evidence": "No countdown this run. Rough estimate from your 4 s per room.",
+      "estimated": true
+     },
+     {
+      "trait": "social",
+      "label": "I do what I'm told",
+      "said": 3,
+      "did": 3,
+      "estimate": 3,
+      "gap": 0,
+      "evidence": "You pressed the button and ignored the narrator's recommended door.",
+      "estimated": false
+     },
+     {
+      "trait": "exploration",
+      "label": "I explore everything",
+      "said": 4,
+      "did": 1,
+      "estimate": 1,
+      "gap": 3,
+      "evidence": "You didn't inspect anything in any of the 5 rooms you entered (36 objects were there). Rooms that required inspecting aren't counted.",
+      "estimated": false
+     }
+    ],
+    "headline": "You said you explore everything. You didn't inspect anything in any of the 5 rooms you entered (36 objects were there). Rooms that required inspecting aren't counted.",
+    "detail": "You said 4/5. You did 1/5.",
+    "headlineTrait": "exploration"
+   },
+   "verdictConflicts": [],
+   "patterns": [],
+   "gambles": [],
+   "traits": {
+    "hesitation": 0.5000000000000002,
+    "curiosity": 0.2255381877612928,
+    "compliance": 0.35674195626933686,
+    "impulsivity": 0.7947466508141059
+   }
+  }
+ },
+ {
+  "seed": 16,
+  "style": "mixed",
+  "rated": true,
+  "view": {
+   "verdict": {
+    "name": "The Reader",
+    "summary": "Curious, by every measure we have. The clearest sign: you pressed the button 2 s after arriving. The building has adjusted itself accordingly.",
+    "hesitation": "Also noted: you gave up on the lift and found the maintenance door after 24 s.",
+    "curiosity": "Noted: you pressed before looking at anything.",
+    "compliance": "Noted: you took the door the narrator recommended (the narrator was lying).",
+    "impulsivity": "Also noted: you pressed the button 2 s after arriving.",
+    "closing": "Your file is complete. The building will remember you, even if you do not remember it."
+   },
+   "measured": {
+    "risk": {
+     "score": 2.7,
+     "evidence": "No gambles this run; estimated from how quickly you acted.",
+     "n": 0,
+     "estimated": true
+    },
+    "patience": {
+     "score": 1,
+     "n": 1,
+     "estimated": false,
+     "evidence": "You left before the countdown ended."
+    },
+    "social": {
+     "score": 5,
+     "n": 3,
+     "estimated": false,
+     "evidence": "You pressed the button and took the narrator's recommended door."
+    },
+    "exploration": {
+     "score": 5,
+     "n": 7,
+     "estimated": false,
+     "evidence": "You inspected something in 7 of 7 rooms you entered (47 of 47 objects). Rooms that required inspecting aren't counted."
+    }
+   },
+   "saidDid": {
+    "rows": [
+     {
+      "trait": "risk",
+      "label": "I take risks",
+      "said": 5,
+      "did": null,
+      "estimate": 3,
+      "gap": null,
+      "evidence": "No gambles this run; estimated from how quickly you acted.",
+      "estimated": true
+     },
+     {
+      "trait": "patience",
+      "label": "I am patient",
+      "said": 1,
+      "did": 1,
+      "estimate": 1,
+      "gap": 0,
+      "evidence": "You left before the countdown ended.",
+      "estimated": false
+     },
+     {
+      "trait": "social",
+      "label": "I do what I'm told",
+      "said": 3,
+      "did": 5,
+      "estimate": 5,
+      "gap": -2,
+      "evidence": "You pressed the button and took the narrator's recommended door.",
+      "estimated": false
+     },
+     {
+      "trait": "exploration",
+      "label": "I explore everything",
+      "said": 4,
+      "did": 5,
+      "estimate": 5,
+      "gap": -1,
+      "evidence": "You inspected something in 7 of 7 rooms you entered (47 of 47 objects). Rooms that required inspecting aren't counted.",
+      "estimated": false
+     }
+    ],
+    "headline": "You rated yourself 3/5 on \"I do what I'm told\". You pressed the button and took the narrator's recommended door.",
+    "detail": "You said 3/5. You did 5/5.",
+    "headlineTrait": "social"
+   },
+   "verdictConflicts": [],
+   "patterns": [],
+   "gambles": [],
+   "traits": {
+    "hesitation": 0.44941084645664653,
+    "curiosity": 0.8079289589300511,
+    "compliance": 0.6374910567674804,
+    "impulsivity": 0.42756072314890087
+   }
+  }
+ }
+]

@@ -87,17 +87,6 @@ export interface TaskEvent {
   data: Record<string, unknown>;
 }
 
-/** What a scored test measured when the player left its room. Metric values are null when there wasn't enough to measure. */
-export interface TaskResult {
-  task: string;
-  room: number;
-  title: string;
-  params: Record<string, number | string | boolean>;
-  metrics: Record<string, number | null>;
-  /** Plain sentences quoting the numbers, for the model and telemetry. */
-  notes: string[];
-}
-
 /** The hidden player profile, for the debug overlay and the final dossier. */
 export interface ProfileSnapshot {
   traits: Record<TraitName, number>;
@@ -129,12 +118,67 @@ export interface Measured {
   n: number;
   /** True when there was no direct test this run and the score is inferred from the hidden profile. */
   estimated: boolean;
+  /**
+   * Only present once a task has reported a result this run (core/director/taskscore.ts).
+   * The task measurements behind the score, with their evidence lines.
+   */
+  tasks?: TaskMeasure[];
+  /** Only present when tasks were combined with ordinary signals: the ordinary signals' share (0..1), behind `evidence`. */
+  ordinaryShare?: number;
+  /** Only present with task results: the score rests on a single yes/no moment. Never a headline or a highlighted gap. */
+  oneObservation?: boolean;
+}
+
+/** What a scored test (an office task) measured when the player left its room. Metric values are null when there wasn't enough to measure. */
+export interface TaskResult {
+  task: string;
+  room: number;
+  title: string;
+  params: Record<string, number | string | boolean>;
+  metrics: Record<string, number | null>;
+  /** Plain sentences quoting the numbers, for the dossier and the model. */
+  notes: string[];
+  /** Which setting the task was played in. Absent means office (the only version so far). */
+  version?: 'office' | 'mine';
+}
+
+/** Traits a task can feed that have no slider: measured, never compared with a self-rating. */
+export type MeasuredOnlyTrait = 'helpfulness' | 'learning' | 'adaptability' | 'calibration' | 'trust' | 'trustworthiness' | 'boredom';
+export type TaskTrait = SelfTrait | MeasuredOnlyTrait;
+
+/** One task result turned into one value for one trait (core/director/taskscore.ts). */
+export interface TaskMeasure {
+  task: string;
+  version: 'office' | 'mine';
+  room: number;
+  trait: TaskTrait;
+  /** 0..1, higher = more of the trait. */
+  value: number;
+  weight: number;
+  /** True when the value can fall between the ends (a time, a share); false for a single yes/no moment. */
+  graded: boolean;
+  /** False when recorded but deliberately not scored (the smoke room without a crowd). */
+  counts: boolean;
+  evidence: string;
+  /** The task's raw metrics, as reported. */
+  metrics: Record<string, number | null>;
+}
+
+/** A trait with no slider, scored from tasks only. */
+export interface AlsoMeasured {
+  trait: MeasuredOnlyTrait;
+  label: string;
+  /** 1–5, one decimal. */
+  score: number;
+  n: number;
+  oneObservation: boolean;
+  evidence: string[];
 }
 
 /** "You said / you did" for the dossier. */
 export interface SaidDid {
   /** `did` and `gap` are null when the trait was not tested this run (`estimate` is the rough guess). */
-  rows: { trait: SelfTrait; label: string; said: number | null; did: number | null; estimate: number; gap: number | null; evidence: string; estimated: boolean }[];
+  rows: { trait: SelfTrait; label: string; said: number | null; did: number | null; estimate: number; gap: number | null; evidence: string; estimated: boolean; oneObservation?: boolean }[];
   /** The single biggest gap in one line, or "You know yourself well." */
   headline: string;
   /** Second, smaller line under the headline. */
@@ -206,6 +250,10 @@ export interface Dossier {
   verdictConflicts: SelfTrait[];
   /** Present when the player rated themselves at the start. */
   saidDid?: SaidDid;
+  /** Only present once a task has reported a result: every task measurement, scored or recorded only. */
+  taskMeasures?: TaskMeasure[];
+  /** Only present once a task has reported a result: traits with no slider (helpfulness, trust...). */
+  alsoMeasured?: AlsoMeasured[];
   /** Contradictory trait pairs, each resolved into one sentence. */
   patterns: Pattern[];
   /** Every gamble: which door, and what happened. */

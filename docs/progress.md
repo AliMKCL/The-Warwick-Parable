@@ -23,6 +23,11 @@ Read this first when picking up the work. Newest entries at the top.
 
 ## Log
 
+### Task scoring connected to the report (PR #7, 8 Nov)
+- Merged Abhinav's task scoring layer (`core/director/taskscore.ts`, `docs/scoring.md`). It was written before the office tasks were ported, so it was waiting for results that now arrive: each office task's `TaskResult` becomes 0–1 scores on the start-screen traits (risk, patience, obedience, curiosity) and on measured-only traits (learning, trust, calibration…), with a weight and an evidence line each. "You said / you did" averages them with the ordinary signals; the dossier lists task evidence per trait and an "Also measured" section; telemetry logs one `task_measure` row per measurement.
+- Merge fixes: duplicate `TaskResult`/`TaskEvent`/`Run.taskResults` declarations removed; the telemetry recorder had two `case 'task_result'` branches (the second, PR #7's, never ran), now one; the no-tasks golden fixture re-captured on today's run (verified identical with and without the layer).
+- New: `tests/core/office-tasks.test.ts` plays the canteen and coffee tasks through to the dossier and checks their scores and evidence appear.
+
 ### Consistent walking speed (8 Nov)
 - Removed duplicate player and active-room updates from `Game.update`. All rooms and transfer corridors now use one world-space collision update per frame at the existing 2.7 m/s speed; doorway crossings preserve movement and walking cadence. Idle timers and room animations also advance once per frame.
 - Dijkstra's edge costs are distances in metres (1 or √2), so they do not change with speed. Path commitment uses actual timestamps, and office-task speed metrics use the player's measured waiting-room baseline.

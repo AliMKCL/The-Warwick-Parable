@@ -1,6 +1,7 @@
-import type { Evidence, GameEvent, Measured, Pattern, SaidDid, SelfRatings, SelfTrait, TraitName } from '../protocol';
+import type { Evidence, GameEvent, Measured, Pattern, SaidDid, SelfRatings, SelfTrait, TaskMeasure, TaskResult, TraitName } from '../protocol';
 import type { GameData, RoomSpec } from '../room/types';
 import type { Run } from '../run/run';
+import { combine, scoreTaskResults } from './taskscore';
 
 /**
  * "You said / you did": the player's behaviour on the four traits they rated
@@ -45,7 +46,58 @@ function chosen(run: Run, room: RoomSpec) {
   return e?.type === 'door_chosen' ? e : undefined;
 }
 
+/** The tasks' results this run, as each office task reported them when the player left its room. */
+export function taskResultsOf(run: Run): TaskResult[] {
+  return run.taskResults;
+}
+
+/**
+ * The four self-rated traits, 1–5. With no task results this is exactly the
+ * score from the ordinary signals (gambles, countdowns, the button, inspecting).
+ * Once tasks have reported, each trait is the weighted average of every
+ * measurement this run: ordinary signals weigh 1, tasks their own weight
+ * (core/director/taskscore.ts).
+ */
 export function measure(run: Run, data: GameData): Record<SelfTrait, Measured> {
+  const results = taskResultsOf(run);
+  if (!results.length) return measureOrdinary(run, data).measured;
+  return withTasks(run, data, scoreTaskResults(results));
+}
+
+/** Combines the ordinary signals with task measurements. Exported for tests. */
+export function withTasks(run: Run, data: GameData, measures: readonly TaskMeasure[]): Record<SelfTrait, Measured> {
+  // Rooms a task already scores for curiosity (the desk) aren't counted again as ordinary rooms.
+  const taskRooms = new Set(measures.filter((x) => x.trait === 'exploration').map((x) => x.room));
+  const { measured, shares } = measureOrdinary(run, data, taskRooms);
+  const out = {} as Record<SelfTrait, Measured>;
+  for (const k of SELF_TRAITS) {
+    const m = measured[k];
+    const tasks = measures.filter((x) => x.trait === k && x.counts);
+    const ordinary = m.estimated ? null : shares[k];
+    const c = combine(ordinary, m.n, tasks);
+    if (!c) {
+      // No measurement at all (still an estimate), or ordinary signals only.
+      out[k] = m.estimated ? m : { ...m, ...(m.n === 1 ? { oneObservation: true } : {}) };
+      continue;
+    }
+    // A single moment is one observation unless it is graded (a time, a share); ordinary signals are yes/no.
+    const one = c.n === 1 && !(tasks.length === 1 && ordinary === null && tasks[0]!.graded);
+    out[k] = {
+      score: scale(c.share),
+      evidence: ordinary !== null ? m.evidence : tasks[0]!.evidence,
+      n: c.n,
+      estimated: false,
+      ...(tasks.length ? { tasks } : {}),
+      ...(tasks.length && ordinary !== null ? { ordinaryShare: ordinary } : {}),
+      ...(one ? { oneObservation: true } : {}),
+    };
+  }
+  return out;
+}
+
+/** The ordinary signals only, with each tested trait's share (0..1) for combining with tasks. */
+function measureOrdinary(run: Run, data: GameData, skipRooms: ReadonlySet<number> = new Set()): { measured: Record<SelfTrait, Measured>; shares: Record<SelfTrait, number | null> } {
+  const shares: Record<SelfTrait, number | null> = { risk: null, patience: null, social: null, exploration: null };
   const t = run.profile.traits;
   const estimate = (v: number, evidence: string): Measured => ({ score: scale(v), evidence, n: 0, estimated: true });
 
@@ -55,7 +107,7 @@ export function measure(run: Run, data: GameData): Record<SelfTrait, Measured> {
   const expired = g.filter((x) => x.expired).length;
   const risk: Measured = g.length
     ? {
-        score: scale(risky / g.length),
+        score: scale((shares.risk = risky / g.length)),
         n: g.length,
         estimated: false,
         evidence:
@@ -78,7 +130,7 @@ export function measure(run: Run, data: GameData): Record<SelfTrait, Measured> {
     }).length;
     const n = timerRooms.length;
     patience = {
-      score: scale((n - left) / n),
+      score: scale((shares.patience = (n - left) / n)),
       n,
       estimated: false,
       evidence:
@@ -117,17 +169,17 @@ export function measure(run: Run, data: GameData): Record<SelfTrait, Measured> {
       const m = suggestRooms.length;
       parts.push(followed === m ? (m === 1 ? "took the narrator's recommended door" : "took the narrator's door every time") : followed === 0 ? (m === 1 ? "ignored the narrator's recommended door" : "ignored the narrator's door every time") : `took the narrator's door ${followed} of ${m} times`);
     }
-    social = { score: scale((pressed + followed) / nSocial), n: nSocial, estimated: false, evidence: `You ${parts.join(' and ')}.` };
+    social = { score: scale((shares.social = (pressed + followed) / nSocial)), n: nSocial, estimated: false, evidence: `You ${parts.join(' and ')}.` };
   } else social = estimate(t.compliance, 'Estimated from how you responded to instructions.');
 
   // Exploration: in how many of the rooms you entered you inspected anything. Per room, so a room
   // full of desks can't swamp the score. Only rooms you entered count (never ones planned behind
   // doors you didn't take), only things placed on purpose count (not filler furniture), and rooms
   // that required inspecting to open their doors are left out.
-  const { roomsSeen, rooms, objectsSeen, objects, forced } = explorationCounts(run, data);
+  const { roomsSeen, rooms, objectsSeen, objects, forced } = explorationCounts(run, data, skipRooms);
   const exploration: Measured = rooms
     ? {
-        score: scale(roomsSeen / rooms),
+        score: scale((shares.exploration = roomsSeen / rooms)),
         n: rooms,
         estimated: false,
         evidence:
@@ -138,7 +190,7 @@ export function measure(run: Run, data: GameData): Record<SelfTrait, Measured> {
       }
     : estimate(t.curiosity, 'Nothing to inspect freely this run. Rough estimate from what you looked at.');
 
-  return { risk, patience, social, exploration };
+  return { measured: { risk, patience, social, exploration }, shares };
 }
 
 /** Props worth inspecting: placed on purpose, inspectable, not the button, and with something to read. */
@@ -150,8 +202,8 @@ export function pointsOfInterest(room: RoomSpec, data: GameData) {
 }
 
 /** What the exploration score is built from. Exported for tests. */
-export function explorationCounts(run: Run, data: GameData) {
-  const entered = run.rooms.filter((r) => eventsIn(run, r).some((e) => e.type === 'room_entered'));
+export function explorationCounts(run: Run, data: GameData, skipRooms: ReadonlySet<number> = new Set()) {
+  const entered = run.rooms.filter((r) => !skipRooms.has(r.index) && eventsIn(run, r).some((e) => e.type === 'room_entered'));
   const free = entered.filter((r) => r.rule?.id !== 'inspect_to_unlock');
   const counted = free.filter((r) => pointsOfInterest(r, data).length > 0);
   let roomsSeen = 0, objectsSeen = 0, objects = 0;
@@ -165,6 +217,18 @@ export function explorationCounts(run: Run, data: GameData) {
   return { roomsSeen, rooms: counted.length, objectsSeen, objects, forced: entered.length - free.length };
 }
 
+/**
+ * The evidence line that supports a score in one direction: with several
+ * sources (ordinary signals and tasks), the lowest-scoring one when the point
+ * is "less than you said", the highest when it is "more". So the line quoted
+ * never argues against the claim it backs. With one source, its own line.
+ */
+export function evidenceToward(m: Measured, high: boolean): string {
+  if (!m.tasks?.length) return m.evidence;
+  const sources = [...(m.ordinaryShare !== undefined ? [{ value: m.ordinaryShare, evidence: m.evidence }] : []), ...m.tasks];
+  return sources.reduce((a, b) => (high ? b.value > a.value : b.value < a.value) ? b : a).evidence;
+}
+
 /** Puts the player's ratings next to what they did, and finds the one gap worth a headline. */
 export function compareSelf(measured: Record<SelfTrait, Measured>, ratings: SelfRatings): SaidDid {
   const rows = SELF_TRAITS.map((trait) => {
@@ -172,30 +236,36 @@ export function compareSelf(measured: Record<SelfTrait, Measured>, ratings: Self
     const said = ratings[trait] ?? null;
     // Untested: no "did" and no gap, only an estimate shown in grey. It can never be the headline or a red gap.
     const did = m.estimated ? null : Math.round(m.score);
-    return { trait, label: SELF_LABELS[trait], said, did, estimate: Math.round(m.score), gap: said === null || did === null ? null : said - did, evidence: m.evidence, estimated: m.estimated };
+    // One yes/no moment: shown, but never a gap or the headline.
+    const gap = said === null || did === null || m.oneObservation ? null : said - did;
+    return { trait, label: SELF_LABELS[trait], said, did, estimate: Math.round(m.score), gap, evidence: m.evidence, estimated: m.estimated, ...(m.oneObservation ? { oneObservation: true } : {}) };
   });
   const big = rows
     .filter((r) => r.gap !== null && !r.estimated && Math.abs(r.gap) >= BIG_GAP)
     .sort((a, b) => Math.abs(b.gap!) - Math.abs(a.gap!) || measured[b.trait].n - measured[a.trait].n)[0];
   if (!big) {
-    const rated = rows.filter((r) => r.said !== null && !r.estimated);
+    const rated = rows.filter((r) => r.said !== null && !r.estimated && !r.oneObservation);
+    const single = rows.some((r) => r.said !== null && r.oneObservation);
     return {
       rows,
       headline: rated.length ? 'You know yourself well.' : 'There was not enough to compare.',
       detail: rated.length
         ? `Every rating you gave was within a point of what you did${rated.length < rows.length ? ' (where the building could measure it)' : ''}.`
-        : 'The building could not test what you rated yourself on this time.',
+        : single
+          ? 'Where the building tested you, it saw each thing only once: too little to hold against you.'
+          : 'The building could not test what you rated yourself on this time.',
       headlineTrait: null,
     };
   }
   const said = big.said!;
+  const evidence = evidenceToward(measured[big.trait], big.gap! < 0);
   const [pos, neg] = CLAIMS[big.trait];
   const claim = big.gap! > 0
     ? said >= 4 ? `You said you ${pos}.` : `You rated yourself ${said}/5 on "${big.label}".`
     : said <= 2 ? `You said you ${neg}.` : `You rated yourself ${said}/5 on "${big.label}".`;
   return {
     rows,
-    headline: `${claim} ${big.evidence}`,
+    headline: `${claim} ${evidence}`,
     detail: `You said ${said}/5. You did ${big.did}/5.`,
     headlineTrait: big.trait,
   };
@@ -279,12 +349,12 @@ export function conflicts(text: string, measured: Record<SelfTrait, Measured>): 
 
 /** A name and summary built only from the measured, tested scores. */
 export function measuredTitle(measured: Record<SelfTrait, Measured>): { name: string; summary: string } {
-  const tested = SELF_TRAITS.filter((k) => !measured[k].estimated)
+  const tested = SELF_TRAITS.filter((k) => !measured[k].estimated && !measured[k].oneObservation)
     .map((k) => ({ k, d: measured[k].score - 3 }))
     .sort((a, b) => Math.abs(b.d) - Math.abs(a.d));
   const top = tested[0];
   const name = !top || Math.abs(top.d) < 1 ? 'The Unremarkable Applicant' : MEASURED_NAMES[top.k][top.d > 0 ? 1 : 0];
-  const lines = tested.filter((x) => Math.abs(x.d) >= 1).slice(0, 2).map((x) => measured[x.k].evidence);
+  const lines = tested.filter((x) => Math.abs(x.d) >= 1).slice(0, 2).map((x) => evidenceToward(measured[x.k], x.d > 0));
   const summary = lines.length
     ? `${lines.join(' ')} The building has adjusted itself accordingly.`
     : 'You did nothing the building could hold against you. That, too, has been noted.';
