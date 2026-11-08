@@ -54,10 +54,27 @@ function aim(g: Game, x: number, z: number, tx: number, y: number, tz: number) {
   g.player.pitch = Math.atan2(y - 1.62, Math.hypot(tx - x, tz - z));
   frames(g, 2);
 }
+// Check every unobstructed step, including thresholds, under uneven frame times.
+// A room arrival rebases the scene: restore that offset before measuring movement.
+function walkFrame(g: Game, i: number) {
+  const dt = [1 / 30, 1 / 60, 1 / 144, 0.011, 0.027][i % 5]!;
+  const before = g.player.position.clone(), from = g.room, corridor = g.corridorState();
+  g.scene.updateMatrixWorld(true);
+  g.player.camera.updateMatrixWorld(true);
+  g.update(dt, i * dt);
+  const after = g.player.position.clone();
+  if (g.room !== from) {
+    const exit = doorPoint(corridor!.layout.doors.find((d) => !d.entrance)!);
+    const entrance = doorPoint(g.room!.spec.layout.doors.find((d) => d.entrance)!);
+    after.x += corridor!.x + exit.x - entrance.x;
+    after.z += corridor!.z + exit.z - entrance.z;
+  }
+  expect(after.distanceTo(before), 'unobstructed walking stays at 2.7 m/s every frame').toBeCloseTo(2.7 * dt, 8);
+}
 function walkTo(g: Game, x: number, z: number) {
   aim(g, g.player.position.x, g.player.position.z, x, 1.62, z);
   key('keydown');
-  for (let i = 0; i < 1500 && Math.hypot(g.player.position.x - x, g.player.position.z - z) > 0.08; i++) frames(g);
+  for (let i = 0; i < 1500 && Math.hypot(g.player.position.x - x, g.player.position.z - z) > 0.08; i++) walkFrame(g, i);
   key('keyup');
   expect(Math.hypot(g.player.position.x - x, g.player.position.z - z), `walk to ${x},${z}`).toBeLessThan(0.1);
 }
@@ -76,6 +93,9 @@ it.each([1, 7, 19, 20261107])('walks a full run with sealed return paths (seed %
   g.player.enabled = true;
   vi.mocked(g.hud.fade).mockClear();
   vi.mocked(g.hud.waiting).mockClear();
+  const standing = g.player.standingFor;
+  frames(g, 30);
+  expect(g.player.standingFor - standing).toBeCloseTo(0.5, 8);
   for (let index = 0; index < 2; index++) {
     const from = g.room!, door = from.spec.layout.doors.find((d) => !d.entrance)!;
     faceDoor(g, door);
@@ -131,7 +151,7 @@ it.each([1, 7, 19, 20261107])('walks a full run with sealed return paths (seed %
     expect(g.hovered?.info.id).toBe('onward');
     g.interact(); frames(g, 30);
     key('keydown');
-    for (let i = 0; i < 120 && g.room === from; i++) frames(g);
+    for (let i = 0; i < 120 && g.room === from; i++) walkFrame(g, i);
     key('keyup'); frames(g, 60);
     expect(g.room!.spec.index).toBe(index + 1);
     expect(g.core.run()!.current!.id).toBe(g.room!.spec.id);

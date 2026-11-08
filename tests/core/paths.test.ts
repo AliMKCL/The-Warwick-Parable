@@ -71,6 +71,28 @@ describe('distance fields', () => {
 });
 
 describe('path analysis', () => {
+  it('keeps Dijkstra distances unchanged at corridor speed and measures the longer walk time', () => {
+    const layout = box(13, 3);
+    layout.spawn = { x: 1.5, z: 1.5, yaw: 0 };
+    layout.doors = [{ id: 'exit', cx: 12, cz: 1, side: 'e', label: 'Exit', entrance: false }];
+    const spec = { index: 0, layout, props: [] } as unknown as RoomSpec;
+    const fields = roomFields(spec, gameData);
+    const travel = (speed: number) => {
+      const tracker = new PathTracker(spec, fields, 0);
+      const seconds = 10.8 / speed;
+      for (let i = 0; i <= Math.round(seconds * 10); i++) tracker.move(1.5 + speed * i / 10, 1.5, i / 10);
+      return tracker.finish('exit', seconds);
+    };
+    const corridor = travel(2.7), doubled = travel(5.4);
+    expect(corridor.shortest).toBe(11.5);
+    expect(corridor.walked).toBe(10.8);
+    expect(corridor.shortest).toBe(doubled.shortest);
+    expect(corridor.efficiency).toBe(doubled.efficiency);
+    expect(corridor.deliberation).toBe(0);
+    expect(corridor.commit).toBe(4);
+    expect(doubled.commit).toBe(2);
+  });
+
   function room(): { spec: RoomSpec; run: Run } {
     const run = new Run(41, gameData, { observeMs: 60_000, layout: { tests: 2, fillers: 1 } });
     const spec = run.start();
