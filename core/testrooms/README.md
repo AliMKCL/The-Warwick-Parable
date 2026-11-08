@@ -22,15 +22,48 @@ When the player enters a room, the room behind each of its doors is planned
 
 1. Test or filler: drawn in proportion to what is left, so the totals are exact
    whatever the order. A test that `needsNextTest` (the gamble) forces a test next.
-2. Which test: from the pool, weighted by `data/layout.json` × the test's
-   `weight(traits)`. Never over its cap, never the previous room's test (unless
-   nothing else is left).
+2. Which test: from the pool, weighted by `data/layout.json` × how much the
+   test is expected to reveal (adaptive selection, below). Never over its cap,
+   never the previous room's test (unless nothing else is left).
 3. Which layout: one of the test's `candidates`, with its door count.
 4. The test's `params` are made from that layout.
 
 Filler rooms use `fillerLayouts` from `data/layout.json`, nudged by the profile.
 Anomalies and messy/upside-down variants are decoration: they can appear in any
 room except set pieces (`setPiece: true`) and the finale.
+
+## Adaptive selection (Bayesian, expected information gain)
+
+Each trait in the profile is a posterior over 0–1 (`core/profile/bayes.ts`), not
+a single number: the dossier shows its mean and ± one standard deviation. Each
+test declares what it reveals in `measures`, as item-response (2PL) items:
+`{ trait, a, b }`, where `a` is how sharply the outcome separates low from high
+(about 3 = weak, 9 = very clear) and `b` is the trait level at which the outcome
+is a coin flip.
+
+When a room is planned, `scoreTests` works out each eligible test's expected
+information gain: the mutual information between its outcome and the traits it
+measures, given what the profile currently believes. A trait that is already
+pinned down, or an item that can't separate anything, gives close to nothing.
+The draw is still random so runs vary, but tilted towards the best test:
+
+    score = pool weight × (0.1 + bits / best bits) ^ focus
+
+`focus` (in `data/layout.json`, or `?focus=`) is the one knob: 0 ignores the
+information, 4 is the default, and 8 or more nearly always takes the single best
+test. `npm run bench` prints what each value buys in accuracy and costs in
+variety. Each test room records why it was drawn (`RoomSpec.selection`: the
+trait, the expected bits, the chance it had), shown in "How this world was built".
+
+Two guards keep it honest. Exposure control: each earlier use of a test in the
+run multiplies its score by 0.35, so one very informative test doesn't take over.
+And a test that ran but moved none of the traits it measures (a countdown left
+at a middling time) still counts: on leaving, those traits get a neutral
+response (`Profile.neutral`), which firms the estimate up without moving it, so
+the scheduler moves on instead of asking the same question again.
+
+`"selection": "weighted"` (or `?select=weighted`) switches back to the old
+hand-written `weight(traits)` rules.
 
 ## Adding a test
 
@@ -42,7 +75,8 @@ room except set pieces (`setPiece: true`) and the finale.
    export const myTest: TestKind = {
      id: 'my_test',
      candidates: [{ archetype: 'hub', exits: [2, 3] }, { archetype: 'l_gallery', exits: 2 }],
-     weight: (t) => 1 + 2 * Math.max(0, t.curiosity - 0.5),   // optional
+     measures: [{ trait: 'curiosity', a: 6, b: 0.5 }],         // what it reveals, for adaptive selection
+     weight: (t) => 1 + 2 * Math.max(0, t.curiosity - 0.5),   // optional, for "selection": "weighted"
      maxPerRun: 2,                                             // optional
      params: ({ rng }) => ({ seconds: 20 }),
      describe: (p) => `What happens, for the model. "rule_line" is said when…`,
@@ -54,6 +88,9 @@ room except set pieces (`setPiece: true`) and the finale.
 2. Add it to `TEST_KINDS` in `registry.ts`.
 3. Give it lines in `data/templates.json` under `rules.my_test` (`line`, `done`, optional `tried`).
 4. Add it to `pool` in `data/layout.json` with a weight.
+
+`measures` should name the traits its `profile.adjust` calls move. A test without
+`measures` scores as average, so it is drawn about as often as the rest.
 
 A test that needs its own room shape (like the lift) adds a builder to
 `core/room/layouts.ts` and lists only that archetype in `candidates`. A test

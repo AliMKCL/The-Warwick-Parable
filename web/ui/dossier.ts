@@ -31,10 +31,11 @@ export function showDossier(root: HTMLElement, d: Dossier) {
     <section class="traits">
       ${TRAITS.map((t) => {
         const val = d.traits[t.key];
+        const sd = d.certainty?.[t.key];
         const moments = d.moments[t.key];
         return `<div class="trait">
-          <div class="trait-head"><strong>${t.label}</strong><span>${mixed.has(t.key) ? 'see pattern above' : val >= 0.62 ? t.high : val <= 0.38 ? t.low : 'unremarkable'}</span></div>
-          <div class="bar"><span style="left:${(val * 100).toFixed(0)}%;background:${t.colour}"></span><i></i></div>
+          <div class="trait-head"><strong>${t.label}</strong><span>${mixed.has(t.key) ? 'see pattern above' : val >= 0.62 ? t.high : val <= 0.38 ? t.low : 'unremarkable'}${sd !== undefined ? ` · ${certainty(sd)}` : ''}</span></div>
+          <div class="bar">${sd !== undefined ? `<u style="left:${(Math.max(0, val - sd) * 100).toFixed(1)}%;width:${((Math.min(1, val + sd) - Math.max(0, val - sd)) * 100).toFixed(1)}%;background:${t.colour}"></u>` : ''}<span style="left:${(val * 100).toFixed(0)}%;background:${t.colour}"></span><i></i></div>
           <div class="ends"><small>${t.low}</small><small>${t.high}</small></div>
           <p>${esc(v[t.key])}</p>
           ${moments.length ? `<ul>${moments.map((m) => `<li><b>${m.delta > 0 ? '+' : ''}${m.delta.toFixed(2)}</b> room ${m.room}: ${esc(m.reason)}</li>`).join('')}</ul>` : ''}
@@ -62,17 +63,19 @@ export function showDossier(root: HTMLElement, d: Dossier) {
 
     <section class="built" hidden>
       <h2>How this world was built</h2>
+      ${d.selection === 'adaptive' ? `<p class="note">Tests were chosen adaptively: before each room the building worked out, from a Bayesian estimate of each trait, which test would tell it the most about what it was least sure of (expected information gain), and leaned its draw towards that one. The shaded band on each trait above is ± one standard deviation of that estimate.</p>` : ''}
       <p class="note">No room existed before the player reached it. Seeded code laid out each room; ${d.rooms.filter((r) => r.source === 'model').length} of ${d.rooms.length} rooms were then written by the local model from what you had done so far (the rest used templates). The verdict above was written by ${d.verdictSource === 'model' ? 'the model' : 'templates'}${d.verdictConflicts?.length ? `; its title and summary contradicted what you did (${d.verdictConflicts.join(', ')}), so they were rewritten from your measured scores` : ''}.</p>
       <h3>Your traits as you entered each room</h3>
       ${chart(d)}
       <h3>Room by room</h3>
       <table>
-        <thead><tr><th>Room</th><th>Layout</th><th>Written by</th><th>Rule</th><th>What the model was told about you</th></tr></thead>
+        <thead><tr><th>Room</th><th>Layout</th><th>Written by</th><th>Rule</th><th>How you walked</th><th>What the model was told about you</th></tr></thead>
         <tbody>${d.rooms.map((r) => `<tr>
           <td><strong>${r.index}</strong> ${esc(r.title)}${r.fact ? `<small>${esc(r.fact)}</small>` : ''}</td>
           <td>${esc(r.archetype.replace('_', ' '))}<small>${esc(r.size)} · seed ${r.seed}</small></td>
           <td>${r.source}${r.genMs ? `<small>${(r.genMs / 1000).toFixed(1)} s</small>` : ''}</td>
-          <td>${r.rule ? esc(r.rule.replaceAll('_', ' ')) : '·'}</td>
+          <td>${r.rule ? esc(r.rule.replaceAll('_', ' ')) : '·'}${why(r.selection)}</td>
+          <td>${walk(r.path)}</td>
           <td>${r.behaviour.length || r.profile.length ? `<details><summary>${r.behaviour.length} notes</summary>${r.profile.length ? `<p><b>Profile:</b> ${r.profile.map(esc).join('; ')}</p>` : ''}${r.behaviour.map((b) => `<p>${esc(b)}</p>`).join('')}</details>` : '<small>first room, nothing yet</small>'}</td>
         </tr>`).join('')}</tbody>
       </table>
@@ -94,6 +97,27 @@ export function showDossier(root: HTMLElement, d: Dossier) {
   };
   root.querySelector('#d-replay')!.addEventListener('click', () => go(d.seed));
   root.querySelector('#d-again')!.addEventListener('click', () => go());
+}
+
+/** How sure the file is about a trait, from its posterior sd (0.2 = no evidence). */
+function certainty(sd: number): string {
+  return `±${sd.toFixed(2)} ${sd <= 0.08 ? 'certain' : sd <= 0.12 ? 'fairly sure' : sd <= 0.16 ? 'tentative' : 'a guess'}`;
+}
+
+/** Why the scheduler picked this room's test. */
+function why(s: NonNullable<Dossier['rooms'][number]['selection']> | undefined): string {
+  if (!s) return '';
+  if (s.mode !== 'adaptive' || !s.trait) return `<small>drawn by weight · ${Math.round(s.chance * 100)}% chance</small>`;
+  return `<small>picked to measure ${s.trait} (±${s.sd?.toFixed(2)}): ${s.bits?.toFixed(2)} bits expected · ${Math.round(s.chance * 100)}% chance${s.others.length ? ` · other options: ${s.others.slice(0, 2).map((o) => `${esc(o.test.replaceAll('_', ' '))} ${o.bits.toFixed(2)}`).join(', ')}` : ''}</small>`;
+}
+
+/** The room's path stats, briefly. */
+function walk(p: Dossier['rooms'][number]['path']): string {
+  if (!p || p.samples < 15) return '·';
+  const back = p.reversals ? ` · turned back ${p.reversals}×` : '';
+  const eff = p.efficiency !== undefined ? ` · ${Math.round(p.efficiency * 100)}% direct` : '';
+  const dec = p.deliberation !== undefined ? `<small>decided after ${Math.round(p.deliberation)} s, walked ${Math.round(p.commit ?? 0)} s</small>` : '';
+  return `${Math.round(p.walked)} m · ${Math.round(p.coverage * 100)}% of floor${eff}${back}${dec}`;
 }
 
 const SELF: { key: SelfTrait; label: string }[] = [

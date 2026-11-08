@@ -72,10 +72,10 @@ describe('run layout', () => {
     expect(run.rooms.filter((r) => r.slot === 'test').map((r) => r.test)).toEqual(['lights_dim_on_idle', 'lights_dim_on_idle', 'lights_dim_on_idle']);
   });
 
-  it('draws tests that push against the player: hesitant players get more countdowns', () => {
+  it('weighted selection draws tests that push against the player: hesitant players get more countdowns', () => {
     const profile = new Profile(gameData);
     profile.traits.hesitation = 0.95;
-    const config = resolveLayout(gameData.layout, { tests: 5, fillers: 0, pool: ['exit_timer', 'inspect_to_unlock'] });
+    const config = resolveLayout(gameData.layout, { tests: 5, fillers: 0, pool: ['exit_timer', 'inspect_to_unlock'], selection: 'weighted' });
     const counts: Record<string, number> = {};
     for (let i = 0; i < 400; i++) {
       const pick = pickRoom({ config, rooms: [], index: 1, last: 6, detours: 0, profile }, createRng(i));

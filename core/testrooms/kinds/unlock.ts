@@ -5,6 +5,7 @@ import { up } from './shared';
 /** Every exit is locked until the player inspects a few things. Needs rooms with things to inspect. */
 export const unlock: TestKind = {
   id: 'inspect_to_unlock',
+  measures: [{ trait: 'curiosity', a: 6, b: 0.5 }, { trait: 'impulsivity', a: 6, b: 0.5 }],
   candidates: (['waiting_room', 'open_office', 'hub', 'l_gallery', 'u_gallery', 'corridor'] as const).map((archetype) => ({ archetype, exits: [1, 3] as [number, number], weight: archetype === 'corridor' ? 0.5 : 1 })),
   weight: (t) => 1 + 4 * up(t.impulsivity) + 2 * up(1 - t.curiosity),
   params: ({ rng }) => ({ count: rng() < 0.5 ? 2 : 3 }),

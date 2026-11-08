@@ -7,8 +7,14 @@
   "//fillers": "Rooms with no test: furnished, inspectable, may hold an anomaly. Exact too, plus one extra for each lost gamble. This example: 1 + 5 + 2 + finale = 9 rooms.",
   "fillers": 2,
 
+  "//selection": "How the next test is drawn from the pool. \"adaptive\": the pool weight times how much the test is expected to reveal about the traits the building is least sure of (Bayesian information gain; see core/testrooms/schedule.ts). \"weighted\": the pool weight times each test's hand-written profile rule. URL: ?select=weighted",
+  "selection": "adaptive",
+
+  "//focus": "Adaptive only: how hard the draw leans towards the most informative test. 0 = not at all (pool weights only), 4 = default, 8 or more = nearly always the single best test (fewer rooms to a confident profile, less variety between runs). `npm run bench` prints the trade-off. URL: ?focus=8",
+  "focus": 4,
+
   "pool": {
-    "//": "Tests that can be drawn, by id (core/testrooms/kinds). A number is a relative weight; { weight, max } also caps it per run. Leave a test out (or set 0) and it never appears. The player's profile multiplies the weight (hesitant players get more countdowns, impulsive ones more locked doors). No test repeats in back-to-back rooms.",
+    "//": "Tests that can be drawn, by id (core/testrooms/kinds). A number is a relative weight; { weight, max } also caps it per run. Leave a test out (or set 0) and it never appears. The selection method (above) multiplies the weight. No test repeats in back-to-back rooms.",
     "exit_timer": 1.2,
     "inspect_to_unlock": 1,
     "lights_dim_on_idle": 0.8,

@@ -15,7 +15,8 @@
     "try:room": "tsx tools/try-room.ts",
     "mock:llm": "node tools/mock-llm.mjs",
     "try:voice": "tsx tools/try-voice.ts",
-    "analyze": "tsx tools/analyze.ts"
+    "analyze": "tsx tools/analyze.ts",
+    "bench": "tsx tools/bench-adaptive.ts"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.119.0",

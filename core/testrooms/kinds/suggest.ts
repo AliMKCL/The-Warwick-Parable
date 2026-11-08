@@ -4,6 +4,7 @@ import { ORDINARY, up } from './shared';
 /** The narrator recommends a door, and sometimes lies. Following or ignoring it moves compliance. */
 export const suggest: TestKind = {
   id: 'narrator_suggests',
+  measures: [{ trait: 'compliance', a: 9, b: 0.5 }],
   candidates: ORDINARY.map((archetype) => ({ archetype, exits: [2, 3] as [number, number] })),
   weight: (t) => 1 + 3 * Math.abs(t.compliance - 0.5),
   picksDoor: true,
