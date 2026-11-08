@@ -97,7 +97,7 @@ describe('office task metrics', () => {
     expect(b.inputRate).toBeCloseTo(2 / 5, 1);
   });
 
-  const base = { speed: 1.5, speedMad: 0.1, inputRate: 1, idleShare: 0.3, reaction: 1, reactionMad: 0.2, turns: 0, turnsMad: 0, samples: 100 };
+  const base = { speed: 1.5, speedMad: 0.1, inputRate: 1, idleShare: 0.3, activity: 0.8, reaction: 1, reactionMad: 0.2, turns: 0, turnsMad: 0, samples: 100 };
 
   it('two doors: compliance, latency against the baseline, early action, forbidden approaches', () => {
     const params = { instructedSide: 'left', leftDoor: 'd1', rightDoor: 'd2' };

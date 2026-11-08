@@ -53,6 +53,10 @@ export interface RoomView {
   glance(propId: string, atId: string, seconds: number, player?: { x: number; z: number }): void;
   /** A prop can no longer be used. */
   disableProp(propId: string): void;
+  /** Scale a prop about its origin; 0 hides it. */
+  scaleProp(propId: string, scale: number): void;
+  /** Turn a prop to face another prop, and leave it that way. */
+  turnProp(propId: string, atId: string): void;
   /** Stylised smoke from a prop, growing to `level` over `seconds`. */
   smoke(fromId: string, level: number, seconds: number): void;
   smokeLevel(): number;
@@ -319,6 +323,21 @@ export function buildRoom(spec: RoomSpec, data: GameData, materials: MaterialLib
       delete obj.userData.interact;
       const i = interactables.indexOf(obj);
       if (i >= 0) interactables.splice(i, 1);
+    },
+    scaleProp(id, s) {
+      const obj = propObjects.get(id);
+      if (!obj) return;
+      obj.visible = s > 0;
+      if (s > 0) obj.scale.setScalar(s);
+      // A hidden prop can't be aimed at either.
+      if (s > 0 && obj.userData.disabledInteract) { obj.userData.interact = obj.userData.disabledInteract; delete obj.userData.disabledInteract; }
+      else if (s <= 0 && obj.userData.interact) { obj.userData.disabledInteract = obj.userData.interact; delete obj.userData.interact; }
+    },
+    turnProp(id, atId) {
+      const obj = propObjects.get(id), at = propObjects.get(atId);
+      if (!obj || !at) return;
+      // Front is local +z: face the target.
+      obj.rotation.y = Math.atan2(at.position.x - obj.position.x, at.position.z - obj.position.z);
     },
     smoke(fromId, to, seconds) {
       const vent = spec.props.find((p) => p.id === fromId);

@@ -235,6 +235,8 @@ export interface TaskTexts {
   desk: { title: string; brief: string; enter: string; exitLabel: string; items: Record<string, { name: string; text: string; reading: boolean; surface?: string }> };
   meeting: { title: string; brief: string; enter: string; ask: string; thanks: string; late: string; boardLabel: string; secretLabel: string; timerLabel: string };
   smoke: { title: string; brief: string; enter: string; fileTaken: string; alarm: string; locked: string; workersBefore: string[]; workers: string[]; fileLabel: string; exitLabel: string; otherLabel: string };
+  /** Tasks 6 to 11, office versions (core/tasks/office). */
+  office: Record<'balloons' | 'coffee' | 'canteen' | 'renumbered' | 'pitch' | 'loan' | 'lockdown', { title: string; brief: string; lines: Record<string, string>; labels?: Record<string, string> }>;
 }
 
 /** Markdown prompt templates from data/prompts and data/themes, with {{placeholders}}. */

@@ -15,9 +15,12 @@ import { attachAnomaly, AnomalyRuntime } from '../anomalies/anomalies';
 import type { AnomalyEffect } from '../protocol';
 import { RUN_LENGTH } from '../director/prompts';
 import { buildTaskLayout } from '../tasks/layouts';
+import { isOfficeModule, OFFICE_MODULES, type OfficeTaskId } from '../tasks/office';
+import { scoreAny, taskBrief, taskTitle } from '../tasks/score';
+import { orient } from '../room/layouts';
 import { TaskLog } from '../tasks/log';
-import { computeBaseline, scoreTask, type Baseline } from '../tasks/metrics';
-import { sessionParams, taskFor, type TaskId, type TaskParams } from '../tasks/params';
+import { computeBaseline, type Baseline } from '../tasks/metrics';
+import { OFFICE_TASKS as OFFICE_TASK_ORDER, sessionParams, taskFor, type TaskId, type TaskParams } from '../tasks/params';
 import { TaskRuntime } from '../tasks/runtime';
 
 const timers = globalThis as unknown as {
@@ -41,7 +44,7 @@ interface Plan {
   abort?: { abort(): void };
   error?: string;
   /** The office task staged in this room, if any. */
-  task?: { id: TaskId; params: TaskParams };
+  task?: { id: TaskId | OfficeTaskId; params: TaskParams };
 }
 
 type RuleSpec = NonNullable<RoomSpec['rule']>;
@@ -71,6 +74,11 @@ export interface RunOptions {
   runLength?: number;
   /** Stage the office tasks (core/tasks) in rooms 1 to 5, with room 0 as the baseline. */
   tasks?: boolean;
+  /**
+   * Which tasks fill rooms 1, 2, 3... (with `tasks` on). Default: tasks 1 to 5. Office modules for
+   * tasks 6 to 11 (core/tasks/office) can be listed by id, e.g. ['balloons', 'coffee'].
+   */
+  taskOrder?: string[];
   now?: () => number;
 }
 
@@ -115,6 +123,12 @@ export class Run {
     // With the office tasks on, the Two Doors is the run's door choice, so there is no separate choice room.
     this.choiceRoomIndex = opts.tasks ? -1 : randInt(createRng(deriveSeed(seed, CHOICE_ROOM)), 1, this.last);
     this.taskParams = sessionParams(seed);
+  }
+
+  /** The task staged in room `index`, if any. */
+  taskAt(index: number): TaskId | OfficeTaskId | undefined {
+    if (!this.opts.tasks) return undefined;
+    return taskFor<string>(index, this.last, this.opts.taskOrder ?? OFFICE_TASK_ORDER) as TaskId | OfficeTaskId | undefined;
   }
 
   /** The player's own normal, from the first room (null until they have left it). */
@@ -199,7 +213,7 @@ export class Run {
   /** Every finished task, rescored from the whole log so metrics that look ahead (the desk note) are complete. */
   finalTaskResults(): TaskResult[] {
     return this.taskResults.map((r) => {
-      const { metrics, notes } = scoreTask(r.task as TaskId, this.taskLog.slice(r.task), { params: r.params, baseline: this.baseline(), all: this.taskLog.events });
+      const { metrics, notes } = scoreAny(r.task, this.taskLog.slice(r.task), { params: r.params, baseline: this.baseline(), all: this.taskLog.events });
       return { ...r, metrics, notes };
     });
   }
@@ -271,7 +285,7 @@ export class Run {
     this.taskRuntime = undefined;
     if (this.opts.tasks) {
       if (room.index === 0) this.taskRuntime = new TaskRuntime('baseline', room, this.taskContext());
-      else if (room.task) this.taskRuntime = new TaskRuntime(room.task.id as TaskId, room, this.taskContext());
+      else if (room.task) this.taskRuntime = new TaskRuntime(room.task.id as TaskId | OfficeTaskId, room, this.taskContext());
     }
     this.rooms.push(room);
     this.traitHistory.push({ ...this.profile.traits });
@@ -299,7 +313,14 @@ export class Run {
     let resolve!: (s: RoomSpec) => void;
     const done = new Promise<RoomSpec>((r) => (resolve = r));
     const base = { doorId: door.id, index, seed, entranceLabel: door.label, status: 'queued' as GenStatus, done, resolve };
-    const taskId = this.opts.tasks ? taskFor(index, this.last) : undefined;
+    const taskId = this.taskAt(index);
+    if (taskId && isOfficeModule(taskId)) {
+      // Tasks 6 to 11: the module's (placeholder) room, rotated like any other.
+      const m = OFFICE_MODULES[taskId];
+      const params = { ...m.defaults(this.seed) };
+      const built = m.layout(params, rng, this.data);
+      return { ...base, layout: orient(built.layout, OPPOSITE[door.side]), task: { id: taskId, params: { ...params, ...built.extra } } };
+    }
     if (taskId) {
       // An office task: its own seeded layout, whichever door led here.
       const built = buildTaskLayout(taskId, this.taskParams[taskId], OPPOSITE[door.side], rng, this.data);
@@ -349,7 +370,7 @@ export class Run {
       narrator: { onEnter: '', doors: {} },
       rule: undefined,
       task: plan.task,
-      title: spec.source === 'template' ? this.data.tasks[plan.task.id].title : spec.title,
+      title: spec.source === 'template' ? taskTitle(plan.task.id, this.data) : spec.title,
     };
   }
 
@@ -443,7 +464,7 @@ export class Run {
         threads: this.threads.filter((t) => t.resolvedIn === undefined).map(({ id, text }) => ({ id, text })),
         runLength: this.last + 1,
         data: this.data,
-        task: plan.task ? this.data.tasks[plan.task.id].brief : undefined,
+        task: plan.task ? taskBrief(plan.task.id, this.data) : undefined,
       },
       rng,
       controller?.signal,

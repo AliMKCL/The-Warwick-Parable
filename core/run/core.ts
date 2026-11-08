@@ -3,7 +3,6 @@ import { fill } from '../director/prompts';
 import type { LlmClient } from '../llm/client';
 import type { CoreMessage, CorePort, GameEvent } from '../protocol';
 import type { GameData } from '../room/types';
-import { taskFor } from '../tasks/params';
 import { Run, type RunOptions } from './run';
 
 export interface CoreOptions {
@@ -15,6 +14,8 @@ export interface CoreOptions {
   runLength?: number;
   /** Stage the office tasks in rooms 1 to 5 (see core/tasks). */
   tasks?: boolean;
+  /** Which tasks fill rooms 1, 2, 3... (see RunOptions.taskOrder). */
+  taskOrder?: string[];
 }
 
 /**
@@ -39,6 +40,7 @@ export function createCore(data: GameData, opts: CoreOptions = {}): CorePort & {
     observeMs: opts.observeMs,
     runLength: opts.runLength,
     tasks: opts.tasks,
+    taskOrder: opts.taskOrder,
     onStatus: (doors) => emit({ type: 'gen_status', doors, model: run?.modelOff ? 'off' : 'on' }),
     maxAnomalies: opts.maxAnomalies,
     onAnomaly: (effect) => emit({ type: 'anomaly_effect', effect }),
@@ -123,7 +125,7 @@ export function createCore(data: GameData, opts: CoreOptions = {}): CorePort & {
           // React live only when the next room is already built, so the
           // reaction never delays the room itself.
           // Not into an office task room: its first line is a measured instruction, and nothing should talk over it.
-          const intoTask = opts.tasks && taskFor((r.current?.index ?? 0) + 1, r.last);
+          const intoTask = r.taskAt((r.current?.index ?? 0) + 1);
           const ready = !intoTask && r.plansStatus().find((p) => p.door === event.doorId)?.status === 'ready';
           const reaction = ready ? reactToDoor(event.doorId) : Promise.resolve(false);
           const room = await r.next(event.doorId);

@@ -14,10 +14,13 @@ import { Loop } from './render/loop';
  *   ?mute=1     start with sound off (M toggles it)
  *   ?rooms=5    rooms per run, counting the first (default 7)
  *   ?tasks=0    no office tasks: every room after the first is generated with a rule, as before
+ *   ?try=balloons,coffee   put these tasks in rooms 1, 2... instead of tasks 1 to 5: any of two_doors, lift,
+ *               desk, meeting, smoke, balloons, coffee, canteen, renumbered, pitch, loan, lockdown
  */
 const params = new URLSearchParams(location.search);
 const seed = Number(params.get('seed')) || Math.floor(Math.random() * 1e9);
 const canvas = document.querySelector<HTMLCanvasElement>('#game-canvas')!;
+const tryTasks = params.get('try')?.split(',').map((s) => s.trim()).filter(Boolean);
 const game = new Game(canvas, {
   seed,
   post: params.get('post') !== '0',
@@ -25,9 +28,11 @@ const game = new Game(canvas, {
   debug: params.get('debug') === '1',
   observeMs: params.has('observe') ? Number(params.get('observe')) * 1000 : undefined,
   forceAmbience: params.get('ambience') ?? undefined,
-  runLength: Number(params.get('rooms')) || undefined,
+  // With ?try=, the run is long enough for every listed task plus the first and the last room.
+  runLength: Math.max(Number(params.get('rooms')) || 0, tryTasks ? tryTasks.length + 2 : 0) || undefined,
   mute: params.get('mute') === '1',
-  tasks: params.get('tasks') !== '0',
+  tasks: params.get('tasks') !== '0' || !!tryTasks,
+  taskOrder: tryTasks,
 });
 
 const loop = new Loop(
@@ -49,7 +54,7 @@ document.addEventListener('pointerlockchange', () => {
     started = true;
     void modelReady.then((ok) => game.begin(ok ? llm : undefined));
   }
-  game.player.enabled = locked && !game.hud.inspecting && !game.ended;
+  game.player.enabled = locked && !game.hud.inspecting && !game.ended && !game.asking;
   game.hud.start.hidden = locked || game.ended;
   if (started && !testMode) game.setPaused(!locked && !game.ended);
   startButton.textContent = 'Click to continue';
@@ -65,9 +70,18 @@ document.addEventListener('mousedown', (e) => {
 document.addEventListener('mouseup', (e) => {
   if (e.button === 0) game.release();
 });
+document.addEventListener('wheel', (e) => {
+  if (game.asking) game.askAdjust(e.deltaY < 0 ? 1 : -1);
+});
 addEventListener('keydown', (e) => {
   const playing = document.pointerLockElement === canvas || testMode;
   if (playing && !e.repeat) game.input(e.code);
+  if (playing && game.asking) {
+    // A task's question is on screen: A/D or arrows adjust, number keys pick, E confirms.
+    if (e.code === 'KeyA' || e.code === 'ArrowLeft') game.askAdjust(-1);
+    if (e.code === 'KeyD' || e.code === 'ArrowRight') game.askAdjust(1);
+    if (/^Digit[1-9]$/.test(e.code)) game.askPick(Number(e.code.slice(5)) - 1);
+  }
   if (e.code === 'KeyE' && playing && !e.repeat) game.interact();
   if (e.code === 'KeyM') game.voice.setMuted(game.sound.toggleMute());
 });
@@ -109,6 +123,7 @@ Object.assign(window, {
     seed,
     async begin() {
       testMode = true;
+      game.testMode = true;
       started = true;
       game.hud.start.hidden = true;
       game.begin((await modelReady) ? llm : undefined);
@@ -151,6 +166,10 @@ Object.assign(window, {
       game.player.pitch = Math.atan2(ty - 1.62, Math.hypot(tx - x, tz - z));
     },
     interact: () => game.interact(),
+    /** The question a task has on screen, if any. */
+    ask: () => game.hud.askOpen,
+    /** Answer it with a given value (an option index, a slider value, or a meter position 0 to 1). */
+    answer: (value: number) => game.answerWith(value),
     /** Let go of E (ends a hold-to-use action early). */
     release: () => game.release(),
     /** The office-task log so far (for checks). */

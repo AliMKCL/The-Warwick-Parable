@@ -162,12 +162,12 @@ const BUILDERS: Record<TaskId, (p: TaskParams, rng: Rng, data: GameData) => Buil
 const SCREENS = ['Q3 FORECAST\n=SUM(F2:F40)\n#REF!', 'INBOX (214)\nRe: fire drill\nRe: Re: fire drill', 'TICKET 5521\nStatus: smells odd\nAssigned: nobody'];
 
 /** Centre of a floor prop of `depth` standing against a wall, `along` metres along it. */
-function against(side: Side, along: number, W: number, D: number, depth: number): Pick<Fixture, 'x' | 'z' | 'face'> {
+export function against(side: Side, along: number, W: number, D: number, depth: number): Pick<Fixture, 'x' | 'z' | 'face'> {
   return spot(side, along, W, D, depth / 2 + 0.03);
 }
 
 /** Centre of a thin wall-mounted prop. */
-function onWall(side: Side, along: number, W: number, D: number, depth: number): Pick<Fixture, 'x' | 'z' | 'face'> {
+export function onWall(side: Side, along: number, W: number, D: number, depth: number): Pick<Fixture, 'x' | 'z' | 'face'> {
   return spot(side, along, W, D, depth / 2 + 0.006);
 }
 
@@ -181,7 +181,7 @@ function spot(side: Side, along: number, W: number, D: number, off: number): Pic
 }
 
 /** Every cell in the rectangle [x0..x1] x [z0..z1]. */
-function cells(x0: number, z0: number, x1: number, z1: number): [number, number][] {
+export function cells(x0: number, z0: number, x1: number, z1: number): [number, number][] {
   const out: [number, number][] = [];
   for (let z = z0; z <= z1; z++) for (let x = x0; x <= x1; x++) out.push([x, z]);
   return out;

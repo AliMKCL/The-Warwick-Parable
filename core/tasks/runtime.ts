@@ -1,9 +1,13 @@
 import type { Profile } from '../profile/profile';
 import type { GameEvent, RuleEffect, TaskEvent, TaskResult } from '../protocol';
 import type { GameData, RoomSpec } from '../room/types';
+import { createRng, deriveSeed, type Rng } from '../util/random';
 import type { TaskLog } from './log';
-import { scoreTask, type Baseline } from './metrics';
+import { type Baseline } from './metrics';
+import { isOfficeModule, OFFICE_MODULES, type OfficeTaskId, type OfficeTaskModule } from './office';
+import type { ModuleCtx } from './office/module';
 import type { TaskId, TaskParams } from './params';
+import { scoreAny, taskTitle } from './score';
 
 export interface TaskContext {
   log: TaskLog;
@@ -38,13 +42,51 @@ export class TaskRuntime {
   private lines = new Map<string, { key: string; duration: number; start?: number; ended?: boolean }>();
   private state: Record<string, unknown> = {};
   result?: TaskResult;
+  /** Tasks 6 to 11 run as modules (core/tasks/office); tasks 1 to 5 are handled inline below. */
+  private module?: OfficeTaskModule;
+  private mctxCache?: ModuleCtx;
+  private rngs = new Map<string, Rng>();
 
   constructor(
     /** 'baseline' for room 0, else the task id. */
-    readonly id: TaskId | 'baseline',
+    readonly id: TaskId | OfficeTaskId | 'baseline',
     readonly room: RoomSpec,
     private ctx: TaskContext,
-  ) {}
+  ) {
+    if (isOfficeModule(id)) this.module = OFFICE_MODULES[id];
+  }
+
+  /** What a module may do: everything it logs is tagged with the office version. */
+  private mctx(): ModuleCtx {
+    if (this.mctxCache) return this.mctxCache;
+    const id = this.id as OfficeTaskId;
+    const self = this;
+    this.mctxCache = {
+      room: this.room,
+      get p() { return self.p; },
+      data: this.ctx.data,
+      state: this.state,
+      text: this.ctx.data.tasks.office[id],
+      now: () => this.at,
+      t0: () => this.t0,
+      log: (type, data = {}) => this.log(type, { ...data, version: 'office' }),
+      say: (key, text) => this.say(key, text ?? this.ctx.data.tasks.office[id].lines[key] ?? ''),
+      emit: (effect) => this.ctx.emit(effect),
+      ask: (a) => {
+        this.ctx.emit({ kind: 'ask', ask: a });
+        this.log('prompt_shown', { prompt: a.id, mode: a.mode, ...(a.mode === 'choice' ? { options: a.options } : {}), version: 'office' });
+      },
+      rng: (label) => {
+        let r = this.rngs.get(label);
+        if (!r) this.rngs.set(label, (r = createRng(deriveSeed(this.room.seed, `${id}:${label}`))));
+        return r;
+      },
+      player: () => (this.last ? { x: this.last.x, z: this.last.z } : undefined),
+      inZone: (zone) => this.inside.has(zone),
+      exits: () => this.exits(),
+    };
+    return this.mctxCache;
+  }
 
   private get p(): TaskParams {
     return this.room.task?.params ?? {};
@@ -92,6 +134,7 @@ export class TaskRuntime {
         this.ctx.emit({ kind: 'doors', locked: this.exits() });
         break;
     }
+    this.module?.begin(this.mctx());
   }
 
   private exits(): string[] {
@@ -132,9 +175,15 @@ export class TaskRuntime {
       }
       case 'inspected':
         this.log('interact', { object: e.objectId, action: 'inspect' });
+        this.module?.onEvent?.(this.mctx(), e);
         break;
       case 'inspect_closed':
         this.log('interact', { object: e.objectId, action: 'inspect_close', seconds: e.seconds });
+        this.module?.onEvent?.(this.mctx(), e);
+        break;
+      case 'answer':
+        this.log('answer', { ask: e.askId, value: e.value, seconds: e.seconds });
+        this.module?.onEvent?.(this.mctx(), e);
         break;
       case 'looked_at':
         this.log('interact', { object: e.objectId, action: 'look', seconds: e.seconds });
@@ -148,9 +197,11 @@ export class TaskRuntime {
           this.state.toldLocked = true;
           this.say('locked', this.ctx.data.tasks.smoke.locked);
         }
+        this.module?.onEvent?.(this.mctx(), e);
         break;
       case 'pressed':
-        this.pressed(e.objectId);
+        if (this.module) this.module.onEvent?.(this.mctx(), e);
+        else this.pressed(e.objectId);
         break;
       case 'hold_start':
         this.holdStart(e.objectId);
@@ -178,16 +229,17 @@ export class TaskRuntime {
     this.log('task_end', { outcome });
     if (this.id === 'baseline') return undefined;
     const events = this.ctx.log.slice(this.id);
-    const score = scoreTask(this.id, events, { params: this.p, baseline: this.ctx.baseline(), all: this.ctx.log.events });
+    const score = scoreAny(this.id, events, { params: this.p, baseline: this.ctx.baseline(), all: this.ctx.log.events });
     this.result = {
       task: this.id,
       room: this.room.index,
-      title: this.ctx.data.tasks[this.id].title,
+      title: taskTitle(this.id, this.ctx.data),
       params: this.p,
       metrics: score.metrics,
       notes: score.notes,
     };
-    this.adjustProfile(score.metrics);
+    if (this.module) this.module.profile?.(score.metrics, (trait, delta, reason) => this.ctx.profile.adjust(trait, delta, reason, this.room, this.now));
+    else this.adjustProfile(score.metrics);
     return this.result;
   }
 
@@ -257,6 +309,7 @@ export class TaskRuntime {
         break;
       }
     }
+    this.module?.tick?.(this.mctx(), t);
   }
 
   private move(x: number, z: number, t: number) {
@@ -272,9 +325,11 @@ export class TaskRuntime {
         this.inside.add(zone.id);
         this.log('zone_enter', { zone: zone.id });
         this.enteredZone(zone.id);
+        this.module?.onZone?.(this.mctx(), zone.id, true);
       } else if (!inside && this.inside.has(zone.id)) {
         this.inside.delete(zone.id);
         this.log('zone_exit', { zone: zone.id });
+        this.module?.onZone?.(this.mctx(), zone.id, false);
       }
     }
   }
@@ -357,7 +412,11 @@ export class TaskRuntime {
         this.ctx.emit({ kind: 'alarm', on: false });
         break;
       default:
-        this.log('choice', { prompt: 'door', chosen: doorId });
+        this.log('choice', { prompt: 'door', chosen: doorId, ...(this.module ? { version: 'office' } : {}) });
+        if (this.module) {
+          this.module.onLeave?.(this.mctx(), doorId);
+          this.ctx.emit({ kind: 'ask_close', id: '*' });
+        }
     }
     this.finish('left');
   }

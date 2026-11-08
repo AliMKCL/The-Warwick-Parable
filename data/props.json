@@ -4830,5 +4830,2026 @@
     "mat": "plastic_black"
    }
   ]
+ },
+ {
+  "id": "colleague_pointing",
+  "name": "Colleague",
+  "tags": [
+   "person",
+   "task"
+  ],
+  "fits": [
+   "fixture"
+  ],
+  "size": [
+   0.62,
+   1.8,
+   0.34
+  ],
+  "solid": true,
+  "inspectable": false,
+  "parts": [
+   {
+    "shape": "box",
+    "size": [
+     0.12,
+     0.06,
+     0.24
+    ],
+    "pos": [
+     -0.09,
+     0.03,
+     0.03
+    ],
+    "mat": "rubber_black"
+   },
+   {
+    "shape": "box",
+    "size": [
+     0.12,
+     0.06,
+     0.24
+    ],
+    "pos": [
+     0.09,
+     0.03,
+     0.03
+    ],
+    "mat": "rubber_black"
+   },
+   {
+    "shape": "box",
+    "size": [
+     0.13,
+     0.82,
+     0.14
+    ],
+    "pos": [
+     -0.09,
+     0.47,
+     0
+    ],
+    "mat": "trousers_dark"
+   },
+   {
+    "shape": "box",
+    "size": [
+     0.13,
+     0.82,
+     0.14
+    ],
+    "pos": [
+     0.09,
+     0.47,
+     0
+    ],
+    "mat": "trousers_dark"
+   },
+   {
+    "shape": "box",
+    "size": [
+     0.42,
+     0.6,
+     0.22
+    ],
+    "pos": [
+     0,
+     1.17,
+     0
+    ],
+    "mat": "shirt_blue"
+   },
+   {
+    "shape": "box",
+    "size": [
+     0.1,
+     0.56,
+     0.12
+    ],
+    "pos": [
+     -0.27,
+     1.15,
+     0.01
+    ],
+    "mat": "shirt_blue",
+    "rot": [
+     0,
+     0,
+     -4
+    ]
+   },
+   {
+    "shape": "sphere",
+    "size": [
+     0.05
+    ],
+    "pos": [
+     -0.29,
+     0.84,
+     0.02
+    ],
+    "mat": "skin"
+   },
+   {
+    "shape": "cyl",
+    "size": [
+     0.05,
+     0.055,
+     0.09
+    ],
+    "pos": [
+     0,
+     1.51,
+     0
+    ],
+    "mat": "skin"
+   },
+   {
+    "shape": "sphere",
+    "size": [
+     0.115
+    ],
+    "pos": [
+     0,
+     1.65,
+     0.005
+    ],
+    "mat": "skin"
+   },
+   {
+    "shape": "sphere",
+    "size": [
+     0.12
+    ],
+    "pos": [
+     0,
+     1.69,
+     -0.025
+    ],
+    "mat": "hair_dark"
+   },
+   {
+    "shape": "sphere",
+    "size": [
+     0.016
+    ],
+    "pos": [
+     -0.042,
+     1.67,
+     0.108
+    ],
+    "mat": "plastic_black"
+   },
+   {
+    "shape": "sphere",
+    "size": [
+     0.016
+    ],
+    "pos": [
+     0.042,
+     1.67,
+     0.108
+    ],
+    "mat": "plastic_black"
+   },
+   {
+    "shape": "box",
+    "size": [
+     0.1,
+     0.1,
+     0.56
+    ],
+    "pos": [
+     0.27,
+     1.38,
+     0.28
+    ],
+    "mat": "shirt_blue"
+   },
+   {
+    "shape": "sphere",
+    "size": [
+     0.05
+    ],
+    "pos": [
+     0.27,
+     1.38,
+     0.58
+    ],
+    "mat": "skin"
+   }
+  ]
+ },
+ {
+  "id": "colleague_talk",
+  "name": "Colleague",
+  "tags": [
+   "person",
+   "task"
+  ],
+  "fits": [
+   "fixture"
+  ],
+  "size": [
+   0.62,
+   1.8,
+   0.34
+  ],
+  "solid": true,
+  "inspectable": false,
+  "parts": [
+   {
+    "shape": "box",
+    "size": [
+     0.12,
+     0.06,
+     0.24
+    ],
+    "pos": [
+     -0.09,
+     0.03,
+     0.03
+    ],
+    "mat": "rubber_black"
+   },
+   {
+    "shape": "box",
+    "size": [
+     0.12,
+     0.06,
+     0.24
+    ],
+    "pos": [
+     0.09,
+     0.03,
+     0.03
+    ],
+    "mat": "rubber_black"
+   },
+   {
+    "shape": "box",
+    "size": [
+     0.13,
+     0.82,
+     0.14
+    ],
+    "pos": [
+     -0.09,
+     0.47,
+     0
+    ],
+    "mat": "trousers_dark"
+   },
+   {
+    "shape": "box",
+    "size": [
+     0.13,
+     0.82,
+     0.14
+    ],
+    "pos": [
+     0.09,
+     0.47,
+     0
+    ],
+    "mat": "trousers_dark"
+   },
+   {
+    "shape": "box",
+    "size": [
+     0.42,
+     0.6,
+     0.22
+    ],
+    "pos": [
+     0,
+     1.17,
+     0
+    ],
+    "mat": "shirt_blue"
+   },
+   {
+    "shape": "box",
+    "size": [
+     0.1,
+     0.56,
+     0.12
+    ],
+    "pos": [
+     -0.27,
+     1.15,
+     0.01
+    ],
+    "mat": "shirt_blue",
+    "rot": [
+     0,
+     0,
+     -4
+    ]
+   },
+   {
+    "shape": "box",
+    "size": [
+     0.1,
+     0.56,
+     0.12
+    ],
+    "pos": [
+     0.27,
+     1.15,
+     0.01
+    ],
+    "mat": "shirt_blue",
+    "rot": [
+     0,
+     0,
+     4
+    ]
+   },
+   {
+    "shape": "sphere",
+    "size": [
+     0.05
+    ],
+    "pos": [
+     -0.29,
+     0.84,
+     0.02
+    ],
+    "mat": "skin"
+   },
+   {
+    "shape": "sphere",
+    "size": [
+     0.05
+    ],
+    "pos": [
+     0.29,
+     0.84,
+     0.02
+    ],
+    "mat": "skin"
+   },
+   {
+    "shape": "cyl",
+    "size": [
+     0.05,
+     0.055,
+     0.09
+    ],
+    "pos": [
+     0,
+     1.51,
+     0
+    ],
+    "mat": "skin"
+   },
+   {
+    "shape": "sphere",
+    "size": [
+     0.115
+    ],
+    "pos": [
+     0,
+     1.65,
+     0.005
+    ],
+    "mat": "skin"
+   },
+   {
+    "shape": "sphere",
+    "size": [
+     0.12
+    ],
+    "pos": [
+     0,
+     1.69,
+     -0.025
+    ],
+    "mat": "hair_dark"
+   },
+   {
+    "shape": "sphere",
+    "size": [
+     0.016
+    ],
+    "pos": [
+     -0.042,
+     1.67,
+     0.108
+    ],
+    "mat": "plastic_black"
+   },
+   {
+    "shape": "sphere",
+    "size": [
+     0.016
+    ],
+    "pos": [
+     0.042,
+     1.67,
+     0.108
+    ],
+    "mat": "plastic_black"
+   },
+   {
+    "shape": "box",
+    "size": [
+     0.6,
+     1.8,
+     0.45
+    ],
+    "pos": [
+     0,
+     0.9,
+     0
+    ],
+    "mat": "hitbox"
+   }
+  ],
+  "interact": "button",
+  "verb": "Talk to them"
+ },
+ {
+  "id": "colleague_talk_b",
+  "name": "Colleague",
+  "tags": [
+   "person",
+   "task"
+  ],
+  "fits": [
+   "fixture"
+  ],
+  "size": [
+   0.62,
+   1.8,
+   0.34
+  ],
+  "solid": true,
+  "inspectable": false,
+  "parts": [
+   {
+    "shape": "box",
+    "size": [
+     0.12,
+     0.06,
+     0.24
+    ],
+    "pos": [
+     -0.09,
+     0.03,
+     0.03
+    ],
+    "mat": "rubber_black"
+   },
+   {
+    "shape": "box",
+    "size": [
+     0.12,
+     0.06,
+     0.24
+    ],
+    "pos": [
+     0.09,
+     0.03,
+     0.03
+    ],
+    "mat": "rubber_black"
+   },
+   {
+    "shape": "box",
+    "size": [
+     0.13,
+     0.82,
+     0.14
+    ],
+    "pos": [
+     -0.09,
+     0.47,
+     0
+    ],
+    "mat": "trousers_dark"
+   },
+   {
+    "shape": "box",
+    "size": [
+     0.13,
+     0.82,
+     0.14
+    ],
+    "pos": [
+     0.09,
+     0.47,
+     0
+    ],
+    "mat": "trousers_dark"
+   },
+   {
+    "shape": "box",
+    "size": [
+     0.42,
+     0.6,
+     0.22
+    ],
+    "pos": [
+     0,
+     1.17,
+     0
+    ],
+    "mat": "shirt_green"
+   },
+   {
+    "shape": "box",
+    "size": [
+     0.1,
+     0.56,
+     0.12
+    ],
+    "pos": [
+     -0.27,
+     1.15,
+     0.01
+    ],
+    "mat": "shirt_green",
+    "rot": [
+     0,
+     0,
+     -4
+    ]
+   },
+   {
+    "shape": "box",
+    "size": [
+     0.1,
+     0.56,
+     0.12
+    ],
+    "pos": [
+     0.27,
+     1.15,
+     0.01
+    ],
+    "mat": "shirt_green",
+    "rot": [
+     0,
+     0,
+     4
+    ]
+   },
+   {
+    "shape": "sphere",
+    "size": [
+     0.05
+    ],
+    "pos": [
+     -0.29,
+     0.84,
+     0.02
+    ],
+    "mat": "skin"
+   },
+   {
+    "shape": "sphere",
+    "size": [
+     0.05
+    ],
+    "pos": [
+     0.29,
+     0.84,
+     0.02
+    ],
+    "mat": "skin"
+   },
+   {
+    "shape": "cyl",
+    "size": [
+     0.05,
+     0.055,
+     0.09
+    ],
+    "pos": [
+     0,
+     1.51,
+     0
+    ],
+    "mat": "skin"
+   },
+   {
+    "shape": "sphere",
+    "size": [
+     0.115
+    ],
+    "pos": [
+     0,
+     1.65,
+     0.005
+    ],
+    "mat": "skin"
+   },
+   {
+    "shape": "sphere",
+    "size": [
+     0.12
+    ],
+    "pos": [
+     0,
+     1.69,
+     -0.025
+    ],
+    "mat": "hair_dark"
+   },
+   {
+    "shape": "sphere",
+    "size": [
+     0.016
+    ],
+    "pos": [
+     -0.042,
+     1.67,
+     0.108
+    ],
+    "mat": "plastic_black"
+   },
+   {
+    "shape": "sphere",
+    "size": [
+     0.016
+    ],
+    "pos": [
+     0.042,
+     1.67,
+     0.108
+    ],
+    "mat": "plastic_black"
+   },
+   {
+    "shape": "box",
+    "size": [
+     0.6,
+     1.8,
+     0.45
+    ],
+    "pos": [
+     0,
+     0.9,
+     0
+    ],
+    "mat": "hitbox"
+   }
+  ],
+  "interact": "button",
+  "verb": "Talk to them"
+ },
+ {
+  "id": "balloon_pump",
+  "name": "Balloon pump",
+  "tags": [
+   "party",
+   "task"
+  ],
+  "fits": [
+   "fixture"
+  ],
+  "size": [
+   1,
+   1.1,
+   0.6
+  ],
+  "solid": true,
+  "inspectable": false,
+  "interact": "button",
+  "verb": "Pump the balloon",
+  "parts": [
+   {
+    "shape": "box",
+    "size": [
+     1,
+     0.04,
+     0.6
+    ],
+    "pos": [
+     0,
+     0.74,
+     0
+    ],
+    "mat": "laminate_white"
+   },
+   {
+    "shape": "box",
+    "size": [
+     0.04,
+     0.72,
+     0.04
+    ],
+    "pos": [
+     -0.45,
+     0.36,
+     -0.25
+    ],
+    "mat": "metal_dark"
+   },
+   {
+    "shape": "box",
+    "size": [
+     0.04,
+     0.72,
+     0.04
+    ],
+    "pos": [
+     0.45,
+     0.36,
+     -0.25
+    ],
+    "mat": "metal_dark"
+   },
+   {
+    "shape": "box",
+    "size": [
+     0.04,
+     0.72,
+     0.04
+    ],
+    "pos": [
+     -0.45,
+     0.36,
+     0.25
+    ],
+    "mat": "metal_dark"
+   },
+   {
+    "shape": "box",
+    "size": [
+     0.04,
+     0.72,
+     0.04
+    ],
+    "pos": [
+     0.45,
+     0.36,
+     0.25
+    ],
+    "mat": "metal_dark"
+   },
+   {
+    "shape": "cyl",
+    "size": [
+     0.07,
+     0.07,
+     0.3
+    ],
+    "pos": [
+     0.3,
+     0.91,
+     0
+    ],
+    "mat": "alarm_red"
+   },
+   {
+    "shape": "cyl",
+    "size": [
+     0.015,
+     0.015,
+     0.18
+    ],
+    "pos": [
+     0.3,
+     1.13,
+     0
+    ],
+    "mat": "metal_light"
+   },
+   {
+    "shape": "box",
+    "size": [
+     0.2,
+     0.03,
+     0.04
+    ],
+    "pos": [
+     0.3,
+     1.22,
+     0
+    ],
+    "mat": "plastic_black"
+   },
+   {
+    "shape": "box",
+    "size": [
+     0.12,
+     0.02,
+     0.2
+    ],
+    "pos": [
+     0.3,
+     0.77,
+     0
+    ],
+    "mat": "plastic_black"
+   },
+   {
+    "shape": "box",
+    "size": [
+     0.4,
+     0.6,
+     0.4
+    ],
+    "pos": [
+     0.3,
+     0.95,
+     0
+    ],
+    "mat": "hitbox"
+   }
+  ]
+ },
+ {
+  "id": "balloon",
+  "name": "Balloon",
+  "tags": [
+   "party",
+   "task"
+  ],
+  "fits": [
+   "fixture"
+  ],
+  "size": [
+   0.6,
+   0.85,
+   0.6
+  ],
+  "solid": false,
+  "inspectable": false,
+  "interact": "button",
+  "verb": "Tie it off",
+  "parts": [
+   {
+    "shape": "cyl",
+    "size": [
+     0.006,
+     0.006,
+     0.12
+    ],
+    "pos": [
+     0,
+     0.06,
+     0
+    ],
+    "mat": "plastic_white"
+   },
+   {
+    "shape": "cone",
+    "size": [
+     0.05,
+     0.07
+    ],
+    "pos": [
+     0,
+     0.14,
+     0
+    ],
+    "rot": [
+     180,
+     0,
+     0
+    ],
+    "mat": "balloon_red"
+   },
+   {
+    "shape": "sphere",
+    "size": [
+     0.3
+    ],
+    "pos": [
+     0,
+     0.46,
+     0
+    ],
+    "mat": "balloon_red"
+   },
+   {
+    "shape": "box",
+    "size": [
+     0.5,
+     0.8,
+     0.5
+    ],
+    "pos": [
+     0,
+     0.42,
+     0
+    ],
+    "mat": "hitbox"
+   }
+  ]
+ },
+ {
+  "id": "coffee_machine",
+  "name": "Coffee machine",
+  "tags": [
+   "coffee",
+   "task"
+  ],
+  "fits": [
+   "fixture"
+  ],
+  "size": [
+   0.6,
+   1.65,
+   0.55
+  ],
+  "solid": true,
+  "inspectable": false,
+  "interact": "button",
+  "verb": "Get a coffee",
+  "parts": [
+   {
+    "shape": "box",
+    "size": [
+     0.6,
+     1.6,
+     0.5
+    ],
+    "pos": [
+     0,
+     0.8,
+     0
+    ],
+    "mat": "metal_dark"
+   },
+   {
+    "shape": "box",
+    "size": [
+     0.4,
+     0.3,
+     0.06
+    ],
+    "pos": [
+     0,
+     0.7,
+     0.24
+    ],
+    "mat": "plastic_black"
+   },
+   {
+    "shape": "box",
+    "size": [
+     0.3,
+     0.02,
+     0.12
+    ],
+    "pos": [
+     0,
+     0.56,
+     0.27
+    ],
+    "mat": "metal_light"
+   },
+   {
+    "shape": "cyl",
+    "size": [
+     0.04,
+     0.035,
+     0.09
+    ],
+    "pos": [
+     0,
+     0.62,
+     0.26
+    ],
+    "mat": "plastic_white"
+   },
+   {
+    "shape": "box",
+    "size": [
+     0.46,
+     0.28,
+     0.02
+    ],
+    "pos": [
+     0,
+     1.3,
+     0.25
+    ],
+    "mat": "plastic_black"
+   },
+   {
+    "shape": "box",
+    "size": [
+     0.62,
+     0.06,
+     0.52
+    ],
+    "pos": [
+     0,
+     1.63,
+     0
+    ],
+    "mat": "brushed_steel"
+   }
+  ],
+  "text": {
+   "pos": [
+    0,
+    1.3,
+    0.262
+   ],
+   "size": [
+    0.42,
+    0.24
+   ],
+   "style": "led"
+  }
+ },
+ {
+  "id": "food_counter",
+  "name": "Counter",
+  "tags": [
+   "canteen",
+   "task"
+  ],
+  "fits": [
+   "fixture"
+  ],
+  "size": [
+   1.2,
+   1,
+   0.6
+  ],
+  "solid": true,
+  "inspectable": false,
+  "interact": "button",
+  "verb": "Take it now",
+  "parts": [
+   {
+    "shape": "box",
+    "size": [
+     1.2,
+     0.9,
+     0.6
+    ],
+    "pos": [
+     0,
+     0.45,
+     0
+    ],
+    "mat": "laminate_wood"
+   },
+   {
+    "shape": "box",
+    "size": [
+     1.24,
+     0.04,
+     0.64
+    ],
+    "pos": [
+     0,
+     0.92,
+     0
+    ],
+    "mat": "brushed_steel"
+   },
+   {
+    "shape": "box",
+    "size": [
+     0.4,
+     0.02,
+     0.28
+    ],
+    "pos": [
+     -0.25,
+     0.95,
+     0
+    ],
+    "mat": "plastic_grey"
+   },
+   {
+    "shape": "box",
+    "size": [
+     0.16,
+     0.06,
+     0.1
+    ],
+    "pos": [
+     -0.25,
+     0.99,
+     0
+    ],
+    "mat": "folder_manila"
+   },
+   {
+    "shape": "sphere",
+    "size": [
+     0.05
+    ],
+    "pos": [
+     0.25,
+     0.99,
+     0.05
+    ],
+    "mat": "alarm_red"
+   }
+  ],
+  "text": {
+   "pos": [
+    0,
+    0.62,
+    0.302
+   ],
+   "size": [
+    0.9,
+    0.34
+   ],
+   "style": "sign"
+  }
+ },
+ {
+  "id": "queue_sign",
+  "name": "Queue sign",
+  "tags": [
+   "canteen",
+   "task"
+  ],
+  "fits": [
+   "fixture"
+  ],
+  "size": [
+   0.5,
+   1.75,
+   0.3
+  ],
+  "solid": true,
+  "inspectable": false,
+  "interact": "button",
+  "verb": "Queue for it",
+  "parts": [
+   {
+    "shape": "cyl",
+    "size": [
+     0.18,
+     0.2,
+     0.04
+    ],
+    "pos": [
+     0,
+     0.02,
+     0
+    ],
+    "mat": "metal_dark"
+   },
+   {
+    "shape": "cyl",
+    "size": [
+     0.02,
+     0.02,
+     1.4
+    ],
+    "pos": [
+     0,
+     0.72,
+     0
+    ],
+    "mat": "metal_light"
+   },
+   {
+    "shape": "box",
+    "size": [
+     0.56,
+     0.4,
+     0.03
+    ],
+    "pos": [
+     0,
+     1.5,
+     0
+    ],
+    "mat": "plastic_black"
+   },
+   {
+    "shape": "box",
+    "size": [
+     0.6,
+     1.8,
+     0.4
+    ],
+    "pos": [
+     0,
+     0.9,
+     0
+    ],
+    "mat": "hitbox"
+   }
+  ],
+  "text": {
+   "pos": [
+    0,
+    1.5,
+    0.017
+   ],
+   "size": [
+    0.52,
+    0.36
+   ],
+   "style": "led"
+  }
+ },
+ {
+  "id": "corridor_opening",
+  "name": "Corridor",
+  "tags": [
+   "junction",
+   "task"
+  ],
+  "fits": [
+   "fixture"
+  ],
+  "size": [
+   1.3,
+   2.4,
+   0.3
+  ],
+  "solid": true,
+  "inspectable": false,
+  "interact": "button",
+  "verb": "Go this way",
+  "parts": [
+   {
+    "shape": "box",
+    "size": [
+     0.12,
+     2.3,
+     0.3
+    ],
+    "pos": [
+     -0.6,
+     1.15,
+     0
+    ],
+    "mat": "door_frame"
+   },
+   {
+    "shape": "box",
+    "size": [
+     0.12,
+     2.3,
+     0.3
+    ],
+    "pos": [
+     0.6,
+     1.15,
+     0
+    ],
+    "mat": "door_frame"
+   },
+   {
+    "shape": "box",
+    "size": [
+     1.32,
+     0.14,
+     0.3
+    ],
+    "pos": [
+     0,
+     2.33,
+     0
+    ],
+    "mat": "door_frame"
+   },
+   {
+    "shape": "box",
+    "size": [
+     1.08,
+     2.26,
+     0.04
+    ],
+    "pos": [
+     0,
+     1.13,
+     -0.12
+    ],
+    "mat": "void_black"
+   },
+   {
+    "shape": "box",
+    "size": [
+     1.08,
+     0.02,
+     0.28
+    ],
+    "pos": [
+     0,
+     0.01,
+     0
+    ],
+    "mat": "floor_line"
+   },
+   {
+    "shape": "box",
+    "size": [
+     1.2,
+     2.3,
+     0.4
+    ],
+    "pos": [
+     0,
+     1.15,
+     0
+    ],
+    "mat": "hitbox"
+   }
+  ]
+ },
+ {
+  "id": "notice_screen",
+  "name": "Notice screen",
+  "tags": [
+   "screen",
+   "task"
+  ],
+  "fits": [
+   "fixture"
+  ],
+  "size": [
+   0.9,
+   0.52,
+   0.05
+  ],
+  "solid": false,
+  "inspectable": false,
+  "parts": [
+   {
+    "shape": "box",
+    "size": [
+     0.9,
+     0.52,
+     0.04
+    ],
+    "pos": [
+     0,
+     0,
+     0
+    ],
+    "mat": "plastic_black"
+   }
+  ],
+  "text": {
+   "pos": [
+    0,
+    0,
+    0.022
+   ],
+   "size": [
+    0.82,
+    0.44
+   ],
+   "style": "screen"
+  }
+ },
+ {
+  "id": "lectern",
+  "name": "Lectern",
+  "tags": [
+   "board",
+   "task"
+  ],
+  "fits": [
+   "fixture"
+  ],
+  "size": [
+   0.6,
+   1.2,
+   0.5
+  ],
+  "solid": true,
+  "inspectable": false,
+  "interact": "button",
+  "verb": "Give your pitch",
+  "parts": [
+   {
+    "shape": "box",
+    "size": [
+     0.5,
+     1.05,
+     0.4
+    ],
+    "pos": [
+     0,
+     0.52,
+     0
+    ],
+    "mat": "laminate_wood"
+   },
+   {
+    "shape": "box",
+    "size": [
+     0.6,
+     0.04,
+     0.5
+    ],
+    "pos": [
+     0,
+     1.1,
+     0.02
+    ],
+    "rot": [
+     -14,
+     0,
+     0
+    ],
+    "mat": "laminate_wood"
+   },
+   {
+    "shape": "cyl",
+    "size": [
+     0.01,
+     0.01,
+     0.25
+    ],
+    "pos": [
+     0.18,
+     1.25,
+     -0.08
+    ],
+    "rot": [
+     -30,
+     0,
+     0
+    ],
+    "mat": "metal_dark"
+   },
+   {
+    "shape": "box",
+    "size": [
+     0.7,
+     1.3,
+     0.6
+    ],
+    "pos": [
+     0,
+     0.65,
+     0
+    ],
+    "mat": "hitbox"
+   }
+  ]
+ },
+ {
+  "id": "projector_screen",
+  "name": "Projector screen",
+  "tags": [
+   "board",
+   "task"
+  ],
+  "fits": [
+   "fixture"
+  ],
+  "size": [
+   2.4,
+   1.4,
+   0.04
+  ],
+  "solid": false,
+  "inspectable": false,
+  "parts": [
+   {
+    "shape": "box",
+    "size": [
+     2.4,
+     1.4,
+     0.02
+    ],
+    "pos": [
+     0,
+     0,
+     0
+    ],
+    "mat": "paper"
+   },
+   {
+    "shape": "box",
+    "size": [
+     2.5,
+     0.06,
+     0.06
+    ],
+    "pos": [
+     0,
+     0.73,
+     0
+    ],
+    "mat": "metal_dark"
+   }
+  ],
+  "text": {
+   "pos": [
+    0,
+    -0.02,
+    0.012
+   ],
+   "size": [
+    2.2,
+    1.2
+   ],
+   "style": "sign"
+  }
+ },
+ {
+  "id": "table_long",
+  "name": "Board table",
+  "tags": [
+   "board",
+   "task"
+  ],
+  "fits": [
+   "fixture"
+  ],
+  "size": [
+   3,
+   0.76,
+   1
+  ],
+  "solid": true,
+  "inspectable": false,
+  "parts": [
+   {
+    "shape": "box",
+    "size": [
+     3,
+     0.05,
+     1
+    ],
+    "pos": [
+     0,
+     0.74,
+     0
+    ],
+    "mat": "laminate_wood"
+   },
+   {
+    "shape": "box",
+    "size": [
+     0.1,
+     0.72,
+     0.8
+    ],
+    "pos": [
+     -1.2,
+     0.36,
+     0
+    ],
+    "mat": "metal_dark"
+   },
+   {
+    "shape": "box",
+    "size": [
+     0.1,
+     0.72,
+     0.8
+    ],
+    "pos": [
+     1.2,
+     0.36,
+     0
+    ],
+    "mat": "metal_dark"
+   }
+  ]
+ },
+ {
+  "id": "buzzer_button",
+  "name": "Button",
+  "tags": [
+   "button",
+   "task"
+  ],
+  "fits": [
+   "fixture"
+  ],
+  "size": [
+   0.2,
+   0.28,
+   0.08
+  ],
+  "solid": false,
+  "inspectable": false,
+  "interact": "button",
+  "verb": "Press",
+  "parts": [
+   {
+    "shape": "box",
+    "size": [
+     0.18,
+     0.18,
+     0.04
+    ],
+    "pos": [
+     0,
+     0.04,
+     0
+    ],
+    "mat": "buzzer_yellow"
+   },
+   {
+    "shape": "cyl",
+    "size": [
+     0.05,
+     0.055,
+     0.04
+    ],
+    "pos": [
+     0,
+     0.04,
+     0.03
+    ],
+    "rot": [
+     90,
+     0,
+     0
+    ],
+    "mat": "red_button"
+   },
+   {
+    "shape": "box",
+    "size": [
+     0.24,
+     0.07,
+     0.01
+    ],
+    "pos": [
+     0,
+     -0.1,
+     0.003
+    ],
+    "mat": "paper"
+   },
+   {
+    "shape": "box",
+    "size": [
+     0.3,
+     0.36,
+     0.12
+    ],
+    "pos": [
+     0,
+     0.18,
+     0
+    ],
+    "mat": "hitbox"
+   }
+  ],
+  "text": {
+   "pos": [
+    0,
+    -0.1,
+    0.009
+   ],
+   "size": [
+    0.22,
+    0.06
+   ],
+   "style": "label"
+  }
+ },
+ {
+  "id": "intercom",
+  "name": "Intercom",
+  "tags": [
+   "intercom",
+   "task"
+  ],
+  "fits": [
+   "fixture"
+  ],
+  "size": [
+   0.15,
+   0.24,
+   0.05
+  ],
+  "solid": false,
+  "inspectable": false,
+  "interact": "button",
+  "verb": "Call the front desk",
+  "parts": [
+   {
+    "shape": "box",
+    "size": [
+     0.15,
+     0.24,
+     0.04
+    ],
+    "pos": [
+     0,
+     0,
+     0
+    ],
+    "mat": "plastic_grey"
+   },
+   {
+    "shape": "box",
+    "size": [
+     0.09,
+     0.008,
+     0.01
+    ],
+    "pos": [
+     0,
+     0.06,
+     0.022
+    ],
+    "mat": "plastic_black"
+   },
+   {
+    "shape": "box",
+    "size": [
+     0.09,
+     0.008,
+     0.01
+    ],
+    "pos": [
+     0,
+     0.035,
+     0.022
+    ],
+    "mat": "plastic_black"
+   },
+   {
+    "shape": "box",
+    "size": [
+     0.09,
+     0.008,
+     0.01
+    ],
+    "pos": [
+     0,
+     0.01,
+     0.022
+    ],
+    "mat": "plastic_black"
+   },
+   {
+    "shape": "box",
+    "size": [
+     0.09,
+     0.008,
+     0.01
+    ],
+    "pos": [
+     0,
+     -0.015,
+     0.022
+    ],
+    "mat": "plastic_black"
+   },
+   {
+    "shape": "cyl",
+    "size": [
+     0.022,
+     0.022,
+     0.02
+    ],
+    "pos": [
+     0,
+     -0.07,
+     0.025
+    ],
+    "rot": [
+     90,
+     0,
+     0
+    ],
+    "mat": "call_glow"
+   },
+   {
+    "shape": "box",
+    "size": [
+     0.26,
+     0.34,
+     0.1
+    ],
+    "pos": [
+     0,
+     0.17,
+     0
+    ],
+    "mat": "hitbox"
+   }
+  ]
+ },
+ {
+  "id": "file_pile",
+  "name": "Unsorted files",
+  "tags": [
+   "files",
+   "task"
+  ],
+  "fits": [
+   "fixture"
+  ],
+  "size": [
+   0.32,
+   0.34,
+   0.26
+  ],
+  "solid": false,
+  "inspectable": false,
+  "interact": "button",
+  "verb": "Take a file",
+  "parts": [
+   {
+    "shape": "box",
+    "size": [
+     0.3,
+     0.1,
+     0.24
+    ],
+    "pos": [
+     0,
+     0.05,
+     0
+    ],
+    "mat": "folder_manila"
+   },
+   {
+    "shape": "box",
+    "size": [
+     0.29,
+     0.1,
+     0.23
+    ],
+    "pos": [
+     0.01,
+     0.15,
+     0.005
+    ],
+    "rot": [
+     0,
+     6,
+     0
+    ],
+    "mat": "paper"
+   },
+   {
+    "shape": "box",
+    "size": [
+     0.3,
+     0.08,
+     0.24
+    ],
+    "pos": [
+     -0.01,
+     0.24,
+     -0.01
+    ],
+    "rot": [
+     0,
+     -5,
+     0
+    ],
+    "mat": "folder_manila"
+   },
+   {
+    "shape": "box",
+    "size": [
+     0.36,
+     0.4,
+     0.32
+    ],
+    "pos": [
+     0,
+     0.18,
+     0
+    ],
+    "mat": "hitbox"
+   }
+  ],
+  "text": {
+   "pos": [
+    0,
+    0.1,
+    0.121
+   ],
+   "size": [
+    0.26,
+    0.08
+   ],
+   "style": "label"
+  }
+ },
+ {
+  "id": "file_tray",
+  "name": "Filing tray",
+  "tags": [
+   "files",
+   "task"
+  ],
+  "fits": [
+   "fixture"
+  ],
+  "size": [
+   0.28,
+   0.08,
+   0.26
+  ],
+  "solid": false,
+  "inspectable": false,
+  "interact": "button",
+  "verb": "File it here",
+  "parts": [
+   {
+    "shape": "box",
+    "size": [
+     0.28,
+     0.01,
+     0.26
+    ],
+    "pos": [
+     0,
+     0.005,
+     0
+    ],
+    "mat": "plastic_black"
+   },
+   {
+    "shape": "box",
+    "size": [
+     0.28,
+     0.06,
+     0.01
+    ],
+    "pos": [
+     0,
+     0.03,
+     0.125
+    ],
+    "mat": "plastic_black"
+   },
+   {
+    "shape": "box",
+    "size": [
+     0.28,
+     0.06,
+     0.01
+    ],
+    "pos": [
+     0,
+     0.03,
+     -0.125
+    ],
+    "mat": "plastic_black"
+   },
+   {
+    "shape": "box",
+    "size": [
+     0.01,
+     0.06,
+     0.26
+    ],
+    "pos": [
+     -0.135,
+     0.03,
+     0
+    ],
+    "mat": "plastic_black"
+   },
+   {
+    "shape": "box",
+    "size": [
+     0.01,
+     0.06,
+     0.26
+    ],
+    "pos": [
+     0.135,
+     0.03,
+     0
+    ],
+    "mat": "plastic_black"
+   },
+   {
+    "shape": "box",
+    "size": [
+     0.3,
+     0.2,
+     0.3
+    ],
+    "pos": [
+     0,
+     0.08,
+     0
+    ],
+    "mat": "hitbox"
+   }
+  ],
+  "text": {
+   "pos": [
+    0,
+    0.035,
+    0.131
+   ],
+   "size": [
+    0.26,
+    0.05
+   ],
+   "style": "label"
+  }
  }
 ]

@@ -37,7 +37,21 @@ export type GameEvent =
   /** The player let go (or finished). */
   | { type: 'hold_end'; roomId: string; objectId: string; seconds: number; completed: boolean; t: number }
   /** A narrator line actually appeared on screen (it may have queued behind another). */
-  | { type: 'narrator_shown'; lineId: string; t: number };
+  | { type: 'narrator_shown'; lineId: string; t: number }
+  /** The player answered an on-screen question (see AskSpec): an option index, a slider value, or where the meter stopped (0 to 1). */
+  | { type: 'answer'; roomId: string; askId: string; value: number; seconds: number; t: number };
+
+/**
+ * An on-screen question a task asks: pick one of a few options, set a slider,
+ * or stop a moving marker inside a highlighted zone (a timing challenge).
+ * The adapter shows it and replies with an `answer` event; core decides what it means.
+ */
+export type AskSpec = { id: string; title: string; text?: string } & (
+  | { mode: 'choice'; options: string[] }
+  | { mode: 'slider'; min: number; max: number; step: number; value: number; unit?: string }
+  /** The marker sweeps 0 → 1 → 0 at `speed` sweeps per second; `zone` is the target band. */
+  | { mode: 'meter'; speed: number; zone: [number, number] }
+);
 
 /** Something a room rule changes in the world. The adapter shows it; core decides it. */
 export type RuleEffect =
@@ -58,7 +72,23 @@ export type RuleEffect =
   /** Remove a prop from the room (picked up). */
   | { kind: 'hide'; prop: string }
   /** The fire alarm bell, on or off. */
-  | { kind: 'alarm'; on: boolean };
+  | { kind: 'alarm'; on: boolean }
+  /** Ask the player something on screen (closes itself when answered). */
+  | { kind: 'ask'; ask: AskSpec }
+  /** Close an open question without an answer (the player walked away). */
+  | { kind: 'ask_close'; id: string }
+  /** Shake the view briefly (a harsh buzzer). */
+  | { kind: 'shake'; seconds: number }
+  /** A one-off sound. */
+  | { kind: 'sound'; name: 'buzz' | 'pop' | 'clunk' | 'click' | 'pour' | 'spill' | 'ding' | 'squeak' | 'paper' }
+  /** Scale a prop (an inflating balloon); 0 hides it. */
+  | { kind: 'scale'; prop: string; scale: number }
+  /** Turn a prop (a character) to face another prop, and stay that way (someone pointing the way). */
+  | { kind: 'turn'; prop: string; at: string }
+  /** Fade out, move the player, fade back in (a corridor that loops back). */
+  | { kind: 'teleport'; x: number; z: number; yaw: number; dark: number }
+  /** A short status line on screen (energy, party score, what you're holding); null hides it. */
+  | { kind: 'status'; text: string | null };
 
 /** The hidden player profile, for the debug overlay and the final dossier. */
 export interface ProfileSnapshot {

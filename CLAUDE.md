@@ -70,6 +70,10 @@ npm run try:voice               # ElevenLabs sample line → voice-sample.mp3 (-
   `layouts.ts` (seeded task rooms with fixtures and zones), `runtime.ts` (TaskRuntime: logs events, drives scripted
   moments from event times, never wall time), `log.ts` (shared TaskLog), `metrics.ts` (pure scoring + baseline).
   Adapter sends extra events for them: move (10 Hz), input, prompt, inspect_closed, hold_start/hold_end, narrator_shown.
+- `core/tasks/office/`: tasks 6 to 11 (office versions), one module each (`module.ts` is the interface), with a
+  placeholder room each and a `needs` list for the real layout generator. Staged only via `?try=<ids>` /
+  `RunOptions.taskOrder`. Questions on screen go through `RuleEffect` `ask` and come back as `answer` events.
+  `core/tasks/paired.ts`: the office/mine balancing rule.
 - `core/llm/client.ts`: Ollama native API (`format` = schema, `think:false`, `keep_alive`) or OpenAI-compatible
   (`response_format: json_schema`); `completeJson`, `streamText`, `ping`. Errors are typed: unreachable / http /
   bad_output / aborted. An unreachable server switches the whole run to templates.

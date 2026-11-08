@@ -90,6 +90,32 @@ html, body, #app { margin: 0; width: 100%; height: 100%; overflow: hidden; }
   opacity: 0; transition: opacity 0.15s ease; pointer-events: none; text-align: center;
 }
 #hold.show { opacity: 1; }
+#status {
+  position: fixed; left: 22px; top: 22px; padding: 6px 12px; border-radius: 6px; background: rgba(8,9,9,0.6);
+  font: 600 13px/1.3 ui-monospace, Menlo, monospace; color: #f4f2ea; letter-spacing: 0.06em;
+  opacity: 0; transition: opacity 0.3s ease; pointer-events: none;
+}
+#status.show { opacity: 1; }
+#ask {
+  position: fixed; left: 50%; bottom: 210px; transform: translateX(-50%); width: min(520px, calc(100vw - 32px));
+  padding: 18px 22px 14px; border-radius: 8px; background: rgba(16,17,17,0.92); color: #f4f2ea;
+  box-shadow: 0 12px 40px rgba(0,0,0,0.5); opacity: 0; transition: opacity 0.2s ease; pointer-events: none;
+  font: 15px/1.45 Inter, system-ui, sans-serif;
+}
+#ask.show { opacity: 1; }
+#ask h3 { margin: 0 0 4px; font-size: 17px; }
+#ask p { margin: 0 0 12px; color: #c9c6bb; }
+#ask small { display: block; margin-top: 12px; color: #8f8c82; font-size: 11.5px; letter-spacing: 0.04em; }
+#ask .opts { display: flex; gap: 8px; flex-wrap: wrap; }
+#ask .opts span { padding: 7px 12px; border-radius: 999px; border: 1px solid #4a4a46; }
+#ask .opts span.on { background: #f4f2ea; color: #141414; border-color: #f4f2ea; }
+#ask .opts b { margin-right: 6px; font: 600 11px ui-monospace, Menlo, monospace; opacity: 0.6; }
+#ask .value { font: 700 28px/1.1 ui-monospace, Menlo, monospace; margin-bottom: 8px; }
+#ask .bar { position: relative; height: 10px; border-radius: 5px; background: #33332f; overflow: hidden; }
+#ask .bar i { position: absolute; left: 0; top: 0; bottom: 0; background: #f4f2ea; }
+#ask .bar.meter { height: 26px; overflow: visible; }
+#ask .bar.meter u { position: absolute; top: 0; bottom: 0; background: rgba(120, 200, 140, 0.55); text-decoration: none; }
+#ask .bar.meter em { position: absolute; top: -4px; bottom: -4px; width: 4px; margin-left: -2px; background: #f4f2ea; border-radius: 2px; }
 #hold span { display: block; margin-bottom: 6px; font: 600 11px/1.4 Inter, system-ui, sans-serif; letter-spacing: 0.08em; color: #f4f2ea; text-shadow: 0 1px 3px #000; }
 #hold i { display: block; height: 4px; border-radius: 2px; background: #f4f2ea; box-shadow: 0 0 0 1px rgba(0,0,0,0.5); }
 

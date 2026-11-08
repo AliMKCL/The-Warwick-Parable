@@ -31,6 +31,8 @@ export interface GameOptions {
   runLength?: number;
   /** Stage the office tasks in rooms 1 to 5 (default on; ?tasks=0 turns them off). */
   tasks?: boolean;
+  /** Which tasks fill rooms 1, 2, 3... (?try=balloons,coffee); default tasks 1 to 5. */
+  taskOrder?: string[];
 }
 
 /** Position samples per second for the office-task log. */
@@ -132,7 +134,7 @@ export class Game {
   /** Start a run. With no model (or an unreachable one), rooms are filled from templates. */
   begin(llm?: LlmClient) {
     this.sound.start();
-    this.core = createCore(gameData, { llm, observeMs: this.opts.observeMs, runLength: this.opts.runLength, maxAnomalies: this.opts.maxAnomalies, tasks: this.opts.tasks });
+    this.core = createCore(gameData, { llm, observeMs: this.opts.observeMs, runLength: this.opts.runLength, maxAnomalies: this.opts.maxAnomalies, tasks: this.opts.tasks, taskOrder: this.opts.taskOrder });
     this.core.onMessage((m) => this.handle(m));
     this.startedAt = performance.now();
     this.send({ type: 'run_started', seed: this.opts.seed, t: 0 });
@@ -142,8 +144,43 @@ export class Game {
     this.core.send(e);
   }
 
+  /** A task's question is on screen: A/D, arrows and the wheel adjust it; number keys pick an option. */
+  askAdjust(dir: number) {
+    this.hud.askAdjust(dir);
+  }
+  askPick(n: number) {
+    this.hud.askPick(n);
+  }
+  get asking() {
+    return !!this.hud.askOpen;
+  }
+
+  private closeAsk() {
+    this.hud.ask(null);
+    if (!this.ended && (document.pointerLockElement || this.testMode)) this.player.enabled = true;
+  }
+  /** Set by the test hooks, which play without pointer lock. */
+  testMode = false;
+
+  /** Test hook: answer the open question with a given value. */
+  answerWith(value: number): boolean {
+    const a = this.hud.askAnswer();
+    if (!a || !this.room) return false;
+    this.closeAsk();
+    this.send({ type: 'answer', roomId: this.room.spec.id, askId: a.id, value, seconds: a.seconds, t: this.time });
+    return true;
+  }
+
   /** Press E or click. */
   interact() {
+    const answer = this.hud.askAnswer();
+    if (answer && this.room) {
+      // Confirm the question on screen.
+      this.closeAsk();
+      this.sound.play('click');
+      this.send({ type: 'answer', roomId: this.room.spec.id, askId: answer.id, value: answer.value, seconds: answer.seconds, t: this.time });
+      return;
+    }
     if (this.hud.inspecting) {
       this.hud.hideInspect();
       this.player.eyeHeight = 1.62;
@@ -263,8 +300,32 @@ export class Game {
     else if (e.kind === 'display') room.setPropText(e.prop, e.text);
     else if (e.kind === 'glance') room.glance(e.prop, e.at, e.seconds, this.player.position);
     else if (e.kind === 'disable') room.disableProp(e.prop);
+    else if (e.kind === 'ask') {
+      this.release();
+      this.hud.ask(e.ask);
+      this.player.enabled = false;
+    } else if (e.kind === 'ask_close') {
+      if (this.hud.askOpen && (e.id === '*' || this.hud.askOpen.id === e.id)) this.closeAsk();
+    } else if (e.kind === 'shake') this.shakeLeft = Math.min(1, e.seconds);
+    else if (e.kind === 'sound') this.sound.play(e.name);
+    else if (e.kind === 'scale') room.scaleProp(e.prop, e.scale);
+    else if (e.kind === 'turn') room.turnProp(e.prop, e.at);
+    else if (e.kind === 'status') this.hud.status(e.text);
+    else if (e.kind === 'teleport') void this.teleport(e.x, e.z, e.yaw, e.dark);
     else if (e.kind === 'hide') room.hideProp(e.prop);
     else if (e.kind === 'alarm') this.sound.alarm(e.on);
+  }
+
+  private shakeLeft = 0;
+
+  /** Fade out, put the player somewhere (a corridor that loops back), fade in after `dark` seconds. */
+  private async teleport(x: number, z: number, yaw: number, dark: number) {
+    this.busy = true;
+    await this.hud.fade(true);
+    this.player.placeAt(x, z, yaw);
+    await wait(Math.max(0, dark * 1000 - 940));
+    await this.hud.fade(false);
+    this.busy = false;
   }
 
   private async loadRoom(spec: RoomSpec) {
@@ -276,6 +337,8 @@ export class Game {
     this.holding = undefined;
     this.hud.progress(null);
     this.sound.alarm(false);
+    this.hud.ask(null);
+    this.hud.status(null);
     if (this.room) {
       this.scene.remove(this.room.group);
       this.room.dispose();
@@ -307,6 +370,13 @@ export class Game {
     const room = this.room;
     if (room) {
       this.player.update(dt, room.isWalkable, room.colliders);
+      if (this.shakeLeft > 0) {
+        // A short, small shake (the buzzer): no flashing, just the view jolting.
+        this.shakeLeft -= dt;
+        const k = Math.max(0, this.shakeLeft) * 0.06;
+        this.player.camera.position.x += (Math.random() - 0.5) * k;
+        this.player.camera.position.y += (Math.random() - 0.5) * k;
+      }
       room.update(dt, t);
       const erased = room.anomaly?.update(dt, t, this.player.position, this.hovered?.info.id);
       if (erased && room.spec.anomaly) this.send({ type: 'anomaly_action', roomId: room.spec.id, anomalyId: room.spec.anomaly.id, action: 'erase', t: this.time });
@@ -395,7 +465,7 @@ export class Game {
       h.doorHoverSent = true;
       this.send({ type: 'door_hovered', roomId: room.spec.id, doorId: h.info.id, seconds: round(t - h.since), t });
     }
-    if (this.busy || this.hud.inspecting || !h) this.hud.setPrompt(null);
+    if (this.busy || this.hud.inspecting || this.hud.askOpen || !h) this.hud.setPrompt(null);
     else if (h.info.kind === 'anomaly') this.hud.setPrompt('E', h.info.name);
     else if (h.info.kind === 'inspect') this.hud.setPrompt('E', `Inspect ${h.info.name.toLowerCase()}`);
     else if (h.info.kind === 'button') this.hud.setPrompt('E', h.info.verb ?? 'Press');

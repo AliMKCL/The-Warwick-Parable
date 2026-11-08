@@ -10,10 +10,14 @@ export type TaskId = (typeof OFFICE_TASKS)[number];
 
 export type TaskParams = Record<string, number | string | boolean>;
 
-/** The task staged in room `index`, if any. Room 0 is the baseline room and the last room ends the run. */
-export function taskFor(index: number, last: number): TaskId | undefined {
+/**
+ * The task staged in room `index`, if any. Room 0 is the baseline room and the last room ends the run.
+ * `order` is which tasks fill rooms 1, 2, 3...: tasks 1 to 5 by default; any of the office modules
+ * (6 to 11, see core/tasks/office) can be listed too.
+ */
+export function taskFor<T extends string = TaskId>(index: number, last: number, order: readonly T[] = OFFICE_TASKS as unknown as T[]): T | undefined {
   if (index < 1 || index >= last) return undefined;
-  return OFFICE_TASKS[index - 1];
+  return order[index - 1];
 }
 
 /**

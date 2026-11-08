@@ -28,6 +28,8 @@ export interface Baseline {
   inputRate: number | null;
   /** Share of time spent standing still. */
   idleShare: number | null;
+  /** Distance walked plus key presses, per second, over the whole room: how much the player fidgets normally. */
+  activity: number | null;
   /** Median time from an interaction prompt appearing to acting on it, seconds. */
   reaction: number | null;
   reactionMad: number | null;
@@ -134,11 +136,13 @@ export function computeBaseline(events: TaskEvent[]): Baseline {
     }
   }
   const speeds = moving.map((s) => s.speed);
+  const duration = ss.length > 1 ? ss.at(-1)!.t - ss[0]!.t : 0;
   return {
     speed: r2(median(speeds)),
     speedMad: r2(mad(speeds)),
     inputRate: movingSeconds >= 2 ? r2(movingInputs / movingSeconds) : null,
     idleShare: ss.length >= 20 ? r2(ss.filter((s) => s.speed < STILL).length / ss.length) : null,
+    activity: duration >= 5 ? r2((walked(ss) + inputs.length) / duration) : null,
     reaction: r2(median(reactions)),
     reactionMad: r2(mad(reactions)),
     turns: r2(median(windows)),

@@ -23,6 +23,18 @@ Read this first when picking up the work. Newest entries at the top.
 
 ## Log
 
+### Office tasks 6 to 11 as modules (from the updated build spec)
+- One module per task in `core/tasks/office/`: `balloons.ts` (6, party balloons, BART), `coffee.ts` (7, three coffee machines, Iowa Gambling Task), `canteen.ts` (8, canteen queue, delay discounting with real waits), `renumbered.ts` (9, renumbered floor, Wisconsin Card Sorting), `pitch.ts` (10a, board pitch, confidence calibration with Brier payouts), `loan.ts` (10b, coffee-token loan, Trust Game), `lockdown.ts` (11, the locked meeting suite). Each has its params, live logic, fixed wording (`data/tasks.json`, "office"), metrics with the spec's formulas, and a profile nudge.
+- Each module's room is a placeholder (`layout()`), clearly marked. Its `needs` lists the fixtures (ids and recipes) and zones the logic relies on; a real layout generator only has to place those, with the same ids.
+- Not in the default run: try them with `?try=balloons,coffee,canteen,renumbered,pitch,loan,lockdown` (any order, any subset, also mixes with two_doors..smoke). The run grows to fit.
+- Events for paired tasks carry `version: 'office'`; `core/tasks/paired.ts` has the balancing rule (mine trials from office counts), the precision top-up check, and the office-versus-mine comparison, ready for the mine.
+- New adapter pieces: an on-screen question panel (choice, slider, timing meter; A/D, wheel, number keys, E), a status line, screen shake, a fade-and-walk-back, scaling and turning props, and synthesised sounds.
+- Tests: every placeholder room is playable in every orientation and contains what its module needs; scripted bots per task (risky/cautious, follower/learner, patient/impatient/quitter, rigid/adaptive, over/under-confident, trusting/stingy, escape artist/busy hands/button pusher) move every metric the expected way; replay reproduces metrics exactly; the balancing-rule checks from the spec's testing list; a browser pass opens each one.
+
+### Meeting and smoke tuning
+- Meeting: 13 s countdown against an 8 s printer fix, so helping makes you late; the printer can only be fixed once.
+- Smoke: exits locked until the smoke starts (8 s, or on reaching the far desk); irregular smoke pooling under the ceiling; workers type, turn to you, small talk before the smoke and brush-off after.
+
 ### Office tasks 1 to 5 (from "Psychometric Game Tasks: Build Spec")
 - Rooms 1 to 5 now each stage one covert task, in the spec's order: the Two Doors, the Lift That Never Comes, the Abandoned Desk, Late for the Meeting, the Smoky Corridor. Room 0 doubles as the baseline room. `?tasks=0` gives the old run (generated rooms with rules); a shorter run (`?rooms=5`) cuts the last tasks first.
 - Task rooms are still generated: seeded layouts (`core/tasks/layouts.ts`) rotated like any room, decorated by the model or templates. Only the measured parts are fixed: task props (fixtures), door labels and the narrator's lines (`data/tasks.json`). Task rooms have no entry line, door lines, rule or live door reaction, so nothing talks over an instruction.

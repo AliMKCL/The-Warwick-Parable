@@ -43,5 +43,9 @@
   "trousers_dark": { "color": "#33363b", "roughness": 0.9 },
   "folder_manila": { "color": "#d8bf86", "roughness": 0.85 },
   "alarm_red": { "color": "#c3241c", "roughness": 0.45 },
-  "hitbox": { "color": "#000000", "opacity": 0 }
+  "hitbox": { "color": "#000000", "opacity": 0 },
+  "balloon_red": { "color": "#d23b3b", "roughness": 0.35 },
+  "void_black": { "color": "#060606", "roughness": 1 },
+  "floor_line": { "color": "#e0b33a", "roughness": 0.8 },
+  "buzzer_yellow": { "color": "#e8c22c", "roughness": 0.5 }
 }
