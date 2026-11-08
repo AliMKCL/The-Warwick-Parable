@@ -26,6 +26,12 @@ Read this first when picking up the work. Newest entries at the top.
 ### Faster rooms
 - Parallel generation (`PARALLEL_ROOMS`), LM Studio support for Qwen thinking, setup in `docs/speed.md`.
 
+### Play-data collection (Supabase)
+- `supabase/schema.sql`: `sessions` and `events` tables, run by hand in the Supabase SQL editor.
+- The start screen asks for consent (and optional 1–5 self-ratings on risk, patience, following instructions, exploring) only when `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` are set. Without consent nothing is sent.
+- Raw behaviour is logged: room enter/exit, interactions, looks, door hovers, idles, locked doors tried, attempts to go back, tasks (button, inspect-to-unlock, beat the timer) and every choice with latency and its trait. Gameplay is unchanged; the recorder only listens.
+- `npm run analyze` prints per-player metrics and population mean and percentiles.
+
 ### After Phase 6: context file and narrator voice
 - `CLAUDE.md`: everything a new Claude session needs (architecture, how to run and test, workflow, decisions).
 - Narrator voice with ElevenLabs, off unless `ELEVENLABS_API_KEY` is set; setup in `docs/voice.md`; `npm run try:voice` to audition voices.
