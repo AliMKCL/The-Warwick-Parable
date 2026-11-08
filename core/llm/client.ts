@@ -64,6 +64,7 @@ export function createLlmClient(config: LlmConfig, deps: LlmDeps): LlmClient {
           temperature: req.temperature ?? 0.8,
           response_format: { type: 'json_schema', json_schema: { name: req.schemaName, schema: req.schema, strict: true } },
           ...(config.noThinking ? { chat_template_kwargs: { enable_thinking: false } } : {}),
+          ...config.extraBody,
         }))) as OpenAiChatResponse;
         const msg = data.choices?.[0]?.message;
         // Some servers put the JSON in reasoning_content when the model insists on thinking.
@@ -89,7 +90,7 @@ export function createLlmClient(config: LlmConfig, deps: LlmDeps): LlmClient {
         ? { model: config.model, messages: req.messages, stream: true, think: false, keep_alive: '30m',
             options: { temperature: req.temperature ?? 0.9, num_predict: req.maxTokens } }
         : { model: config.model, messages: req.messages, stream: true, max_tokens: req.maxTokens, temperature: req.temperature ?? 0.9,
-            ...(config.noThinking ? { chat_template_kwargs: { enable_thinking: false } } : {}) };
+            ...(config.noThinking ? { chat_template_kwargs: { enable_thinking: false } } : {}), ...config.extraBody };
       const url = ollama ? `${base}/api/chat` : `${base}/v1/chat/completions`;
       let res;
       try {

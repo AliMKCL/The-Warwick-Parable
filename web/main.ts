@@ -70,7 +70,7 @@ voiceStatus.className = `status ${__TTS__.enabled ? 'ok' : ''}`;
 
 // ---- model server status on the start screen ----
 const llm = createLlmClient(
-  { provider: __LLM_PROVIDER__, baseUrl: '/llm', model: __LLM_MODEL__, noThinking: __LLM_NO_THINKING__ },
+  { provider: __LLM_PROVIDER__, baseUrl: '/llm', model: __LLM_MODEL__, noThinking: __LLM_NO_THINKING__, extraBody: __LLM_EXTRA__ },
   { fetch: (url, init) => fetch(url, init as RequestInit), now: () => performance.now() },
 );
 const status = document.getElementById('status-llm')!;

@@ -1,4 +1,5 @@
 import { defineConfig, loadEnv } from 'vite';
+import { isOpenRouter, OPENROUTER_EXTRA } from './core/llm/cloud';
 
 // The browser never talks to the model server directly. It calls /llm on the
 // Vite dev server, which forwards to LLM_BASE_URL. This avoids cross-origin
@@ -19,7 +20,8 @@ export default defineConfig(({ mode }) => {
       __LLM_PROVIDER__: JSON.stringify(provider),
       __LLM_MODEL__: JSON.stringify(model),
       __LLM_PARALLEL__: JSON.stringify(Math.max(1, Number(env.LLM_PARALLEL) || 1)),
-      __LLM_NO_THINKING__: JSON.stringify(provider === 'openai' && /127\.0\.0\.1|localhost/.test(baseUrl)),
+      __LLM_NO_THINKING__: JSON.stringify(provider === 'openai' && /127\.0\.0\.1|localhost/.test(baseUrl) && !isOpenRouter(baseUrl, env.LLM_OPENROUTER)),
+      __LLM_EXTRA__: JSON.stringify(isOpenRouter(baseUrl, env.LLM_OPENROUTER) ? OPENROUTER_EXTRA : undefined),
       __TTS__: JSON.stringify({
         enabled: !!ttsKey,
         voice: ttsVoice,
@@ -37,8 +39,13 @@ export default defineConfig(({ mode }) => {
           changeOrigin: true,
           rewrite: (path) => path.replace(/^\/llm/, ''),
           configure: (proxy) => {
-            // Model servers may reject browser origins; the request comes from the dev server instead.
-            proxy.on('proxyReq', (req) => req.removeHeader('origin'));
+            proxy.on('proxyReq', (req) => {
+              // Model servers may reject browser origins; the request comes from the dev server instead.
+              req.removeHeader('origin');
+              // Cloud models: the key is added here and never reaches the browser.
+              if (env.LLM_API_KEY) req.setHeader('authorization', `Bearer ${env.LLM_API_KEY}`);
+              if (isOpenRouter(baseUrl, env.LLM_OPENROUTER)) req.setHeader('x-title', 'whack');
+            });
           },
         },
         '/tts': {

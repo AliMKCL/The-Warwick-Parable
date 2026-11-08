@@ -87,3 +87,16 @@ describe('local OpenAI-compatible servers', () => {
     expect(calls[0]?.body.chat_template_kwargs).toEqual({ enable_thinking: false });
   });
 });
+
+describe('cloud (OpenRouter)', () => {
+  it('adds the routing and reasoning settings to every request', async () => {
+    const { OPENROUTER_EXTRA } = await import('../../core/llm/cloud');
+    const { fetch, calls } = mockFetch(() => ({ json: { choices: [{ message: { content: '{"a": 4}' } }] } }));
+    const client = createLlmClient({ provider: 'openai', baseUrl: 'https://openrouter.ai/api', model: 'qwen/qwen3.6-35b-a3b', apiKey: 'k', extraBody: OPENROUTER_EXTRA }, { fetch, now });
+    expect((await client.completeJson<{ a: number }>(req)).value.a).toBe(4);
+    expect(calls[0]?.url).toBe('https://openrouter.ai/api/v1/chat/completions');
+    expect(calls[0]?.body.provider).toEqual({ require_parameters: true });
+    expect(calls[0]?.body.reasoning).toEqual({ effort: 'none' });
+    expect(calls[0]?.body.chat_template_kwargs).toBeUndefined();
+  });
+});

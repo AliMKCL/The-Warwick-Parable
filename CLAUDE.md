@@ -106,8 +106,12 @@ npm run try:voice               # ElevenLabs sample line → voice-sample.mp3 (-
   Predictions"); higher than the server just queues there and loses lingered-door-first ordering.
 - LM Studio path: provider `openai`, `noThinking` is set automatically for localhost servers
   (`chat_template_kwargs.enable_thinking=false`), and JSON is also accepted from `reasoning_content`.
-- Setup walkthrough for Ali: `docs/speed.md`. Ali chose parallel generation + LM Studio/MLX; he did not want
-  shorter observation, fewer slots, or the transition corridor.
+- Cloud: OpenRouter via provider `openai`, base `https://openrouter.ai/api`, model `qwen/qwen3.6-35b-a3b`.
+  `core/llm/cloud.ts` adds `provider.require_parameters` and `reasoning.effort: none` (`extraBody`); the Vite
+  proxy adds `Authorization: Bearer LLM_API_KEY` server-side. `LLM_OPENROUTER=1` forces the extras (used with the mock).
+- Setup walkthrough for Ali: `docs/speed.md`. Ali chose parallel generation and a faster engine; he did not want
+  shorter observation, fewer slots, or the transition corridor. The Ollama MLX build (`qwen3.6:35b-a3b-nvfp4`)
+  felt slower to him than `qwen3.6:35b-a3b` (with LLM_PARALLEL=3 at first, since set back to 1); cloud was then added.
 
 ## Decisions worth keeping
 - No hand-written rooms, ever (track theme). Fallbacks are generated too (layout generator + templates).

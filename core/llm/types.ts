@@ -17,6 +17,11 @@ export interface LlmConfig {
    * such as LM Studio; cloud APIs may reject the extra field.
    */
   noThinking?: boolean;
+  /**
+   * Extra fields merged into every OpenAI-compatible request. Used for OpenRouter:
+   * route only to providers that enforce the JSON Schema, and switch reasoning off.
+   */
+  extraBody?: Record<string, unknown>;
 }
 
 /** Minimal readable stream, as returned by fetch in browsers and Node 22+. */

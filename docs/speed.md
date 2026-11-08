@@ -1,4 +1,4 @@
-# Faster rooms: parallel generation and LM Studio
+# Faster rooms: parallel generation, MLX, LM Studio and cloud
 
 Most of the wait after a door comes from rooms being generated one after another. The game can now
 generate the rooms behind all of a room's doors **at the same time**. The game side is one setting,
@@ -50,6 +50,37 @@ If `check:llm` says the JSON is missing fields, thinking is still on: switch it 
 
 To go back to Ollama, restore the three Ollama lines in `.env.local` (see `.env.example`).
 
+## C. Cloud through OpenRouter (fastest, needs internet)
+Hosted servers run the same model on much faster hardware and handle parallel requests, so every door's room
+is generated at once in a few seconds, and your Mac's GPU is left to the rendering.
+
+1. Make an account at https://openrouter.ai, add a little credit (a few dollars lasts a long time for this
+   model), and create an API key under **Keys**.
+2. In `.env.local`:
+   ```
+   LLM_PROVIDER=openai
+   LLM_BASE_URL=https://openrouter.ai/api
+   LLM_MODEL=qwen/qwen3.6-35b-a3b
+   LLM_API_KEY=sk-or-...
+   LLM_PARALLEL=3
+   ```
+   Same model as locally, so the writing stays the same; only the speed changes.
+3. `npm run check:llm`, then `npm run try:room`, then restart `npm run dev`.
+
+What the game does for you: the key is added by the dev server (never in the browser); every request asks
+OpenRouter to use only providers that enforce the room's JSON format (`require_parameters`) and to switch the
+model's reasoning off. If the internet drops mid-demo, rooms fall back to templates; switch the five lines back
+to Ollama to run offline.
+
+**Free models (`:free` IDs)** work too, but are a poor fit for a live demo: 20 requests a minute and only 50 a day
+unless you have bought at least $10 of credit (then 1,000 a day). One run uses about 30 to 40 requests (up to three
+rooms per doorway, plus narrator lines and the verdict), so 50 a day is one or two runs. They are also throttled at
+busy times, can disappear without notice, and not all of them enforce JSON formats.
+
+**Bigger models** write a little better but are usually slower per room, and speed is the goal here. Any OpenRouter
+model ID works in `LLM_MODEL` if you want to compare; check it lists "structured outputs" on its model page.
+
 ## Which to keep
-Pick whichever makes `try:room` finish all doors soonest. For 2–3 doors, three rooms in parallel usually beats
+Pick whichever makes `try:room` finish all doors soonest. With good internet, the cloud (C) will usually win;
+keep Ollama as the offline backup. For 2–3 doors, three rooms in parallel usually beats
 one faster room at a time; MLX with parallel is best if your LM Studio offers it.

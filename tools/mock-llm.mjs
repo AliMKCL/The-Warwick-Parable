@@ -8,6 +8,7 @@ const PORT = Number(process.env.MOCK_PORT || 11999);
 const DELAY = Number(process.env.MOCK_DELAY_MS ?? 1500);
 let n = 0;
 let ttsCalls = 0;
+const stats = { openai: 0, auth: null, reasoning: null, provider: null };
 const pick = (xs) => xs[Math.floor(Math.random() * xs.length)];
 
 function roomContent(prompt) {
@@ -57,6 +58,31 @@ http.createServer((req, res) => {
       return res.end(wav);
     }
     if (req.url === '/tts-calls') return res.end(JSON.stringify({ ttsCalls }));
+    if (req.url === '/mock-stats') return res.end(JSON.stringify(stats));
+    // OpenAI-compatible (OpenRouter-style) endpoints, served under /api like OpenRouter.
+    if (req.url === '/api/v1/models') return res.end(JSON.stringify({ data: [{ id: process.env.LLM_MODEL || 'qwen/qwen3.6-35b-a3b' }] }));
+    if (req.url === '/api/v1/chat/completions') {
+      const b = JSON.parse(body);
+      stats.openai++;
+      stats.auth = req.headers.authorization || null;
+      stats.reasoning = b.reasoning || null;
+      stats.provider = b.provider || null;
+      const prompt = b.messages.map((m) => m.content).join('\n');
+      if (b.stream) {
+        res.setHeader('content-type', 'text/event-stream');
+        for (const w of pick(['Interesting choice.', 'That door? Of course.']).split(' ')) {
+          await new Promise((r) => setTimeout(r, 80));
+          res.write(`data: ${JSON.stringify({ choices: [{ delta: { content: w + ' ' } }] })}\n\n`);
+        }
+        return res.end('data: [DONE]\n\n');
+      }
+      await new Promise((r) => setTimeout(r, DELAY));
+      const schema = b.response_format?.json_schema?.schema;
+      const content = schema?.properties?.summary
+        ? JSON.stringify({ name: 'The Patient Applicant', summary: 'You waited.', hesitation: 'a', curiosity: 'b', compliance: 'c', impulsivity: 'd', closing: 'Goodbye.' })
+        : JSON.stringify(roomContent(prompt));
+      return res.end(JSON.stringify({ choices: [{ message: { content } }], usage: { prompt_tokens: 1800, completion_tokens: 420 } }));
+    }
     if (req.url === '/api/tags') return res.end(JSON.stringify({ models: [{ name: process.env.LLM_MODEL || 'qwen3.6:35b-a3b' }] }));
     if (req.url !== '/api/chat') { res.statusCode = 404; return res.end('{}'); }
     const b = JSON.parse(body);

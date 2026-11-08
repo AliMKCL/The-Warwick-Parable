@@ -66,7 +66,9 @@ async function main() {
     console.error(
       config.provider === 'ollama'
         ? '  Start Ollama (open the Ollama app, or run `ollama serve`) and try again.'
-        : '  Start the server in LM Studio (Developer tab → Start server) and try again.',
+        : /openrouter/.test(config.baseUrl)
+          ? '  Check your internet connection and LLM_API_KEY.'
+          : '  Start the server in LM Studio (Developer tab → Start server) and try again.',
     );
     process.exit(1);
   }

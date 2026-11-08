@@ -1,5 +1,6 @@
 import { existsSync } from 'node:fs';
 import type { LlmConfig, LlmProvider } from '../core/llm/types';
+import { isOpenRouter, OPENROUTER_EXTRA } from '../core/llm/cloud';
 
 /** Loads .env then .env.local (later wins) into process.env, like Vite does. */
 export function loadProjectEnv(): void {
@@ -15,7 +16,11 @@ export function llmConfigFromEnv(): LlmConfig {
     baseUrl: process.env.LLM_BASE_URL || (provider === 'ollama' ? 'http://127.0.0.1:11434' : 'http://127.0.0.1:1234'),
     model: process.env.LLM_MODEL || 'qwen3.6:35b-a3b',
     apiKey: process.env.LLM_API_KEY || undefined,
-    noThinking: provider === 'openai' && /127\.0\.0\.1|localhost/.test(process.env.LLM_BASE_URL || 'http://127.0.0.1:1234'),
+    noThinking:
+      provider === 'openai' &&
+      /127\.0\.0\.1|localhost/.test(process.env.LLM_BASE_URL || 'http://127.0.0.1:1234') &&
+      !isOpenRouter(process.env.LLM_BASE_URL || '', process.env.LLM_OPENROUTER),
+    extraBody: isOpenRouter(process.env.LLM_BASE_URL || '', process.env.LLM_OPENROUTER) ? OPENROUTER_EXTRA : undefined,
   };
 }
 
