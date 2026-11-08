@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { gameData } from '../../core/data';
-import { compareSelf, findPatterns, measure } from '../../core/director/selfcheck';
+import { alignVerdict, compareSelf, conflicts, explorationCounts, findPatterns, measure, pointsOfInterest } from '../../core/director/selfcheck';
 import type { CoreMessage, Measured, RuleEffect, SelfTrait } from '../../core/protocol';
 import { createCore } from '../../core/run/core';
 import { gamblePlan, Run } from '../../core/run/run';
@@ -177,5 +177,91 @@ describe('contradictions', () => {
     run.profile.traits.hesitation = 0.8;
     run.profile.traits.impulsivity = 0.3;
     expect(findPatterns(run)).toEqual([]);
+  });
+});
+
+describe('exploration counts only rooms you entered, and only things worth inspecting', () => {
+  it('ignores rooms planned behind doors you did not take, and filler furniture', async () => {
+    const run = new Run(11, gameData, { observeMs: 0 });
+    const r0 = run.start();
+    run.record({ type: 'room_entered', roomId: r0.id, t: 0 });
+    const r1 = await run.next(exits(run)[0]!.id);
+    run.record({ type: 'room_entered', roomId: r1.id, t: 10 });
+    const poi = (r: typeof r0) => pointsOfInterest(r, gameData).length;
+    const before = explorationCounts(run, gameData);
+    expect(before.objects).toBe(poi(r0) + (r1.rule?.id === 'inspect_to_unlock' ? 0 : poi(r1)));
+
+    // A room that was generated but never walked into (no room_entered) adds nothing.
+    run.rooms.push({ ...r1, id: 'prefetched', index: 2, rule: undefined });
+    expect(explorationCounts(run, gameData)).toEqual(before);
+
+    // Filler (desks, partitions, a model room's background furniture) is not a point of interest.
+    const desks = Array.from({ length: 6 }, (_, i) => ({ id: `desk${i}`, recipe: 'desk_office', slot: 'x', x: 0, y: 0, z: 0, rotY: 0, inspectText: 'A desk.' }));
+    const room = { ...r1, id: 'office', index: 3, rule: undefined, props: [...desks, { ...desks[0]!, id: 'memo', recipe: 'memo_board', featured: true }] };
+    run.rooms.push(room);
+    run.record({ type: 'room_entered', roomId: room.id, t: 20 });
+    run.record({ type: 'inspected', roomId: room.id, objectId: 'memo', t: 21 });
+    const after = explorationCounts(run, gameData);
+    expect(after.objects).toBe(before.objects + 1);
+    expect(after.rooms).toBe(before.rooms + 1);
+    expect(after.roomsSeen).toBe(before.roomsSeen + 1);
+    expect(measure(run, gameData).exploration.evidence).toMatch(/^You inspected something in \d+ of \d+ rooms you entered \(\d+ of \d+ objects?\)/);
+  });
+
+  it('scores the share of rooms, so one busy room cannot swamp it', () => {
+    const run = new Run(3, gameData, { observeMs: 60_000 });
+    const r0 = run.start();
+    const busy = (id: string, n: number) => ({ ...r0, id, props: Array.from({ length: n }, (_, i) => ({ id: `${id}-${i}`, recipe: 'poster_wall', slot: 's', x: 0, y: 0, z: 0, rotY: 0, surfaceText: 'HI', featured: true })) });
+    run.rooms.length = 0;
+    run.rooms.push(busy('a', 20), busy('b', 2), busy('c', 2), busy('d', 2));
+    for (const r of run.rooms) run.events.push({ type: 'room_entered', roomId: r.id, t: 0 });
+    // One object in each of the three small rooms, nothing in the big one: 3 of 4 rooms, though only 3 of 26 objects.
+    for (const id of ['b', 'c', 'd']) run.events.push({ type: 'inspected', roomId: id, objectId: `${id}-0`, t: 1 });
+    const e = measure(run, gameData).exploration;
+    expect(e.evidence).toBe('You inspected something in 3 of 4 rooms you entered (3 of 26 objects).');
+    expect(e.score).toBe(4);
+  });
+});
+
+describe('untested traits', () => {
+  it('are never the headline and never a gap, however far off the estimate is', () => {
+    const sd = compareSelf(all({ patience: m(1, 'No countdown this run.', true), risk: m(3) }), { risk: 3, patience: 5, social: 3, exploration: 3 });
+    const row = sd.rows.find((r) => r.trait === 'patience')!;
+    expect(row.did).toBeNull();
+    expect(row.gap).toBeNull();
+    expect(row.estimate).toBe(1);
+    expect(sd.headlineTrait).toBeNull();
+    expect(sd.headline).toBe('You know yourself well.');
+  });
+
+  it('patience without a countdown is untested, not measured from time per room', () => {
+    const run = new Run(3, gameData, { observeMs: 60_000 });
+    const r0 = run.start();
+    run.events.push({ type: 'room_entered', roomId: r0.id, t: 0 }, { type: 'door_chosen', roomId: r0.id, doorId: 'd1', t: 3 });
+    const p = measure(run, gameData).patience;
+    expect(p.estimated).toBe(true);
+    expect(compareSelf(measure(run, gameData), { risk: null, patience: 5, social: null, exploration: null }).headlineTrait).not.toBe('patience');
+  });
+});
+
+describe('the archetype title agrees with the measured scores', () => {
+  const impatient = all({ patience: m(1, 'You left before 3 of 4 countdowns ended.'), risk: m(3), social: m(3), exploration: m(3) });
+
+  it('never calls an impatient player patient', () => {
+    const v = { name: 'The Patient Applicant', summary: 'You waited before every door and read everything twice.', closing: 'Bye.' };
+    const out = alignVerdict(v, impatient);
+    expect(out.conflicts).toContain('patience');
+    expect(out.verdict.name).not.toMatch(/patient/i);
+    expect(out.verdict.name).toBe('The Hurried Applicant');
+    expect(out.verdict.summary).toContain('You left before 3 of 4 countdowns ended.');
+    expect(conflicts(`${out.verdict.name} ${out.verdict.summary}`, impatient)).toEqual([]);
+    expect(out.verdict.closing).toBe('Bye.');
+  });
+
+  it('keeps a verdict that already agrees, and ignores untested traits', () => {
+    const v = { name: 'The Hurried Applicant', summary: 'You never stopped moving.' };
+    expect(alignVerdict(v, impatient)).toEqual({ verdict: v, conflicts: [] });
+    const untested = all({ patience: m(1, 'No countdown this run.', true) });
+    expect(alignVerdict({ name: 'The Patient Applicant', summary: 'You waited.' }, untested).conflicts).toEqual([]);
   });
 });

@@ -140,6 +140,12 @@ export interface PlacedProp {
   surfaceText?: string;
   /** Shown when the player inspects it. */
   inspectText?: string;
+  /**
+   * Placed on purpose: one of the model's chosen slots, or a template room's
+   * chosen piece. Filler (rows of desks, partitions, a model room's background
+   * furniture) is not, so it doesn't count as something worth exploring.
+   */
+  featured?: boolean;
 }
 
 export interface RoomSpec {

@@ -66,7 +66,8 @@ export interface Measured {
 
 /** "You said / you did" for the dossier. */
 export interface SaidDid {
-  rows: { trait: SelfTrait; label: string; said: number | null; did: number; gap: number | null; evidence: string; estimated: boolean }[];
+  /** `did` and `gap` are null when the trait was not tested this run (`estimate` is the rough guess). */
+  rows: { trait: SelfTrait; label: string; said: number | null; did: number | null; estimate: number; gap: number | null; evidence: string; estimated: boolean }[];
   /** The single biggest gap in one line, or "You know yourself well." */
   headline: string;
   /** Second, smaller line under the headline. */
@@ -120,6 +121,8 @@ export interface Dossier {
   stats: { inspected: number; pressed: number; stoodStill: number; doorsTried: number };
   /** The player's behaviour on the four self-rated traits, 1–5. */
   measured: Record<SelfTrait, Measured>;
+  /** Traits the original verdict name/summary contradicted; when any, they were rewritten from `measured`. */
+  verdictConflicts: SelfTrait[];
   /** Present when the player rated themselves at the start. */
   saidDid?: SaidDid;
   /** Contradictory trait pairs, each resolved into one sentence. */

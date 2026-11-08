@@ -23,6 +23,11 @@ Read this first when picking up the work. Newest entries at the top.
 
 ## Log
 
+### Dossier fixes: exploration, untested traits, consistent title (8 Nov 2026)
+- Exploration is now per room: "You inspected something in 1 of 5 rooms you entered (3 of 14 objects)", scored on the share of rooms. Only rooms the player entered count, and only props placed on purpose (`featured`: the model's chosen slots, or a template room's chosen pieces), not filler desks and partitions. Rooms that required inspecting are left out.
+- A trait with no real test this run (e.g. patience with no countdown) shows "You did: not tested this run" in grey with a rough estimate; it has no gap, never gets the red highlight and is never the headline.
+- The archetype title and summary are checked against the measured scores; if they contradict a tested score (e.g. "The Patient Applicant" for 1/5 patience), both are rewritten from the measured scores. The "How this world was built" note says when that happened.
+
 ### Gambles, required self-ratings and "you said / you did" (8 Nov 2026)
 - Start screen: four required 1–5 sliders (I take risks, I am patient, I do what I'm told, I explore everything). Begin stays disabled until all four are set and, when Supabase is configured, consent is ticked.
 - Gamble rooms: three per default run (rooms 1, 3, 5), two doors tagged CERTAIN and 50/50. The narrator spells out the stakes before the choice; looking at either door repeats them. The middle gamble has a 15 s clock, after which the 50/50 door locks. The 50/50 is a real coin toss (seeded): shortcut (the next room's task is removed; at the last gamble, the last room is skipped) or setback (one extra detour room). The outcome is announced on arrival.

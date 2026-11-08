@@ -62,7 +62,7 @@ export function showDossier(root: HTMLElement, d: Dossier) {
 
     <section class="built" hidden>
       <h2>How this world was built</h2>
-      <p class="note">No room existed before the player reached it. Seeded code laid out each room; ${d.rooms.filter((r) => r.source === 'model').length} of ${d.rooms.length} rooms were then written by the local model from what you had done so far (the rest used templates). The verdict above was written by ${d.verdictSource === 'model' ? 'the model' : 'templates'}.</p>
+      <p class="note">No room existed before the player reached it. Seeded code laid out each room; ${d.rooms.filter((r) => r.source === 'model').length} of ${d.rooms.length} rooms were then written by the local model from what you had done so far (the rest used templates). The verdict above was written by ${d.verdictSource === 'model' ? 'the model' : 'templates'}${d.verdictConflicts?.length ? `; its title and summary contradicted what you did (${d.verdictConflicts.join(', ')}), so they were rewritten from your measured scores` : ''}.</p>
       <h3>Your traits as you entered each room</h3>
       ${chart(d)}
       <h3>Room by room</h3>
@@ -114,13 +114,16 @@ function saidDid(d: Dossier): string {
   const row = (key: SelfTrait, label: string, m: Measured) => {
     const r = sd?.rows.find((x) => x.trait === key);
     const said = r?.said ?? null;
-    const did = Math.round(m.score);
-    const gap = said === null ? 0 : Math.abs(said - did);
-    return `<div class="sd-row${sd?.headlineTrait === key ? ' top' : ''}${gap >= 2 && !m.estimated ? ' gap' : ''}">
+    // Untested this run: no score to compare, never a red gap, never the headline.
+    const did = m.estimated ? null : Math.round(m.score);
+    const gap = said === null || did === null ? 0 : Math.abs(said - did);
+    return `<div class="sd-row${sd?.headlineTrait === key ? ' top' : ''}${gap >= 2 ? ' gap' : ''}${did === null ? ' untested' : ''}">
       <strong>${esc(label)}</strong>
       <div class="sd-vals">
         ${sd ? `<span>You said: <b>${said === null ? '–' : `${said}/5`}</b>${dots(said, 'said')}</span>` : ''}
-        <span>You did: <b>${did}/5</b>${m.estimated ? ' <em>(estimate)</em>' : ''}${dots(did, 'did')}</span>
+        ${did === null
+          ? `<span class="nt">You did: <b>not tested this run</b> <em>(estimate ${Math.round(m.score)}/5)</em></span>`
+          : `<span>You did: <b>${did}/5</b>${dots(did, 'did')}</span>`}
       </div>
       <p>${esc(m.evidence)}</p>
     </div>`;

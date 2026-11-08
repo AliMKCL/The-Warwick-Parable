@@ -22,7 +22,7 @@ npm install
 npm run check:llm               # model reachable, JSON output, speed
 npm run try:room                # scripted player + real model: prints the next room, rule, profile, narrator lines
 npm run dev                     # http://127.0.0.1:5188  (?debug=1 ?seed= ?rooms=5 ?post=0 ?ambience= ?mute=1 ?observe=)
-npm test                        # vitest: core + telemetry (50 tests)
+npm test                        # vitest: core + telemetry (56 tests)
 npm run typecheck               # tsc for web + core, plus core purity check
 npm run test:e2e                # Playwright; see "Working from Claude's sandbox" below
 npm run mock:llm                # fake Ollama + fake ElevenLabs on :11999
@@ -61,7 +61,9 @@ npm run analyze                 # Supabase play data → per-player metrics + po
 - `core/director/selfcheck.ts`: `measure` (risk from gambles, patience from countdowns or time per room, social from
   the button and narrator recommendations, exploration from share inspected; 1–5 with one evidence line; `estimated`
   when there was no test), `compareSelf` (said vs did, headline = biggest gap of 2+ on measured traits, else
-  "You know yourself well."), `findPatterns` (hesitant+impulsive or curious+impulsive → one sentence).
+  "You know yourself well."; untested rows have did/gap null), `findPatterns` (hesitant+impulsive or curious+impulsive
+  → one sentence), `alignVerdict` (rewrites the verdict name/summary from measured scores if they contradict them).
+  Exploration counts only `featured` props (model slots / template rooms' chosen pieces) in entered rooms, per room.
 - `core/director/`: `content.ts` (picks up to 8 slots for the model, builds messages, schema-constrained call,
   one repair round), `schema.ts` (per-room JSON Schema: enums of real slot/prop/door/thread ids), `summary.ts`
   (events → plain sentences), `prompts.ts` (fill, story stages, RUN_LENGTH=7), `dossier.ts` (verdict + Dossier).

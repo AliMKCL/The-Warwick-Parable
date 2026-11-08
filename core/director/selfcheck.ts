@@ -94,11 +94,12 @@ export function measure(run: Run, data: GameData): Record<SelfTrait, Measured> {
         return entered === undefined || out === undefined ? undefined : out - entered;
       })
       .filter((x): x is number => x !== undefined);
+    // No countdown means patience was never put to the test: only an estimate, never a headline.
     if (stays.length) {
       const avg = stays.reduce((a, b) => a + b, 0) / stays.length;
       // 8 s a room reads as 1/5, a minute or more as 5/5.
-      patience = { score: scale((avg - 8) / 52), n: stays.length, estimated: false, evidence: `No countdowns this run; you spent ${Math.round(avg)} s in each room on average.` };
-    } else patience = estimate(t.hesitation, 'Estimated from how long you hesitated.');
+      patience = { score: scale((avg - 8) / 52), n: 0, estimated: true, evidence: `No countdown this run. Rough estimate from your ${Math.round(avg)} s per room.` };
+    } else patience = estimate(t.hesitation, 'No countdown this run. Rough estimate from how long you hesitated.');
   }
 
   // Social: the button in the first room, and the narrator's recommendations.
@@ -119,23 +120,49 @@ export function measure(run: Run, data: GameData): Record<SelfTrait, Measured> {
     social = { score: scale((pressed + followed) / nSocial), n: nSocial, estimated: false, evidence: `You ${parts.join(' and ')}.` };
   } else social = estimate(t.compliance, 'Estimated from how you responded to instructions.');
 
-  // Exploration: how much of what could be inspected was.
-  const inspectable = (recipe: string) => {
-    const r = data.props.find((p) => p.id === recipe);
-    return !!r?.inspectable && r.interact !== 'button';
-  };
-  let total = 0, seen = 0;
-  for (const r of run.rooms) {
-    if (!eventsIn(run, r).some((e) => e.type === 'room_entered')) continue;
-    const ids = new Set(r.props.filter((p) => inspectable(p.recipe)).map((p) => p.id));
-    total += ids.size;
-    seen += new Set(eventsIn(run, r).flatMap((e) => (e.type === 'inspected' && ids.has(e.objectId) ? [e.objectId] : []))).size;
-  }
-  const exploration: Measured = total
-    ? { score: scale(seen / total), n: total, estimated: false, evidence: seen === 0 ? `You didn't inspect a single thing (${total} were there to look at).` : `You inspected ${seen} of the ${total} things you could have.` }
-    : estimate(t.curiosity, 'Estimated from what you looked at.');
+  // Exploration: in how many of the rooms you entered you inspected anything. Per room, so a room
+  // full of desks can't swamp the score. Only rooms you entered count (never ones planned behind
+  // doors you didn't take), only things placed on purpose count (not filler furniture), and rooms
+  // that required inspecting to open their doors are left out.
+  const { roomsSeen, rooms, objectsSeen, objects, forced } = explorationCounts(run, data);
+  const exploration: Measured = rooms
+    ? {
+        score: scale(roomsSeen / rooms),
+        n: rooms,
+        estimated: false,
+        evidence:
+          (roomsSeen === 0
+            ? `You didn't inspect anything in any of the ${rooms} room${rooms > 1 ? 's' : ''} you entered (${objects} object${objects > 1 ? 's were' : ' was'} there).`
+            : `You inspected something in ${roomsSeen} of ${rooms} room${rooms > 1 ? 's' : ''} you entered (${objectsSeen} of ${objects} object${objects > 1 ? 's' : ''}).`) +
+          (forced ? ` Rooms that required inspecting aren't counted.` : ''),
+      }
+    : estimate(t.curiosity, 'Nothing to inspect freely this run. Rough estimate from what you looked at.');
 
   return { risk, patience, social, exploration };
+}
+
+/** Props worth inspecting: placed on purpose, inspectable, not the button, and with something to read. */
+export function pointsOfInterest(room: RoomSpec, data: GameData) {
+  return room.props.filter((p) => {
+    const r = data.props.find((x) => x.id === p.recipe);
+    return p.featured && !!r?.inspectable && r.interact !== 'button' && !!(p.inspectText || p.surfaceText);
+  });
+}
+
+/** What the exploration score is built from. Exported for tests. */
+export function explorationCounts(run: Run, data: GameData) {
+  const entered = run.rooms.filter((r) => eventsIn(run, r).some((e) => e.type === 'room_entered'));
+  const free = entered.filter((r) => r.rule?.id !== 'inspect_to_unlock');
+  const counted = free.filter((r) => pointsOfInterest(r, data).length > 0);
+  let roomsSeen = 0, objectsSeen = 0, objects = 0;
+  for (const r of counted) {
+    const poi = new Set(pointsOfInterest(r, data).map((p) => p.id));
+    const inspected = new Set(eventsIn(run, r).flatMap((e) => (e.type === 'inspected' ? [e.objectId] : [])));
+    objects += poi.size;
+    objectsSeen += [...inspected].filter((id) => poi.has(id)).length;
+    if (inspected.size) roomsSeen++;
+  }
+  return { roomsSeen, rooms: counted.length, objectsSeen, objects, forced: entered.length - free.length };
 }
 
 /** Puts the player's ratings next to what they did, and finds the one gap worth a headline. */
@@ -143,10 +170,10 @@ export function compareSelf(measured: Record<SelfTrait, Measured>, ratings: Self
   const rows = SELF_TRAITS.map((trait) => {
     const m = measured[trait];
     const said = ratings[trait] ?? null;
-    const did = Math.round(m.score);
-    return { trait, label: SELF_LABELS[trait], said, did, gap: said === null ? null : said - did, evidence: m.evidence, estimated: m.estimated };
+    // Untested: no "did" and no gap, only an estimate shown in grey. It can never be the headline or a red gap.
+    const did = m.estimated ? null : Math.round(m.score);
+    return { trait, label: SELF_LABELS[trait], said, did, estimate: Math.round(m.score), gap: said === null || did === null ? null : said - did, evidence: m.evidence, estimated: m.estimated };
   });
-  // Only measured traits can make the headline: an estimate is not evidence of a gap.
   const big = rows
     .filter((r) => r.gap !== null && !r.estimated && Math.abs(r.gap) >= BIG_GAP)
     .sort((a, b) => Math.abs(b.gap!) - Math.abs(a.gap!) || measured[b.trait].n - measured[a.trait].n)[0];
@@ -219,4 +246,58 @@ export function findPatterns(run: Run): Pattern[] {
 function share(xs: Evidence[], pred: (e: Evidence) => boolean): number {
   const total = xs.reduce((a, e) => a + Math.abs(e.delta), 0);
   return total ? xs.filter(pred).reduce((a, e) => a + Math.abs(e.delta), 0) / total : 0;
+}
+
+/**
+ * Words in a verdict's name or summary that claim a trait is high or low.
+ * Used to catch a title like "The Patient Applicant" on a player measured 1/5 for patience.
+ */
+const CLAIM_WORDS: Record<SelfTrait, { high: RegExp; low: RegExp }> = {
+  patience: { high: /\bpatien(t|ce)\b|\bwait(ed|s|ing)?\b|took (your|their) time|\blinger/i, low: /impatien|\bhurr(y|ied)|\brush(ed|es|ing)?\b|\bhast(e|y)/i },
+  risk: { high: /gambl|\brisk(s|y)?\b|\bbold\b|daring|reckless/i, low: /\bcautio|\bcareful|\bsafe\b|\bcertain\b/i },
+  social: { high: /obedien|complian|did (as|what) (you were|it was) told|model employee|\bfollow(ed|s)?\b/i, low: /defian|contrar|rebel|disobe/i },
+  exploration: { high: /curio|\bread(s|er|ing)?\b|explor|inspect|every memo/i, low: /incurious|shortcut|ignored (the|every) detail/i },
+};
+
+/** Names from the measured behaviour: [low, high]. */
+const MEASURED_NAMES: Record<SelfTrait, [string, string]> = {
+  risk: ['The Safe Bet', 'The Gambler'],
+  patience: ['The Hurried Applicant', 'The Patient Applicant'],
+  social: ['The Contrarian', 'The Model Employee'],
+  exploration: ['The Shortcut', 'The Reader'],
+};
+
+/** Which tested traits a piece of text contradicts. */
+export function conflicts(text: string, measured: Record<SelfTrait, Measured>): SelfTrait[] {
+  return SELF_TRAITS.filter((k) => {
+    const m = measured[k];
+    if (m.estimated) return false;
+    const s = Math.round(m.score);
+    return (s <= 2 && CLAIM_WORDS[k].high.test(text)) || (s >= 4 && CLAIM_WORDS[k].low.test(text));
+  });
+}
+
+/** A name and summary built only from the measured, tested scores. */
+export function measuredTitle(measured: Record<SelfTrait, Measured>): { name: string; summary: string } {
+  const tested = SELF_TRAITS.filter((k) => !measured[k].estimated)
+    .map((k) => ({ k, d: measured[k].score - 3 }))
+    .sort((a, b) => Math.abs(b.d) - Math.abs(a.d));
+  const top = tested[0];
+  const name = !top || Math.abs(top.d) < 1 ? 'The Unremarkable Applicant' : MEASURED_NAMES[top.k][top.d > 0 ? 1 : 0];
+  const lines = tested.filter((x) => Math.abs(x.d) >= 1).slice(0, 2).map((x) => measured[x.k].evidence);
+  const summary = lines.length
+    ? `${lines.join(' ')} The building has adjusted itself accordingly.`
+    : 'You did nothing the building could hold against you. That, too, has been noted.';
+  return { name, summary };
+}
+
+/**
+ * Makes the verdict's name and summary agree with the measured scores (and so
+ * with "you said / you did"). If either claims something a tested score
+ * contradicts, both are rewritten from the measured scores. Returns what it found.
+ */
+export function alignVerdict<V extends { name: string; summary: string }>(verdict: V, measured: Record<SelfTrait, Measured>): { verdict: V; conflicts: SelfTrait[] } {
+  const found = [...new Set([...conflicts(verdict.name, measured), ...conflicts(verdict.summary, measured)])];
+  if (!found.length) return { verdict, conflicts: [] };
+  return { verdict: { ...verdict, ...measuredTitle(measured) }, conflicts: found };
 }
