@@ -24,24 +24,36 @@
       <div id="fade"></div>
       <div id="waiting">the building is preparing something</div>
       <section id="start">
-        <h1>whack</h1>
-        <p>No room exists until you reach it.</p>
-        <form id="research">
-          <fieldset id="self-ratings">
-            <legend>Before you start: how true is each of these of you? <span>1 not at all · 5 very</span></legend>
-            <div class="rate" data-trait="risk"><span>I take risks</span></div>
-            <div class="rate" data-trait="patience"><span>I am patient</span></div>
-            <div class="rate" data-trait="social"><span>I do what I'm told</span></div>
-            <div class="rate" data-trait="exploration"><span>I explore everything</span></div>
-          </fieldset>
-          <label class="consent" id="consent-row" hidden><input type="checkbox" id="consent" /> Share anonymous play data for research (what you do in the game; nothing about who you are)</label>
-          <small id="research-hint" aria-live="polite"></small>
-        </form>
-        <button id="start-button" type="button">Click to begin</button>
-        <small>WASD to move · mouse to look · E to interact · M for sound · Esc to pause</small>
-        <small>Best with headphones.</small>
-        <small id="status-llm" class="status">Model: checking…</small>
-        <small id="status-voice" class="status"></small>
+        <div class="start-inner">
+          <header class="start-head">
+            <h1>whack</h1>
+            <p>No room exists until you reach it.</p>
+          </header>
+          <form id="research">
+            <fieldset id="self-ratings">
+              <legend>Before you start: how true is each of these of you? <span>1 not at all · 5 very</span></legend>
+              <div class="rate" data-trait="risk"><span>I take risks</span></div>
+              <div class="rate" data-trait="patience"><span>I am patient</span></div>
+              <div class="rate" data-trait="social"><span>I do what I'm told</span></div>
+              <div class="rate" data-trait="exploration"><span>I explore everything</span></div>
+            </fieldset>
+            <label class="consent" id="consent-row" hidden><input type="checkbox" id="consent" /> Share anonymous play data for research (what you do in the game; nothing about who you are)</label>
+            <small id="research-hint" aria-live="polite"></small>
+          </form>
+          <button id="start-button" type="button">Click to begin</button>
+          <p class="keys" aria-label="Controls: WASD to move, mouse to look, E to interact, M for sound, Esc to pause">
+            <span><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> move</span>
+            <span><kbd>Mouse</kbd> look</span>
+            <span><kbd>E</kbd> interact</span>
+            <span><kbd>M</kbd> sound</span>
+            <span><kbd>Esc</kbd> pause</span>
+          </p>
+          <small class="headphones">Best with headphones.</small>
+        </div>
+        <footer class="start-foot">
+          <small id="status-llm" class="status">Model: checking…</small>
+          <small id="status-voice" class="status"></small>
+        </footer>
       </section>
       <section id="dossier" hidden></section>
       <pre id="debug" hidden></pre>
