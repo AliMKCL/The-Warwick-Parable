@@ -7,6 +7,7 @@ import narratorUser from '../data/prompts/narrator-user.md?raw';
 import roomSystem from '../data/prompts/room-system.md?raw';
 import roomUser from '../data/prompts/room-user.md?raw';
 import props from '../data/props.json';
+import tasks from '../data/tasks.json';
 import templates from '../data/templates.json';
 import world from '../data/themes/office.md?raw';
 import type { GameData } from './room/types';
@@ -18,4 +19,5 @@ export const gameData: GameData = {
   ambience: ambience as unknown as GameData['ambience'],
   templates: templates as unknown as GameData['templates'],
   prompts: { world, roomSystem, roomUser, narratorSystem, narratorUser, dossierSystem, dossierUser },
+  tasks: tasks as GameData['tasks'],
 };

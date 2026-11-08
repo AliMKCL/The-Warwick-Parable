@@ -10,6 +10,7 @@ export function loadGameData(): GameData {
     materials: json('materials.json'),
     ambience: json('ambience.json'),
     templates: json('templates.json'),
+    tasks: json('tasks.json'),
     prompts: {
       world: md('themes/office.md'),
       roomSystem: md('prompts/room-system.md'),

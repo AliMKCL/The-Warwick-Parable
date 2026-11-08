@@ -143,6 +143,26 @@ export class Sound {
     this.tone(urgent ? 1320 : 1000, 0.03, urgent ? 0.07 : 0.04, 'sine');
   }
 
+  private alarmTimer = 0;
+  /** A fire alarm bell, kept soft: a slow two-tone chime, not a siren. */
+  alarm(on: boolean) {
+    clearInterval(this.alarmTimer);
+    this.alarmTimer = 0;
+    if (!on) return;
+    let hi = true;
+    const ring = () => {
+      this.tone(hi ? 880 : 660, 0.35, 0.035, 'triangle');
+      hi = !hi;
+    };
+    ring();
+    this.alarmTimer = window.setInterval(ring, 520);
+  }
+
+  /** Paper being picked up. */
+  pickup() {
+    this.burst({ filter: 'highpass', freq: 1800, dur: 0.22, gain: 0.05 });
+  }
+
   // ---------- building blocks ----------
 
   private noiseBed(to: AudioNode, type: BiquadFilterType, freq: number, gain: number, q = 0.7): () => void {

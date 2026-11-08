@@ -25,6 +25,8 @@ export interface ContentContext {
   /** Rooms in this run, counting the first. */
   runLength: number;
   data: GameData;
+  /** The office task staged here, as a short description of the setting (core/tasks). */
+  task?: string;
 }
 
 export interface GeneratedContent {
@@ -59,6 +61,7 @@ export function buildRoomMessages(ctx: ContentContext, slots: Slot[]): { message
   const { data, layout } = ctx;
   const p = data.prompts;
   const catalogue = data.props
+    .filter((r) => !r.fits.every((f) => f === 'fixture'))
     .map((r) => `| ${r.id} | ${r.name.toLowerCase()} | ${r.text ? r.text.style : 'no text'} |`)
     .join('\n');
   const system = fill(p.roomSystem, { world: p.world.trim(), catalogue });
@@ -79,7 +82,9 @@ export function buildRoomMessages(ctx: ContentContext, slots: Slot[]): { message
     total: ctx.runLength - 1,
     stage: storyStage(ctx.index, ctx.runLength - 1),
     profile: ctx.profile.map((s) => `- ${s}`).join('\n'),
-    rule: ctx.rule ? describeRule(ctx.rule) : 'None. Leave "rule_line" and "rule_done_line" empty.',
+    rule: ctx.task
+      ? `None, but the room is set up for a scene: ${ctx.task} Those props are already placed and the narrator's lines for it are fixed, so write only the setting around it: never instruct the player or hint at what to do. Leave "rule_line" and "rule_done_line" empty.`
+      : ctx.rule ? describeRule(ctx.rule) : 'None. Leave "rule_line" and "rule_done_line" empty.',
     threads: ctx.threads.length ? ctx.threads.map((t) => `- ${t.id}: ${t.text}`).join('\n') : '- None yet.',
     archetype: layout.archetype.replace('_', ' '),
     width: layout.width,
@@ -91,7 +96,7 @@ export function buildRoomMessages(ctx: ContentContext, slots: Slot[]): { message
     behaviour: ctx.behaviour.length ? ctx.behaviour.map((s) => `- ${s}`).join('\n') : '- Nothing recorded yet.',
     min_slots: Math.min(3, slots.length),
     slots: slotLines.join('\n'),
-    exits: exits.map((d) => `- ${d.id}: on the ${WALL[d.side]} wall`).join('\n'),
+    exits: exits.map((d) => `- ${d.id}: on the ${WALL[d.side]} wall${ctx.task ? ` (its sign already says "${d.label}"; use that as the label)` : ''}`).join('\n'),
   });
 
   const propIds = [...new Set(slots.flatMap(allowed))];

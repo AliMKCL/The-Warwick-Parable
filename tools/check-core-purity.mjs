@@ -2,8 +2,9 @@
 // Core has to run unchanged in the browser, in Node and next to Godot.
 import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { join, relative } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
-const root = new URL('../core/', import.meta.url).pathname;
+const root = fileURLToPath(new URL('../core/', import.meta.url));
 const banned = [/^three(\/|$)/, /^node:/, /(^|\/)web\//, /^(fs|path|http|https|os|child_process)$/];
 const problems = [];
 

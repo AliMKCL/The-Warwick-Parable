@@ -71,3 +71,41 @@ the prompts in `data/prompts/`, fallback text in `data/templates.json`.
 
 See `docs/progress.md` for what is done and what is next, `docs/voice.md` for the narrator voice,
 and `CLAUDE.md` for the full project context (written for AI coding sessions, useful for people too).
+
+## Anomaly encounters
+
+Change `MAX_ANOMALIES_PER_RUN` in `core/anomalies/config.ts` to set the maximum
+number of distinct anomalies encountered during one run. The default is `6`.
+Set it to `0` to disable encounters. Restart the development server or rebuild
+a production bundle after changing the value.
+
+The seed and chosen route select from sixteen encounters. An eligible room has
+a 65% chance of receiving one, with at most one anomaly per room and an ordinary
+room between encounters. Opening and ending rooms stay ordinary. A default
+seven-room run therefore has room for up to three encounters. Longer runs can
+reach the configured cap. Some encounters also require a compatible rule or
+prior choice. Unvisited branches never consume the budget.
+
+The blue door, ceiling cabinet, false exit, numbered footprints, floor meeting,
+delayed mirror, queueing plant, borrowed clock, disputed ticket, route copier,
+wandering light, hold telephone, weather drawer, permission machine, visit
+receipt and moving silhouette each have authored interactions and narrator
+responses. Recorded encounters also feed subsequent model narration. These
+encounters work with template narration when the model is offline.
+
+The permission machine offers a fold-out break seat for STAY. The copier shows
+a textual route record with a second inspection, and the mirror combines a live
+reflection with an animated chair silhouette. These fit the existing procedural
+wall slots.
+
+## Room layouts and the Choice Room
+
+L-shaped galleries turn around one corner. U-shaped galleries have two wings
+joined by a passage around a central wall. Both rotate to match the arrival
+direction and use the same prop placement and exit checks as other rooms.
+
+Each run schedules one `choice_room` after the opening, using the run seed.
+The location is shared by every route and can be the final room. Its two
+available exits have stable IDs and markings, blue **A** (`d1`) and orange
+**B** (`d2`). The existing `door_chosen` event reports the player's selection.
+If the Choice Room is last, either door proceeds to the run summary.

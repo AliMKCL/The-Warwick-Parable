@@ -1,0 +1,87 @@
+{
+  "two_doors": {
+    "title": "Two doors",
+    "brief": "A small, plain vestibule. Its only features are two doors side by side on the far wall.",
+    "instruction": [
+      "Take the {side} door. The {other} one is for maintenance only.",
+      "Right. Take the {side} door, please. The {other} one is for maintenance only, and maintenance have been very clear about that."
+    ],
+    "allowedLabel": "STAFF",
+    "forbiddenLabel": "MAINTENANCE"
+  },
+  "lift": {
+    "title": "Lift lobby",
+    "brief": "A lift lobby. A lift with a floor indicator and a call button on one wall, a door to the stairs on another.",
+    "enter": "The lift will be with you shortly.",
+    "hint": "Perhaps the stairs?",
+    "stairsLabel": "STAIRS",
+    "floors": ["9", "8", "7", "6", "5", "4", "3"]
+  },
+  "desk": {
+    "title": "Someone's desk",
+    "brief": "A corridor past an abandoned desk. Whoever sat here left in a hurry and did not come back.",
+    "enter": "Someone left in a hurry.",
+    "exitLabel": "CORRIDOR",
+    "items": {
+      "sticky": {
+        "name": "Sticky note",
+        "surface": "417",
+        "text": "In handwriting that is trying hard to look calm: \"If it all goes wrong, use door 417. Don't tell facilities.\"",
+        "reading": true
+      },
+      "email": {
+        "name": "Open email",
+        "surface": "RE: RE: RE: Restructuring\n\nHi all, a reminder that...",
+        "text": "From: Facilities. Subject: RE: RE: RE: Restructuring. Hi all, a reminder that the fourth floor is closed until further notice. Please do not use the lift during this period, or at any other period. Staff found on the stairs will be thanked for their initiative. Kind regards, Facilities.",
+        "reading": true
+      },
+      "drawer": {
+        "name": "Desk drawer",
+        "text": "A stapler, three pens, a dried-out highlighter and a resignation letter. Unsigned. Dated next Friday.",
+        "reading": true
+      },
+      "photo": {
+        "name": "Framed photo",
+        "text": "An office party. Everyone is smiling except one person near the back, who is looking straight at the camera.",
+        "reading": false
+      },
+      "mug": {
+        "name": "Coffee mug",
+        "text": "Cold, and still half full. The mug says WORLD'S OKAYEST EMPLOYEE.",
+        "reading": false
+      },
+      "calendar": {
+        "name": "Wall calendar",
+        "surface": "NOVEMBER",
+        "text": "Every day this month has been crossed out, including the ones that haven't happened yet.",
+        "reading": true
+      }
+    }
+  },
+  "meeting": {
+    "title": "The long corridor",
+    "brief": "A long corridor leading to the boardroom. A colleague is struggling with a jammed printer along the way.",
+    "enter": "You're late. The board is waiting.",
+    "ask": "“Could you help? It takes a second.”",
+    "thanks": "“Oh, thank you. Honestly.”",
+    "late": "The board has started without you. They seemed relieved.",
+    "boardLabel": "BOARDROOM",
+    "secretLabel": "417",
+    "timerLabel": "Board meeting in"
+  },
+  "smoke": {
+    "title": "Open plan",
+    "brief": "An open-plan office with desks. A vent high on one wall, a fire alarm by the exit.",
+    "enter": "Could you fetch the Henderson file from the far desk? Thank you.",
+    "fileTaken": "The Henderson file. Thank you.",
+    "alarm": "The alarm. Right.",
+    "workers": [
+      "“Hm? Oh, that. It does that sometimes.”",
+      "“Not my department.”",
+      "“I'm sure someone's dealing with it.”"
+    ],
+    "fileLabel": "HENDERSON",
+    "exitLabel": "FIRE EXIT",
+    "otherLabel": "CORRIDOR"
+  }
+}

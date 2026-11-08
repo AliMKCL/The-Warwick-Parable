@@ -29,5 +29,18 @@
   "lamp_shade": { "color": "#f3efe4", "emissive": "#ffe9c4", "emissiveIntensity": 0.6 },
   "door_paint": { "color": "#d8d4c8", "roughness": 0.6 },
   "door_frame": { "color": "#b9b7ae", "roughness": 0.5, "metalness": 0.2 },
-  "rubber_black": { "color": "#222222", "roughness": 0.9 }
+  "rubber_black": { "color": "#222222", "roughness": 0.9 },
+  "brushed_steel": { "color": "#a7abad", "roughness": 0.35, "metalness": 0.75 },
+  "call_glow": { "color": "#f2f6ff", "roughness": 0.3, "emissive": "#cfe0ff", "emissiveIntensity": 0.6 },
+  "sticky_yellow": { "color": "#f4dd5c", "roughness": 0.85 },
+  "coffee": { "color": "#3b2516", "roughness": 0.2 },
+  "photo": { "color": "#7d8f9a", "roughness": 0.4 },
+  "skin": { "color": "#c99a7d", "roughness": 0.8 },
+  "hair_dark": { "color": "#2e2621", "roughness": 0.9 },
+  "shirt_blue": { "color": "#5d7aa6", "roughness": 0.9 },
+  "shirt_white": { "color": "#e6e4de", "roughness": 0.9 },
+  "trousers_dark": { "color": "#33363b", "roughness": 0.9 },
+  "folder_manila": { "color": "#d8bf86", "roughness": 0.85 },
+  "alarm_red": { "color": "#c3241c", "roughness": 0.45 },
+  "hitbox": { "color": "#000000", "opacity": 0 }
 }

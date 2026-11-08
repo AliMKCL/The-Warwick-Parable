@@ -24,7 +24,7 @@ npm run try:room                # scripted player + real model: prints the next 
 npm run dev                     # http://127.0.0.1:5188  (?debug=1 ?seed= ?rooms=5 ?post=0 ?ambience= ?mute=1 ?observe=)
 npm test                        # vitest: core + telemetry (36 tests)
 npm run typecheck               # tsc for web + core, plus core purity check
-npm run test:e2e                # Playwright; see "Working from Claude's sandbox" below
+npm run test:e2e                # Playwright; see "Working from Claude's sandbox" below (PORT=5189 to use another port)
 npm run mock:llm                # fake Ollama + fake ElevenLabs on :11999
 npm run try:voice               # ElevenLabs sample line → voice-sample.mp3 (-- <voiceId> | --list)
 npm run analyze                 # Supabase play data → per-player metrics + population stats (-- --all --json f --csv f)
@@ -66,6 +66,11 @@ npm run analyze                 # Supabase play data → per-player metrics + po
 - `core/rules/rules.ts`: lights_dim_on_idle, inspect_to_unlock, exit_timer, narrator_suggests (may lie).
   Chosen against the player's tendencies, never repeated back to back, none in the first or last room.
   `RuleRuntime.start(t, history)` picks up current state (e.g. already standing still).
+- `core/tasks/`: the five office tasks from "Psychometric Game Tasks: Build Spec" (rooms 1 to 5, room 0 is the
+  baseline; `RunOptions.tasks`, on in the browser unless `?tasks=0`). `params.ts` (order, per-session conditions),
+  `layouts.ts` (seeded task rooms with fixtures and zones), `runtime.ts` (TaskRuntime: logs events, drives scripted
+  moments from event times, never wall time), `log.ts` (shared TaskLog), `metrics.ts` (pure scoring + baseline).
+  Adapter sends extra events for them: move (10 Hz), input, prompt, inspect_closed, hold_start/hold_end, narrator_shown.
 - `core/llm/client.ts`: Ollama native API (`format` = schema, `think:false`, `keep_alive`) or OpenAI-compatible
   (`response_format: json_schema`); `completeJson`, `streamText`, `ping`. Errors are typed: unreachable / http /
   bad_output / aborted. An unreachable server switches the whole run to templates.

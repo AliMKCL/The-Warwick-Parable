@@ -1,9 +1,13 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
+import { CHOICE_ROOM } from '../../core/room/layouts';
 import { DIR, footprintRect, isFloor, OPPOSITE, yawForFacing } from '../../core/room/geometry';
 import type { Door, GameData, RoomSpec, Side } from '../../core/room/types';
 import { buildProp, type InteractInfo } from './buildProp';
 import { MaterialLibrary, surfaceMaterials } from './materials';
+import { ANOMALY_ANCHOR } from '../../core/anomalies/catalog';
+import { buildAnomaly, type AnomalyView } from './buildAnomaly';
+import { addMess, mountOnCeiling, planWallDetails, windowKey } from './dressRoom';
 import { textMaterial } from './textTexture';
 
 export interface Rect { minX: number; maxX: number; minZ: number; maxZ: number }
@@ -23,6 +27,7 @@ export interface DoorView {
 
 export interface RoomView {
   spec: RoomSpec;
+  anomaly?: AnomalyView;
   group: THREE.Group;
   colliders: Rect[];
   interactables: THREE.Object3D[];
@@ -40,6 +45,15 @@ export interface RoomView {
   setLights(level: number, seconds: number): void;
   lightLevel(): number;
   setLocked(doorIds: string[]): void;
+  /** Redraw a prop's text surface (a lift indicator, a printer's status). */
+  setPropText(propId: string, text: string): void;
+  /** Take a prop out of the room (picked up). */
+  hideProp(propId: string): void;
+  /** Turn a prop (a character) towards another prop for a while, then back. */
+  glance(propId: string, atId: string, seconds: number): void;
+  /** Stylised smoke from a prop, growing to `level` over `seconds`. */
+  smoke(fromId: string, level: number, seconds: number): void;
+  smokeLevel(): number;
   dispose(): void;
 }
 
@@ -51,6 +65,8 @@ export function buildRoom(spec: RoomSpec, data: GameData, materials: MaterialLib
   const H = layout.ceiling;
   const amb = data.ambience[spec.ambience] ?? Object.values(data.ambience)[0]!;
   const mats = surfaceMaterials(amb);
+  const recipes = new Map(data.props.map((p) => [p.id, p]));
+  const { windows, fixtures } = planWallDetails(spec, recipes);
   const owned: { dispose(): void }[] = Object.values(mats);
   const group = new THREE.Group();
   group.name = spec.id;
@@ -62,6 +78,11 @@ export function buildRoom(spec: RoomSpec, data: GameData, materials: MaterialLib
   const ceilQuads: THREE.BufferGeometry[] = [];
   const doors: DoorView[] = [];
   const interactables: THREE.Object3D[] = [];
+  const windowPanes: THREE.BufferGeometry[] = [];
+  const railPieces: THREE.BufferGeometry[] = [];
+  const railMat = new THREE.MeshStandardMaterial({ color: new THREE.Color(amb.wall).multiplyScalar(0.64), roughness: 0.84 });
+  const paneMat = new THREE.MeshBasicMaterial({ vertexColors: true, toneMapped: false, fog: false });
+  owned.push(railMat, paneMat);
 
   for (let cz = 0; cz < layout.depth; cz++) {
     for (let cx = 0; cx < layout.width; cx++) {
@@ -73,15 +94,27 @@ export function buildRoom(spec: RoomSpec, data: GameData, materials: MaterialLib
         if (isFloor(layout, cx + dx, cz + dz)) continue;
         const frame = wallFrame(cx, cz, side);
         const door = doorAt.get(`${cx},${cz},${side}`);
-        if (door) {
+        if (door && !(layout.archetype === CHOICE_ROOM && door.entrance)) {
           // Wall above the door, then the door itself.
           wallQuads.push(place(quad(1, H - DOOR_H - 0.06).translate(0, (H + DOOR_H + 0.06) / 2, 0), frame));
           wallQuads.push(place(quad(0.05, DOOR_H + 0.06).translate(-0.475, (DOOR_H + 0.06) / 2, 0), frame));
           wallQuads.push(place(quad(0.05, DOOR_H + 0.06).translate(0.475, (DOOR_H + 0.06) / 2, 0), frame));
           doors.push(buildDoor(door, frame));
         } else {
-          wallQuads.push(place(quad(1, H).translate(0, H / 2, 0), frame));
+          const key = windowKey(cx, cz, side);
+          if (windows.has(key)) {
+            addWindow(frame);
+          } else {
+            wallQuads.push(place(quad(1, H).translate(0, H / 2, 0), frame));
+          }
           trimPieces.push(place(new THREE.BoxGeometry(1, 0.09, 0.014).translate(0, 0.045, 0.007), frame));
+          railPieces.push(place(new THREE.BoxGeometry(1, 0.065, 0.023).translate(0, 0.91, 0.012), frame));
+          railPieces.push(place(new THREE.BoxGeometry(1, 0.048, 0.02).translate(0, H - 0.19, 0.01), frame));
+          if (fixtures.has(key)) {
+            railPieces.push(place(new THREE.BoxGeometry(0.23, 0.27, 0.04).translate(-0.18, 1.25, 0.025), frame));
+            trimPieces.push(place(new THREE.BoxGeometry(0.03, 0.48, 0.024).translate(-0.18, 1.12, 0.035), frame));
+            trimPieces.push(place(new THREE.BoxGeometry(0.1, 0.055, 0.014).translate(-0.18, 1.29, 0.051), frame));
+          }
         }
       }
     }
@@ -93,23 +126,36 @@ export function buildRoom(spec: RoomSpec, data: GameData, materials: MaterialLib
   const trim = mergedMesh(trimPieces, mats.trim);
   walls.receiveShadow = floor.receiveShadow = ceiling.receiveShadow = true;
   walls.castShadow = true;
-  group.add(walls, floor, ceiling, trim);
+  group.add(walls, floor, ceiling, trim, mergedMesh(railPieces, railMat));
+  if (windowPanes.length) group.add(mergedMesh(windowPanes, paneMat));
 
   // ---- props ----
   const colliders: Rect[] = [];
-  const recipes = new Map(data.props.map((p) => [p.id, p]));
+  const propObjects = new Map<string, THREE.Group>();
   for (const placed of spec.props) {
     const recipe = recipes.get(placed.recipe);
     if (!recipe) continue;
     const { object, owned: o } = buildProp(placed, recipe, materials);
     owned.push(...o);
+    // Upside-down rooms flip the decoration; an office task's own props stay put and keep their collision.
+    const flipped = spec.variant === 'ceiling' && placed.slot !== 'fixture';
+    if (flipped) mountOnCeiling(object, H);
+    propObjects.set(placed.id, object);
     group.add(object);
     if (object.userData.interact) interactables.push(object);
-    if (recipe.solid && !recipe.fits.every((f) => f === 'wall_mounted')) {
+    if (!flipped && recipe.solid && !recipe.fits.every((f) => f === 'wall_mounted')) {
       colliders.push(footprintRect(placed.x, placed.z, placed.rotY, recipe.size[0], recipe.size[2]));
     }
   }
   for (const d of doors) interactables.push(d.pivot);
+
+  const anomaly = spec.anomaly ? buildAnomaly(spec, data, materials, group, doors, owned) : undefined;
+  if (spec.anomaly) {
+    const a = spec.anomaly.anchor;
+    colliders.push(footprintRect(a.x, a.z, a.rotY, ANOMALY_ANCHOR.size[0], ANOMALY_ANCHOR.size[2]));
+  }
+
+  if (spec.variant === 'messy') addMess(spec, group, colliders, owned);
 
   // ---- lights ----
   const panels: THREE.Mesh[] = [];
@@ -161,13 +207,40 @@ export function buildRoom(spec: RoomSpec, data: GameData, materials: MaterialLib
     hemi.intensity = baseHemi * (0.25 + 0.75 * level);
   };
 
+  // ---- characters turning their heads ----
+  const glances: { obj: THREE.Object3D; base: number; to: number; t: number; hold: number }[] = [];
+
+  // ---- smoke: soft grey puffs drifting out of a vent, plus a light haze ----
+  const fog = new THREE.FogExp2(amb.fog, amb.fogDensity);
+  const fogBase = new THREE.Color(amb.fog);
+  const fogSmoke = new THREE.Color('#8f8f8a');
+  let smokeFrom: { x: number; y: number; z: number; dx: number; dz: number } | undefined;
+  let smokeNow = 0, smokeTo = 0, smokeRate = 0;
+  const puffs: { sprite: THREE.Sprite; age: number; life: number; vx: number; vy: number; vz: number }[] = [];
+  let puffTex: THREE.Texture | undefined;
+  let spawnAcc = 0;
+  const spawnPuff = () => {
+    if (!smokeFrom) return;
+    puffTex ??= softDot();
+    // Sprites aren't lit, so the grey is set dark enough to read as smoke rather than glow.
+    const mat = new THREE.SpriteMaterial({ map: puffTex, color: '#6f6e6a', transparent: true, depthWrite: false, opacity: 0 });
+    const sprite = new THREE.Sprite(mat);
+    sprite.raycast = () => {}; // smoke never blocks what the player is aiming at
+    sprite.position.set(smokeFrom.x + (Math.random() - 0.5) * 0.4, smokeFrom.y + (Math.random() - 0.5) * 0.15, smokeFrom.z + (Math.random() - 0.5) * 0.4);
+    sprite.scale.setScalar(0.4);
+    group.add(sprite);
+    const speed = 0.35 + Math.random() * 0.25;
+    puffs.push({ sprite, age: 0, life: 7 + Math.random() * 5, vx: smokeFrom.dx * speed + (Math.random() - 0.5) * 0.12, vy: -0.02 + Math.random() * 0.06, vz: smokeFrom.dz * speed + (Math.random() - 0.5) * 0.12 });
+  };
+
   return {
     spec,
+    anomaly,
     group,
     colliders,
     interactables,
     doors,
-    fog: new THREE.FogExp2(amb.fog, amb.fogDensity),
+    fog,
     background: new THREE.Color(amb.fog),
     exposure: amb.exposure,
     grade: amb.grade,
@@ -193,7 +266,78 @@ export function buildRoom(spec: RoomSpec, data: GameData, materials: MaterialLib
         d.indicator?.emissive.set(d.locked ? '#ff3b30' : '#34c759');
       }
     },
+    setPropText(id, text) {
+      const obj = propObjects.get(id);
+      const placed = spec.props.find((p) => p.id === id);
+      const recipe = placed && recipes.get(placed.recipe);
+      const plane = obj?.userData.textPlane as THREE.Mesh | undefined;
+      if (!plane || !recipe?.text) return;
+      const old = plane.material as THREE.MeshStandardMaterial;
+      const mat = textMaterial(text, recipe.text.style, recipe.text.size);
+      plane.material = mat;
+      owned.push(mat.map!, mat);
+      old.map?.dispose();
+      old.dispose();
+    },
+    hideProp(id) {
+      const obj = propObjects.get(id);
+      if (!obj) return;
+      group.remove(obj);
+      const i = interactables.indexOf(obj);
+      if (i >= 0) interactables.splice(i, 1);
+    },
+    glance(id, atId, seconds) {
+      const obj = propObjects.get(id), at = propObjects.get(atId);
+      if (!obj || !at) return;
+      const base = obj.rotation.y;
+      // The prop's front is local +z; face it towards the target, but only turn part of the way, like a glance.
+      const want = Math.atan2(at.position.x - obj.position.x, at.position.z - obj.position.z);
+      const delta = Math.atan2(Math.sin(want - base), Math.cos(want - base));
+      glances.push({ obj, base, to: base + delta * 0.6, t: 0, hold: seconds });
+    },
+    smoke(fromId, to, seconds) {
+      const vent = spec.props.find((p) => p.id === fromId);
+      if (!vent) return;
+      // Out of the vent's face, into the room.
+      smokeFrom = { x: vent.x, y: vent.y, z: vent.z, dx: Math.sin(vent.rotY), dz: Math.cos(vent.rotY) };
+      smokeTo = to;
+      smokeRate = to / Math.max(1, seconds);
+    },
+    smokeLevel: () => smokeNow,
     update(dt) {
+      for (let i = glances.length - 1; i >= 0; i--) {
+        const g = glances[i]!;
+        g.t += dt;
+        const turn = 0.6;
+        const k = g.t < turn ? g.t / turn : g.t < turn + g.hold ? 1 : Math.max(0, 1 - (g.t - turn - g.hold) / turn);
+        const e = k * k * (3 - 2 * k);
+        g.obj.rotation.y = g.base + (g.to - g.base) * e;
+        if (g.t >= turn * 2 + g.hold) { g.obj.rotation.y = g.base; glances.splice(i, 1); }
+      }
+      if (smokeFrom) {
+        smokeNow = Math.min(smokeTo, smokeNow + smokeRate * dt);
+        fog.color.copy(fogBase).lerp(fogSmoke, smokeNow * 0.8);
+        fog.density = amb.fogDensity + smokeNow * 0.07;
+        spawnAcc += dt * (3 + smokeNow * 9);
+        while (spawnAcc >= 1 && puffs.length < 90) { spawnAcc -= 1; spawnPuff(); }
+        for (let i = puffs.length - 1; i >= 0; i--) {
+          const p = puffs[i]!;
+          p.age += dt;
+          const f = p.age / p.life;
+          p.sprite.position.x += p.vx * dt;
+          p.sprite.position.y = Math.min(H - 0.15, p.sprite.position.y + p.vy * dt);
+          p.sprite.position.z += p.vz * dt;
+          p.vx *= 1 - dt * 0.08;
+          p.vz *= 1 - dt * 0.08;
+          p.sprite.scale.setScalar(0.6 + f * 2.4);
+          (p.sprite.material as THREE.SpriteMaterial).opacity = Math.sin(Math.PI * Math.min(1, f)) * (0.38 + 0.27 * smokeNow);
+          if (f >= 1) {
+            group.remove(p.sprite);
+            (p.sprite.material as THREE.SpriteMaterial).dispose();
+            puffs.splice(i, 1);
+          }
+        }
+      }
       if (levelT < 1) {
         levelT = Math.min(1, levelT + dt / levelDur);
         const e = levelT * levelT * (3 - 2 * levelT);
@@ -218,6 +362,8 @@ export function buildRoom(spec: RoomSpec, data: GameData, materials: MaterialLib
     dispose() {
       for (const o of owned) o.dispose();
       for (const l of points) l.dispose();
+      for (const p of puffs) (p.sprite.material as THREE.SpriteMaterial).dispose();
+      puffTex?.dispose();
       hemi.dispose();
     },
   };
@@ -232,11 +378,38 @@ export function buildRoom(spec: RoomSpec, data: GameData, materials: MaterialLib
     return new THREE.Mesh(geo, mat);
   }
 
+  function addWindow(frame: THREE.Matrix4) {
+    const width = 0.84, bottom = 1.12, top = 2.37;
+    const height = top - bottom, mid = (top + bottom) / 2;
+    const margin = (1 - width) / 2;
+    wallQuads.push(place(quad(1, bottom).translate(0, bottom / 2, 0), frame));
+    wallQuads.push(place(quad(1, H - top).translate(0, (H + top) / 2, 0), frame));
+    for (const sign of [-1, 1]) {
+      wallQuads.push(place(quad(margin, height).translate(sign * (width + margin) / 2, mid, 0), frame));
+      railPieces.push(place(new THREE.BoxGeometry(0.055, height + 0.1, 0.145)
+        .translate(sign * width / 2, mid, -0.035), frame));
+    }
+    for (const y of [bottom, top]) {
+      railPieces.push(place(new THREE.BoxGeometry(width + 0.055, 0.055, 0.145)
+        .translate(0, y, -0.035), frame));
+    }
+    railPieces.push(place(new THREE.BoxGeometry(0.026, height, 0.12).translate(0, mid, -0.052), frame));
+    railPieces.push(place(new THREE.BoxGeometry(width + 0.12, 0.035, 0.19).translate(0, bottom - 0.025, -0.012), frame));
+
+    // The window has a sealed luminous backing. There is no exterior geometry.
+    const pane = quad(width, height).translate(0, mid, -0.1);
+    const upper = new THREE.Color('#ffffff'), lower = new THREE.Color('#bdd9e5');
+    const colors = [...upper.toArray(), ...upper.toArray(), ...lower.toArray(), ...lower.toArray()];
+    pane.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
+    windowPanes.push(place(pane, frame));
+  }
+
   function buildDoor(door: Door, frame: THREE.Matrix4): DoorView {
     const root = new THREE.Group();
     root.applyMatrix4(frame);
     const frameMat = materials.get('door_frame');
-    const leafMat = materials.get(door.entrance ? 'door_paint' : 'door_paint');
+    const leafMat = door.color ? materials.get('door_paint').clone() : materials.get('door_paint');
+    if (door.color) { leafMat.color.set(door.color); owned.push(leafMat); }
     for (const [w, h, x, y] of [
       [0.06, DOOR_H + 0.06, -0.48, (DOOR_H + 0.06) / 2],
       [0.06, DOOR_H + 0.06, 0.48, (DOOR_H + 0.06) / 2],
@@ -263,6 +436,13 @@ export function buildRoom(spec: RoomSpec, data: GameData, materials: MaterialLib
     handle.position.set(DOOR_W - 0.1, 1.0, 0.045);
     pivot.add(leaf, handle);
     root.add(pivot);
+    if (door.concealed) {
+      const cover = new THREE.Mesh(new THREE.BoxGeometry(1.04, 2.7, 0.08), mats.wall);
+      cover.position.set(0, 1.35, 0.14);
+      cover.name = 'concealed-exit';
+      owned.push(cover.geometry);
+      root.add(cover);
+    }
 
     // Beyond the door: a dark passage, so an open door shows depth, not the void.
     const passageGeo = new THREE.BoxGeometry(1.0, DOOR_H + 0.06, 2.2);
@@ -278,8 +458,14 @@ export function buildRoom(spec: RoomSpec, data: GameData, materials: MaterialLib
       const plaqueGeo = new THREE.PlaneGeometry(0.56, 0.17);
       owned.push(plaqueGeo);
       const plaque = new THREE.Mesh(plaqueGeo, mat);
-      plaque.position.set(0, DOOR_H + 0.25, 0.006);
-      root.add(plaque);
+      if (layout.archetype === CHOICE_ROOM) {
+        plaque.position.set(DOOR_W / 2, 1.56, 0.024);
+        plaque.scale.set(1.35, 2.3, 1);
+        pivot.add(plaque);
+      } else {
+        plaque.position.set(0, DOOR_H + 0.25, 0.006);
+        root.add(plaque);
+      }
     }
 
     let indicator: THREE.MeshStandardMaterial | undefined;
@@ -299,6 +485,22 @@ export function buildRoom(spec: RoomSpec, data: GameData, materials: MaterialLib
     group.add(root);
     return { door, pivot, open: 0, target: 0, swing: 1, locked: false, indicator };
   }
+}
+
+/** A soft round dot (a smoke puff). */
+function softDot(): THREE.Texture {
+  const c = document.createElement('canvas');
+  c.width = c.height = 64;
+  const g = c.getContext('2d')!;
+  const grad = g.createRadialGradient(32, 32, 0, 32, 32, 32);
+  grad.addColorStop(0, 'rgba(255,255,255,1)');
+  grad.addColorStop(0.5, 'rgba(255,255,255,0.45)');
+  grad.addColorStop(1, 'rgba(255,255,255,0)');
+  g.fillStyle = grad;
+  g.fillRect(0, 0, 64, 64);
+  const tex = new THREE.CanvasTexture(c);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  return tex;
 }
 
 /** A plane of the given size, facing +z, centred at the origin. */

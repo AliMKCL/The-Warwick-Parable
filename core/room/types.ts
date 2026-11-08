@@ -23,7 +23,7 @@ export interface PropPart {
   mat: string;
 }
 
-export type TextStyle = 'sign' | 'poster' | 'screen' | 'paper' | 'whiteboard' | 'label';
+export type TextStyle = 'sign' | 'poster' | 'screen' | 'paper' | 'whiteboard' | 'label' | 'led' | 'sticky';
 
 export interface TextSurface {
   /** Centre of the text plane, local to the prop; the plane faces +z. */
@@ -32,7 +32,8 @@ export interface TextSurface {
   style: TextStyle;
 }
 
-export type SlotKind = 'floor' | 'wall' | 'wall_mounted' | 'center';
+/** 'fixture': placed only by an office task at an exact spot, never in a slot (see Layout.fixtures). */
+export type SlotKind = 'floor' | 'wall' | 'wall_mounted' | 'center' | 'fixture';
 
 export interface PropRecipe {
   id: string;
@@ -49,7 +50,10 @@ export interface PropRecipe {
   /** Mounting height for wall_mounted props (centre of the prop). */
   mountHeight?: number;
   text?: TextSurface;
-  interact?: 'button';
+  /** button: press once (sends `pressed`) · hold: keep E held for a while (sends hold_start / hold_end). */
+  interact?: 'button' | 'hold';
+  /** Prompt verb for button and hold props, e.g. "Call the lift" (default "Press"). */
+  verb?: string;
   parts: PropPart[];
 }
 
@@ -86,6 +90,8 @@ export interface AmbiencePreset {
 // ---------- Layout (made by the generator, no model) ----------
 
 export interface Door {
+  color?: string;
+  concealed?: boolean;
   id: string;
   cx: number;
   cz: number;
@@ -122,6 +128,35 @@ export interface Layout {
   slots: Slot[];
   /** Where the player stands on arrival, and the direction they face (radians, 0 = facing -z). */
   spawn: { x: number; z: number; yaw: number };
+  /** Props an office task puts at exact spots (rotated with the layout). */
+  fixtures?: Fixture[];
+  /** Circular trigger areas an office task watches (rotated with the layout). */
+  zones?: Zone[];
+}
+
+/** A prop at an exact position, placed before any slot is filled. Its id is stable so a task can refer to it. */
+export interface Fixture {
+  id: string;
+  recipe: string;
+  x: number;
+  z: number;
+  /** Height of the prop's origin (e.g. on top of a desk). */
+  y: number;
+  /** Which way the prop's front faces. */
+  face: Side;
+  surfaceText?: string;
+  inspectText?: string;
+  /** Interaction range in metres when shorter than usual (horizontal distance from the player). */
+  reach?: number;
+  /** For hold props: seconds of holding needed. */
+  holdSeconds?: number;
+}
+
+export interface Zone {
+  id: string;
+  x: number;
+  z: number;
+  r: number;
 }
 
 // ---------- Room spec (what the adapter draws) ----------
@@ -140,9 +175,15 @@ export interface PlacedProp {
   surfaceText?: string;
   /** Shown when the player inspects it. */
   inspectText?: string;
+  /** Interaction range in metres, when shorter than usual. */
+  reach?: number;
+  /** For hold props: seconds of holding needed. */
+  holdSeconds?: number;
 }
 
 export interface RoomSpec {
+  variant?: 'messy' | 'ceiling';
+  anomaly?: import('../anomalies/anomalies').AnomalySpec;
   id: string;
   index: number;
   seed: number;
@@ -168,6 +209,8 @@ export interface RoomSpec {
   thread?: { plant?: string; resolves?: string };
   /** What the model was given to write this room, for the "how this world was built" view. */
   provenance?: { behaviour: string[]; profile: string[]; story: string[]; repaired?: boolean; error?: string };
+  /** The office task staged in this room (see core/tasks). Rooms with a task have no rule. */
+  task?: { id: string; params: Record<string, number | string | boolean> };
 }
 
 export interface GameData {
@@ -176,6 +219,20 @@ export interface GameData {
   ambience: Record<string, AmbiencePreset>;
   templates: TextTemplates;
   prompts: Prompts;
+  /** Fixed lines and texts for the office tasks (data/tasks.json). */
+  tasks: TaskTexts;
+}
+
+/**
+ * The office tasks' wording. The measured instructions are fixed so every
+ * player gets the same test; only decoration around them is generated.
+ */
+export interface TaskTexts {
+  two_doors: { title: string; brief: string; instruction: string[]; allowedLabel: string; forbiddenLabel: string };
+  lift: { title: string; brief: string; enter: string; hint: string; stairsLabel: string; floors: string[] };
+  desk: { title: string; brief: string; enter: string; exitLabel: string; items: Record<string, { name: string; text: string; reading: boolean; surface?: string }> };
+  meeting: { title: string; brief: string; enter: string; ask: string; thanks: string; late: string; boardLabel: string; secretLabel: string; timerLabel: string };
+  smoke: { title: string; brief: string; enter: string; fileTaken: string; alarm: string; workers: string[]; fileLabel: string; exitLabel: string; otherLabel: string };
 }
 
 /** Markdown prompt templates from data/prompts and data/themes, with {{placeholders}}. */
