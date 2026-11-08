@@ -8,4 +8,3 @@ artifacts/
 .DS_Store
 *.log
 voice-sample.mp3
-.env.local.bak

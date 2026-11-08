@@ -24,9 +24,9 @@ npm run check:llm     # should print ✓ lines and the generation speed
 npm run dev           # then open http://127.0.0.1:5188
 ```
 
-Using LM Studio instead of Ollama: start its local server, then set
-`LLM_PROVIDER=openai`, `LLM_BASE_URL=http://127.0.0.1:1234` and `LLM_MODEL` to
-the name LM Studio shows, in `.env.local`.
+The model that writes the rooms is chosen in `.env.local` with `MODEL_BACKEND`:
+`ollama` (local, offline), `openrouter` (cloud, fastest; needs `OPENROUTER_API_KEY`) or `lmstudio`.
+`npm run dev` prints "Rooms written by: …" when it starts. See `docs/speed.md`.
 
 ## Controls and options
 

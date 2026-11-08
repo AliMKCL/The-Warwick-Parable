@@ -1,14 +1,13 @@
 import { defineConfig, loadEnv } from 'vite';
-import { isOpenRouter, OPENROUTER_EXTRA } from './core/llm/cloud';
+import { resolveLlmEnv } from './tools/llm-env';
 
 // The browser never talks to the model server directly. It calls /llm on the
 // Vite dev server, which forwards to LLM_BASE_URL. This avoids cross-origin
 // errors and keeps the real address (and any key) out of browser code.
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '');
-  const provider = env.LLM_PROVIDER || 'ollama';
-  const baseUrl = env.LLM_BASE_URL || (provider === 'ollama' ? 'http://127.0.0.1:11434' : 'http://127.0.0.1:1234');
-  const model = env.LLM_MODEL || 'qwen3.6:35b-a3b';
+  const llm = resolveLlmEnv(env);
+  const { provider, baseUrl, model } = llm;
 
   // Narrator voice (optional). The key is added here, on the dev server, and never reaches the browser.
   const ttsKey = env.ELEVENLABS_API_KEY || '';
@@ -16,12 +15,23 @@ export default defineConfig(({ mode }) => {
   const ttsBase = env.ELEVENLABS_BASE_URL || 'https://api.elevenlabs.io';
 
   return {
+    plugins: [
+      {
+        name: 'whack-model-banner',
+        configureServer() {
+          // Say which model writes the rooms, so a stale or wrong .env.local is obvious.
+          console.log(`\n  Rooms written by: ${llm.label}${llm.problem ? `\n  ⚠ ${llm.problem}` : ''}\n`);
+        },
+      },
+    ],
     define: {
       __LLM_PROVIDER__: JSON.stringify(provider),
       __LLM_MODEL__: JSON.stringify(model),
-      __LLM_PARALLEL__: JSON.stringify(Math.max(1, Number(env.LLM_PARALLEL) || 1)),
-      __LLM_NO_THINKING__: JSON.stringify(provider === 'openai' && /127\.0\.0\.1|localhost/.test(baseUrl) && !isOpenRouter(baseUrl, env.LLM_OPENROUTER)),
-      __LLM_EXTRA__: JSON.stringify(isOpenRouter(baseUrl, env.LLM_OPENROUTER) ? OPENROUTER_EXTRA : undefined),
+      __LLM_PARALLEL__: JSON.stringify(llm.parallel),
+      __LLM_NO_THINKING__: JSON.stringify(!!llm.noThinking),
+      __LLM_EXTRA__: JSON.stringify(llm.extraBody),
+      __LLM_LABEL__: JSON.stringify(llm.label),
+      __LLM_PROBLEM__: JSON.stringify(llm.problem ?? ''),
       __TTS__: JSON.stringify({
         enabled: !!ttsKey,
         voice: ttsVoice,
@@ -43,9 +53,13 @@ export default defineConfig(({ mode }) => {
               // Model servers may reject browser origins; the request comes from the dev server instead.
               req.removeHeader('origin');
               // Cloud models: the key is added here and never reaches the browser.
-              if (env.LLM_API_KEY) req.setHeader('authorization', `Bearer ${env.LLM_API_KEY}`);
-              if (isOpenRouter(baseUrl, env.LLM_OPENROUTER)) req.setHeader('x-title', 'whack');
+              if (llm.apiKey) req.setHeader('authorization', `Bearer ${llm.apiKey}`);
+              if (llm.backend === 'openrouter') req.setHeader('x-title', 'whack');
             });
+            proxy.on('proxyRes', (res, req) => {
+              if ((res.statusCode ?? 200) >= 400) console.error(`[rooms] ${llm.label}: ${req.method} ${req.url} → HTTP ${res.statusCode}`);
+            });
+            proxy.on('error', (err) => console.error(`[rooms] cannot reach ${baseUrl}: ${err.message}`));
           },
         },
         '/tts': {

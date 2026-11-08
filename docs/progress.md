@@ -24,7 +24,7 @@ Read this first when picking up the work. Newest entries at the top.
 ## Log
 
 ### Faster rooms
-- Parallel generation (`LLM_PARALLEL`), LM Studio support for Qwen thinking, setup in `docs/speed.md`.
+- Parallel generation (`PARALLEL_ROOMS`), LM Studio support for Qwen thinking, setup in `docs/speed.md`.
 
 ### After Phase 6: context file and narrator voice
 - `CLAUDE.md`: everything a new Claude session needs (architecture, how to run and test, workflow, decisions).

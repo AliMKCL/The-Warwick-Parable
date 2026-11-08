@@ -75,11 +75,15 @@ const llm = createLlmClient(
 );
 const status = document.getElementById('status-llm')!;
 modelReady = llm.ping().then((r) => {
-  status.textContent = !r.ok
-    ? 'Model: not reachable (rooms will use templates)'
-    : r.hasModel
-      ? `Model: ${__LLM_MODEL__} ready`
-      : `Model: server up, ${__LLM_MODEL__} not installed`;
+  // Say exactly what is wrong: otherwise the game quietly falls back to template rooms.
+  status.textContent = __LLM_PROBLEM__
+    ? `Rooms: ${__LLM_LABEL__}. ${__LLM_PROBLEM__}, so rooms will use templates.`
+    : !r.ok
+      ? `Rooms: ${__LLM_LABEL__} not reachable (${(r.error ?? 'no answer').replace(/:\s*$/, '').slice(0, 110)}; details in the npm run dev terminal), so rooms will use templates.`
+      : r.hasModel
+        ? `Rooms: ${__LLM_LABEL__} ready`
+        : `Rooms: ${__LLM_LABEL__}: server up but this model isn't available there, so rooms will use templates.`;
+  if (__LLM_PROBLEM__) return false;
   status.className = `status ${r.ok && r.hasModel ? 'ok' : 'bad'}`;
   if (r.ok && r.hasModel) warmUp();
   return r.ok && r.hasModel;
