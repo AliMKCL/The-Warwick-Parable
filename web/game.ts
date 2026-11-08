@@ -15,6 +15,7 @@ import { Sound } from './audio/sound';
 import { Voice } from './audio/voice';
 import { showDossier } from './ui/dossier';
 import type { Dossier } from '../core/protocol';
+import type { Act } from './telemetry/recorder';
 
 export interface GameOptions {
   seed: number;
@@ -59,6 +60,8 @@ export class Game {
   private frames = 0;
   private fpsTime = 0;
   private fps = 0;
+  /** Telemetry listens here: events sent to core, messages back, and clicks. It never changes the game. */
+  tap?: { event(e: GameEvent): void; message(m: CoreMessage): void; act(a: Act): void };
 
   constructor(
     private canvas: HTMLCanvasElement,
@@ -95,6 +98,7 @@ export class Game {
   }
 
   send(e: GameEvent) {
+    this.tap?.event(e);
     this.core.send(e);
   }
 
@@ -109,6 +113,7 @@ export class Game {
     if (!h || this.busy || !this.room) return;
     const roomId = this.room.spec.id;
     const t = this.time;
+    this.tap?.act({ kind: h.info.kind, id: h.info.id, locked: h.info.kind === 'door' ? !!this.room.doors.find((d) => d.door.id === h.info.id)?.locked : undefined });
     switch (h.info.kind) {
       case 'inspect':
         this.sound.rustle();
@@ -154,6 +159,7 @@ export class Game {
   }
 
   private handle(m: CoreMessage) {
+    this.tap?.message(m);
     if (m.type === 'load_room') void this.loadRoom(m.spec);
     else if (m.type === 'narrator_line') {
       this.hud.narrate(m.lineId, m.text, m.final);
