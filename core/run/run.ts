@@ -2,15 +2,16 @@ import { describeVisit } from '../director/summary';
 import { generateRoomContent } from '../director/content';
 import { LlmError, type LlmClient } from '../llm/client';
 import { OPPOSITE } from '../room/geometry';
-import { CHOICE_ROOM, FINALE_HALL, generateLayout, type Archetype } from '../room/layouts';
+import { CHOICE_ROOM, FINALE_HALL, generateLayout, orient, type Archetype } from '../room/layouts';
 import { placeAssignments } from '../room/place';
 import { applyRoomVariant } from '../room/variants';
 import { templateAssignments } from '../room/templates';
 import type { Door, GameData, Layout, RoomSpec } from '../room/types';
 import { createRng, deriveSeed, pick } from '../util/random';
-import type { GameEvent, ProfileSnapshot, RuleEffect, SelfRatings } from '../protocol';
+import type { GameEvent, ProfileSnapshot, RuleEffect, SelfRatings, TaskEvent, TaskResult } from '../protocol';
 import { Profile } from '../profile/profile';
-import { RuleRuntime, templateRuleLines, type RoomRule } from '../rules/rules';
+import { RuleRuntime, templateRuleLines, testLog, type RoomRule } from '../rules/rules';
+import { computeBaseline, type Baseline } from '../testrooms/office/metrics';
 import { resolveLayout, type LayoutConfig, type LayoutInput } from '../testrooms/config';
 import { TESTS } from '../testrooms/registry';
 import { pickRoom, usedCounts } from '../testrooms/schedule';
@@ -76,6 +77,8 @@ export interface RunOptions {
   onSay?: (text: string) => void;
   /** The hidden profile changed. */
   onProfile?: (profile: ProfileSnapshot) => void;
+  /** A test that scores itself (an office task) finished: what it measured, and its slice of the test log. */
+  onTaskResult?: (result: TaskResult, log: TaskEvent[]) => void;
   /**
    * How the run is laid out: test and filler room counts and the test pool, on
    * top of data/layout.json (see core/testrooms/config.ts).
@@ -121,6 +124,15 @@ export class Run {
   private rule?: RuleRuntime;
   /** Test and filler counts and the test pool for this run. */
   readonly layout: LayoutConfig;
+  /**
+   * The test log: moves, presses and answers that self-scoring tests (the
+   * office tasks) record and score from. The waiting room's moves are logged
+   * under 'baseline', for each player's own walking speed and input rate.
+   */
+  readonly taskLog = testLog();
+  /** What each self-scoring test measured, in the order they finished. */
+  readonly taskResults: TaskResult[] = [];
+  private baselineCache?: Baseline;
   /** Every gamble the player has faced, in order. */
   readonly gambles: GambleRecord[] = [];
   /** Extra rooms added by lost gambles. */
@@ -159,6 +171,15 @@ export class Run {
 
   record(event: GameEvent): void {
     if ('roomId' in event && event.roomId !== this.current?.id) return;
+    // Position samples and raw input feed the running test and the baseline only, not the event log.
+    if (event.type === 'move' || event.type === 'input') {
+      if (this.current?.index === 0) {
+        const data = event.type === 'move' ? this.baselineMove(event.x, event.z, event.t) : { key: event.key, ...(event.target ? { target: event.target } : {}) };
+        this.taskLog.emit('baseline', event.type, data, event.t);
+      }
+      this.rule?.onEvent(event);
+      return;
+    }
     this.events.push(event);
     const before = this.profile.evidence.length;
     this.profile.observe(event, this.current, this.events);
@@ -241,7 +262,26 @@ export class Run {
     const noticed = [...new Set(this.profile.evidence.filter((e) => e.room === room.index).map((e) => e.reason))];
     const lines = describeVisit(room, this.events, this.data);
     if (noticed.length) lines.push(`Noticed: ${noticed.join('; ')}.`);
+    const measured = this.taskResults.filter((r) => r.room === room.index).flatMap((r) => r.notes);
+    if (measured.length) lines.push(`Measured: ${measured.join(' ')}`);
     return lines;
+  }
+
+  /** The player's own baseline from the waiting room (walking speed, input rate…), for tests that compare against it. */
+  baseline(): Baseline | null {
+    if (this.current?.index === 0) return null;
+    if (this.baselineCache) return this.baselineCache;
+    const events = this.taskLog.slice('baseline');
+    return events.length ? (this.baselineCache = computeBaseline(events)) : null;
+  }
+
+  private lastMove?: { t: number; x: number; z: number };
+  private baselineMove(x: number, z: number, t: number) {
+    const prev = this.lastMove;
+    const dt = prev ? t - prev.t : 0;
+    this.lastMove = { t, x, z };
+    const v = (a: number, b: number) => (prev && dt > 0 ? Math.round(((a - b) / dt) * 1000) / 1000 : 0);
+    return { x, z, vx: v(x, prev?.x ?? x), vz: v(z, prev?.z ?? z) };
   }
 
   /** One line per earlier room, for the story memory. */
@@ -279,6 +319,13 @@ export class Run {
       say: (text) => text && this.opts.onSay?.(text),
       rng: createRng(deriveSeed(room.seed, 'rule')),
       data: this.data,
+      log: this.taskLog,
+      report: (result) => {
+        this.taskResults.push(result);
+        this.opts.onTaskResult?.(result, this.taskLog.slice(result.task));
+        this.opts.onProfile?.(this.profile.snapshot());
+      },
+      baseline: () => this.baseline(),
     });
     this.rule.start(t, this.events);
   }
@@ -332,19 +379,23 @@ export class Run {
     const seed = deriveSeed(this.seed, `room-${index}-${from.id}-${door.id}`);
     const rng = createRng(seed);
     const pick = pickRoom({ config: this.layout, rooms: this.rooms, index, last: this.last, detours: this.detours, profile: this.profile, forced: this.nextForced() }, createRng(deriveSeed(seed, 'pick-room')));
-    const layout = generateLayout({
-      archetype: pick.archetype,
-      entranceSide: OPPOSITE[door.side],
-      exits: pick.exits,
-      rng,
-      doorLabels: this.data.templates.doorLabels,
-    });
+    // A test with its own room builds it (and its settings); every other room comes from the layout generator.
+    const own = pick.test?.room?.({ seed, rng, data: this.data, profile: this.profile });
+    const layout = own
+      ? orient(own.layout, OPPOSITE[door.side])
+      : generateLayout({
+        archetype: pick.archetype as Archetype,
+        entranceSide: OPPOSITE[door.side],
+        exits: pick.exits,
+        rng,
+        doorLabels: this.data.templates.doorLabels,
+      });
     let resolve!: (s: RoomSpec) => void;
     const done = new Promise<RoomSpec>((r) => (resolve = r));
     const p: Plan = { doorId: door.id, index, seed, layout, entranceLabel: door.label, status: 'queued', done, resolve, slot: pick.slot };
     if (pick.test) {
       p.test = pick.test.id;
-      const params = pick.test.params({ layout, rng: createRng(deriveSeed(seed, 'test-params')), profile: this.profile, used: usedCounts(this.rooms) });
+      const params = own ? own.params : pick.test.params({ layout, rng: createRng(deriveSeed(seed, 'test-params')), profile: this.profile, used: usedCounts(this.rooms) });
       if (params) p.rule = { id: pick.test.id, params };
     }
     return p;
@@ -491,7 +542,7 @@ export class Run {
       props,
       ambience: isChoice ? 'cold' : o.ambience ?? pick(rng, Object.keys(this.data.ambience)),
       narrator: {
-        onEnter: o.first ? pick(rng, t.narratorFirst) : pick(rng, t.narratorEnter[layout.archetype] ?? t.narratorFirst),
+        onEnter: o.first ? pick(rng, t.narratorFirst) : pick(rng, t.narratorEnter[layout.archetype] ?? t.narratorEnter.default ?? t.narratorFirst),
         doors: isChoice ? {} : Object.fromEntries(layout.doors.filter((d) => !d.entrance).map((d) => [d.id, pick(rng, t.narratorDoor)])),
       },
       source: 'template',

@@ -38,6 +38,13 @@ export const PREFERRED: Record<string, Partial<Record<Slot['kind'] | 'desk' | 'p
   },
 };
 
+// The office tasks' own rooms (core/testrooms/office): light decoration that can't be mistaken for part of the task.
+for (const room of ['party_room', 'break_room', 'canteen', 'boardroom', 'coffee_nook', 'meeting_suite']) {
+  PREFERRED[room] = { wall: ['plant_potted', 'water_cooler', 'trash_bin', 'coat_rack'], wall_mounted: ['poster_wall', 'memo_board', 'clock_wall'] };
+}
+// The renumbered floor is about following signs: nothing on its walls that could read as one.
+PREFERRED.junction = { wall: ['plant_potted', 'trash_bin'], wall_mounted: ['clock_wall'] };
+
 export function candidatesFor(slot: Slot, archetype: string, data: GameData): PropRecipe[] {
   const prefs = PREFERRED[archetype] ?? {};
   const key = slot.tags.includes('desk') ? 'desk' : slot.tags.includes('partition') ? 'partition' : slot.kind;

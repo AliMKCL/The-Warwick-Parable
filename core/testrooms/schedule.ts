@@ -10,7 +10,8 @@ import type { TestKind, TestRoomCandidate } from './types';
 export interface RoomPick {
   slot: 'test' | 'filler' | 'finale';
   test?: TestKind;
-  archetype: Archetype;
+  /** A room type, or the name of the test's own room (TestKind.room builds that one). */
+  archetype: Archetype | string;
   exits: number;
 }
 

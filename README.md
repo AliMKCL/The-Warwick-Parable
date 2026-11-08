@@ -125,8 +125,12 @@ Tests in the pool by default: `exit_timer`, `inspect_to_unlock`,
 `lights_dim_on_idle`, `narrator_suggests`, `gamble` (always followed by another
 test room, so a won 50/50 has a task to skip; the second gamble of a run is
 timed), `lift_wait` (the lift lobby: a lift that never comes and a MAINTENANCE
-door as the only way on) and `choice` (Kaan's room with a blue **A** and an
-orange **B** door; the `door_chosen` event reports the pick).
+door as the only way on), `choice` (Kaan's room with a blue **A** and an
+orange **B** door; the `door_chosen` event reports the pick), and the seven
+office tasks from PR #6, each with its own room and scored when the player
+leaves: `balloons`, `coffee`, `canteen`, `renumbered`, `pitch`, `loan`,
+`lockdown` (see `core/testrooms/README.md`). To try one on its own:
+`?tests=1&fillers=0&pool=balloons`.
 
 L-shaped and U-shaped galleries are room shapes for both filler and test rooms.
 

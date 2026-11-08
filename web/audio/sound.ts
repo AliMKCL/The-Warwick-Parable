@@ -143,6 +143,43 @@ export class Sound {
     this.tone(urgent ? 1320 : 1000, 0.03, urgent ? 0.07 : 0.04, 'sine');
   }
 
+  /** One-off sounds the office tasks ask for (RuleEffect 'sound'). */
+  play(name: 'buzz' | 'pop' | 'clunk' | 'click' | 'pour' | 'spill' | 'ding' | 'squeak' | 'paper') {
+    switch (name) {
+      case 'buzz': // harsh but capped: the "do not press" button
+        this.tone(110, 0.6, 0.06, 'sawtooth');
+        this.tone(165, 0.6, 0.04, 'square');
+        break;
+      case 'pop':
+        this.burst({ filter: 'bandpass', freq: 900, q: 0.8, dur: 0.12, gain: 0.2 });
+        this.burst({ filter: 'lowpass', freq: 300, dur: 0.2, gain: 0.1 });
+        break;
+      case 'clunk':
+        this.burst({ filter: 'lowpass', freq: 180, dur: 0.35, gain: 0.2 });
+        this.tone(70, 0.2, 0.06, 'square');
+        break;
+      case 'click':
+        this.tone(1800, 0.01, 0.05, 'square');
+        break;
+      case 'pour':
+        this.burst({ filter: 'bandpass', freq: 1200, q: 2, dur: 0.9, gain: 0.04 });
+        break;
+      case 'spill':
+        this.burst({ filter: 'bandpass', freq: 900, q: 1, dur: 0.5, gain: 0.08 });
+        this.burst({ filter: 'lowpass', freq: 260, dur: 0.2, gain: 0.1, delay: 0.1 });
+        break;
+      case 'ding':
+        this.tone(1320, 0.4, 0.04, 'sine');
+        break;
+      case 'squeak':
+        this.burst({ filter: 'bandpass', freq: 700 + Math.random() * 300, q: 6, dur: 0.18, gain: 0.05 });
+        break;
+      case 'paper':
+        this.rustle();
+        break;
+    }
+  }
+
   // ---------- building blocks ----------
 
   private noiseBed(to: AudioNode, type: BiquadFilterType, freq: number, gain: number, q = 0.7): () => void {

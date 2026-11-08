@@ -9,6 +9,7 @@ import roomUser from '../data/prompts/room-user.md?raw';
 import props from '../data/props.json';
 import templates from '../data/templates.json';
 import layout from '../data/layout.json';
+import tasks from '../data/tasks.json';
 import world from '../data/themes/office.md?raw';
 import type { GameData } from './room/types';
 
@@ -20,4 +21,5 @@ export const gameData: GameData = {
   templates: templates as unknown as GameData['templates'],
   prompts: { world, roomSystem, roomUser, narratorSystem, narratorUser, dossierSystem, dossierUser },
   layout: layout as unknown as GameData['layout'],
+  tasks: tasks as unknown as GameData['tasks'],
 };

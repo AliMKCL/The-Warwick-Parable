@@ -23,6 +23,12 @@ Read this first when picking up the work. Newest entries at the top.
 
 ## Log
 
+### The office tasks from PR #6, in the test pool (8 Nov)
+- PR #6 couldn't merge: it was built on the reverted office-task system (`core/tasks`), so it edited files `main` had deleted, and both sides had rewritten the run, protocol and adapter since. Instead its seven tasks are ported onto `main`'s test rooms: balloons, coffee, canteen, renumbered, pitch, loan, lockdown.
+- The task modules are unchanged (`core/testrooms/office/`); `adapter.ts` runs each as a test with its own room. Drawn from `pool` in `data/layout.json` like any test, at most once per run each.
+- New plumbing they need: 10 Hz position samples and raw input (not stored in the event log), on-screen questions with answers, a status line, scaling/turning/glancing props, sounds, a teleport, the player's baseline from the waiting room, and a `task_result` message (logged by telemetry). Props, materials and wording (`data/tasks.json`) come from the PR. Divyansh's five original office tasks stay out.
+- Tests: the PR's bot tests for each task, ported (`tests/core/office-tasks.test.ts`), plus pool tests; `tests/e2e/office-tasks.spec.ts` opens and uses each task in the browser.
+
 ### Run layout: test rooms, filler rooms, finale hallway (8 Nov)
 - `data/layout.json` sets how many test rooms and filler rooms a run has, and the pool of tests (weights, caps). The order is decided room by room as the player goes (`core/testrooms/schedule.ts`); the totals are always exact. URL: `?tests= ?fillers= ?pool=`; `?rooms=N` still works.
 - Tests are pluggable: one `TestKind` file each in `core/testrooms/kinds/` (candidate layouts and door counts, profile weighting, settings, the model's description, runtime behaviour), listed in `registry.ts`. `RuleRuntime` is now a generic host. Replaces `chooseRule`, `gamblePlan`, `choiceRoomFor` and the lift's room-type weight.

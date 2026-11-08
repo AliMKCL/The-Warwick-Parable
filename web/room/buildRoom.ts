@@ -47,6 +47,14 @@ export interface RoomView {
   setLocked(doorIds: string[]): void;
   /** Redraw the text on a prop (the lift's floor indicator). */
   setPropText(propId: string, text: string): void;
+  /** Turn a prop (a character) towards another prop, or the player, for some seconds, then back. */
+  glance(propId: string, atId: string, seconds: number, player?: { x: number; z: number }): void;
+  /** A prop can no longer be used. */
+  disableProp(propId: string): void;
+  /** Scale a prop (an inflating balloon); 0 hides it. */
+  scaleProp(propId: string, scale: number): void;
+  /** Turn a prop to face another prop, and stay that way. */
+  turnProp(propId: string, atId: string): void;
   dispose(): void;
 }
 
@@ -191,6 +199,14 @@ export function buildRoom(spec: RoomSpec, data: GameData, materials: MaterialLib
   const basePanel = mats.panel.emissiveIntensity;
   const baseHemi = hemi.intensity;
   let level = 1, levelFrom = 1, levelTo = 1, levelT = 1, levelDur = 0;
+
+  // ---- characters (office tasks): typing hands, and turning to look at something ----
+  const glances: { obj: THREE.Object3D; base: number; to: number; t: number; hold: number }[] = [];
+  const typing: { mesh: THREE.Object3D; y: number; phase: number; rate: number }[] = [];
+  group.traverse((o) => {
+    if (o.userData.anim === 'type') typing.push({ mesh: o, y: o.position.y, phase: Math.random() * 10, rate: 9 + Math.random() * 5 });
+  });
+  let clock = 0;
   const applyLights = () => {
     const k = level * flickerK;
     mats.panel.emissiveIntensity = basePanel * Math.max(0.05, k);
@@ -243,7 +259,51 @@ export function buildRoom(spec: RoomSpec, data: GameData, materials: MaterialLib
       old.map?.dispose();
       old.dispose();
     },
+    glance(id, atId, seconds, player) {
+      const obj = propObjects.get(id);
+      const at = atId === 'player' ? player : propObjects.get(atId)?.position;
+      if (!obj || !at) return;
+      // Already turning: let that finish rather than stacking turns.
+      if (glances.some((g) => g.obj === obj)) return;
+      const base = obj.rotation.y;
+      // The prop's front is local +z. Swivel part of the way to a thing, most of the way to the player.
+      const want = Math.atan2(at.x - obj.position.x, at.z - obj.position.z);
+      const delta = Math.atan2(Math.sin(want - base), Math.cos(want - base));
+      glances.push({ obj, base, to: base + delta * (atId === 'player' ? 0.8 : 0.6), t: 0, hold: seconds });
+    },
+    disableProp(id) {
+      const obj = propObjects.get(id);
+      if (!obj) return;
+      delete obj.userData.interact;
+      const i = interactables.indexOf(obj);
+      if (i >= 0) interactables.splice(i, 1);
+    },
+    scaleProp(id, s) {
+      const obj = propObjects.get(id);
+      if (!obj) return;
+      obj.visible = s > 0;
+      if (s > 0) obj.scale.setScalar(s);
+      // A hidden prop can't be aimed at either.
+      if (s > 0 && obj.userData.disabledInteract) { obj.userData.interact = obj.userData.disabledInteract; delete obj.userData.disabledInteract; }
+      else if (s <= 0 && obj.userData.interact) { obj.userData.disabledInteract = obj.userData.interact; delete obj.userData.interact; }
+    },
+    turnProp(id, atId) {
+      const obj = propObjects.get(id), at = propObjects.get(atId);
+      if (!obj || !at) return;
+      obj.rotation.y = Math.atan2(at.position.x - obj.position.x, at.position.z - obj.position.z);
+    },
     update(dt) {
+      clock += dt;
+      for (const k of typing) k.mesh.position.y = k.y + Math.max(0, Math.sin(clock * k.rate + k.phase)) * 0.012;
+      for (let i = glances.length - 1; i >= 0; i--) {
+        const g = glances[i]!;
+        g.t += dt;
+        const turn = 0.6;
+        const k = g.t < turn ? g.t / turn : g.t < turn + g.hold ? 1 : Math.max(0, 1 - (g.t - turn - g.hold) / turn);
+        const e = k * k * (3 - 2 * k);
+        g.obj.rotation.y = g.base + (g.to - g.base) * e;
+        if (g.t >= turn * 2 + g.hold) { g.obj.rotation.y = g.base; glances.splice(i, 1); }
+      }
       if (levelT < 1) {
         levelT = Math.min(1, levelT + dt / levelDur);
         const e = levelT * levelT * (3 - 2 * levelT);

@@ -48,6 +48,7 @@ export function createCore(data: GameData, opts: CoreOptions = {}): CorePort & {
     onEffect: (effect) => emit({ type: 'rule_effect', effect }),
     onSay: say,
     onProfile: (profile) => emit({ type: 'profile', profile }),
+    onTaskResult: (result, log) => emit({ type: 'task_result', result, log }),
   });
 
   /** A live, streamed reaction to the door the player just chose. Returns when the line is finished. */

@@ -62,7 +62,7 @@ document.addEventListener('pointerlockchange', () => {
     research.hidden = true;
     void modelReady.then((ok) => game.begin(ok ? llm : undefined, ratings));
   }
-  game.player.enabled = locked && !game.hud.inspecting && !game.ended;
+  game.player.enabled = locked && !game.hud.inspecting && !game.ended && !game.asking;
   game.hud.start.hidden = locked || game.ended;
   startButton.textContent = 'Click to continue';
   startButton.disabled = false;
@@ -71,10 +71,23 @@ document.addEventListener('mousemove', (e) => {
   if (document.pointerLockElement === canvas) game.player.look(e.movementX, e.movementY);
 });
 document.addEventListener('mousedown', (e) => {
-  if (document.pointerLockElement === canvas && e.button === 0) game.interact();
+  if (document.pointerLockElement !== canvas) return;
+  game.input(`Mouse${e.button}`);
+  if (e.button === 0) game.interact();
+});
+document.addEventListener('wheel', (e) => {
+  if (game.asking) game.askAdjust(e.deltaY < 0 ? 1 : -1);
 });
 addEventListener('keydown', (e) => {
-  if (e.code === 'KeyE' && (document.pointerLockElement === canvas || testMode)) game.interact();
+  const playing = document.pointerLockElement === canvas || testMode;
+  if (playing && !e.repeat) game.input(e.code);
+  if (playing && game.asking) {
+    // A test's question is on screen: A/D or arrows adjust, number keys pick, E confirms.
+    if (e.code === 'KeyA' || e.code === 'ArrowLeft') game.askAdjust(-1);
+    if (e.code === 'KeyD' || e.code === 'ArrowRight') game.askAdjust(1);
+    if (/^Digit[1-9]$/.test(e.code)) game.askPick(Number(e.code.slice(5)) - 1);
+  }
+  if (e.code === 'KeyE' && playing && !e.repeat) game.interact();
   if (e.code === 'KeyM') game.voice.setMuted(game.sound.toggleMute());
 });
 
@@ -181,6 +194,7 @@ Object.assign(window, {
      */
     async begin(opts: { telemetry?: SelfRatings | null; selfRatings?: SelfRatings } = {}) {
       testMode = true;
+      game.testMode = true;
       started = true;
       if (opts.telemetry !== undefined) record(opts.telemetry);
       game.hud.start.hidden = true;
@@ -193,10 +207,13 @@ Object.assign(window, {
         room: r && {
           id: r.id, index: r.index, archetype: r.layout.archetype, doors: r.layout.doors,
           anomaly: r.anomaly, variant: r.variant,
-          props: r.props.map((p) => ({ id: p.id, recipe: p.recipe, x: p.x, z: p.z })),
+          props: r.props.map((p) => ({ id: p.id, recipe: p.recipe, x: p.x, y: p.y, z: p.z, rotY: p.rotY })),
         },
         player: { x: game.player.position.x, z: game.player.position.z, yaw: game.player.yaw },
         hovered: game.hovered?.info,
+        ask: game.hud.askOpen?.id,
+        /** The room's test has started (after the narrator has introduced the room). */
+        ruleStarted: !!(r && game.core.run()?.ruleStarts.has(r.id)),
         events: game.core.run()?.events.map((e) => e.type) ?? [],
         source: r?.source,
         rule: r?.rule,
@@ -218,6 +235,10 @@ Object.assign(window, {
       game.player.pitch = Math.atan2(ty - 1.62, Math.hypot(tx - x, tz - z));
     },
     interact: () => game.interact(),
+    /** Answer the question on screen with a value (an option index, a slider value, or a meter position 0–1). */
+    answer: (value: number) => game.answerWith(value),
+    /** The question on screen, if any. */
+    ask: () => game.hud.askOpen,
     /** Play every sound once; returns the audio state. */
     soundCheck() {
       const s = game.sound;

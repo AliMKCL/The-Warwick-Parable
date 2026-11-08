@@ -2,10 +2,10 @@
   "//": "How a run is laid out: the waiting room (room 0), then `tests` + `fillers` rooms in an order decided as the player goes, then the finale hallway. Notes on each setting are in the \"//\" entries; they are ignored by the game. URL overrides for a quick try: ?tests=3&fillers=1&pool=exit_timer,gamble:3",
 
   "//tests": "Rooms that hold a test (a countdown, locked doors, a gamble, the lift...). Exact: a run always has this many.",
-  "tests": 4,
+  "tests": 5,
 
   "//fillers": "Rooms with no test: furnished, inspectable, may hold an anomaly. Exact too, plus one extra for each lost gamble. This example: 1 + 5 + 2 + finale = 9 rooms.",
-  "fillers": 1,
+  "fillers": 2,
 
   "pool": {
     "//": "Tests that can be drawn, by id (core/testrooms/kinds). A number is a relative weight; { weight, max } also caps it per run. Leave a test out (or set 0) and it never appears. The player's profile multiplies the weight (hesitant players get more countdowns, impulsive ones more locked doors). No test repeats in back-to-back rooms.",
@@ -15,7 +15,16 @@
     "narrator_suggests": 1,
     "gamble": { "weight": 1, "max": 2 },
     "lift_wait": { "weight": 0.8, "max": 1 },
-    "choice": { "weight": 0.5, "max": 1 }
+    "choice": { "weight": 0.5, "max": 1 },
+
+    "//office": "The office tasks from PR #6, each with its own room and scored when the player leaves it (core/testrooms/office). Each runs at most once per run. Remove a line, or set it to 0, to leave a task out.",
+    "balloons": 0.6,
+    "coffee": 0.6,
+    "canteen": 0.6,
+    "renumbered": 0.5,
+    "pitch": 0.6,
+    "loan": 0.6,
+    "lockdown": 0.5
   },
 
   "fillerLayouts": {
