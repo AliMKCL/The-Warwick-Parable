@@ -110,7 +110,7 @@ door glows brighter and warmer than any door before it and leads to the
 player's file. Set the counts and the pool of tests in `data/layout.json`:
 
 ```json
-{ "tests": 4, "fillers": 1,
+{ "tests": 5, "fillers": 2,
   "pool": { "exit_timer": 1, "gamble": { "weight": 1, "max": 2 }, "lift_wait": 0.6, "choice": 0.6 } }
 ```
 

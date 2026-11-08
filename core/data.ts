@@ -19,5 +19,5 @@ export const gameData: GameData = {
   ambience: ambience as unknown as GameData['ambience'],
   templates: templates as unknown as GameData['templates'],
   prompts: { world, roomSystem, roomUser, narratorSystem, narratorUser, dossierSystem, dossierUser },
-  layout: layout as GameData['layout'],
+  layout: layout as unknown as GameData['layout'],
 };
