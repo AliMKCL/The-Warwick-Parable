@@ -97,3 +97,15 @@ The permission machine offers a fold-out break seat for STAY. The copier shows
 a textual route record with a second inspection, and the mirror combines a live
 reflection with an animated chair silhouette. These fit the existing procedural
 wall slots.
+
+## Room layouts and the Choice Room
+
+L-shaped galleries turn around one corner. U-shaped galleries have two wings
+joined by a passage around a central wall. Both rotate to match the arrival
+direction and use the same prop placement and exit checks as other rooms.
+
+Each run schedules one `choice_room` after the opening, using the run seed.
+The location is shared by every route and can be the final room. Its two
+available exits have stable IDs and markings, blue **A** (`d1`) and orange
+**B** (`d2`). The existing `door_chosen` event reports the player's selection.
+If the Choice Room is last, either door proceeds to the run summary.

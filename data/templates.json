@@ -129,6 +129,9 @@
     "Welcome. Please make yourself comfortable. Not too comfortable."
   ],
   "narratorEnter": {
+    "l_gallery": ["The gallery continues around the corner."],
+    "u_gallery": ["The gallery wraps around the central wall."],
+    "choice_room": ["There are two doors. Choose either one."],
     "waiting_room": [
       "Another waiting room. You seem to collect them.",
       "Have a seat. Or don't. I'll be watching either way."

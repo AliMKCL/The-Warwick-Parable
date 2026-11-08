@@ -53,7 +53,7 @@ test('walk through generated rooms', async ({ page }) => {
   // Walk to every exit in turn across several rooms.
   for (let i = 0; i < (process.env.EXPECT_MODEL ? 3 : 5); i++) {
     // Spend a moment in the room, as a player would, so generation can finish.
-    if (process.env.EXPECT_MODEL) await page.waitForFunction(() => (window as any).__WHACK__.state().gen?.some((g: any) => g.status === 'ready'), null, { timeout: 60_000 });
+    if (process.env.EXPECT_MODEL) await page.waitForFunction(() => (window as any).__WHACK__.state().gen?.some((g: any) => g.status === 'ready' || g.status === 'fallback'), null, { timeout: 60_000 });
     const st = await W(page);
     const exit = st.room.doors.find((d: any) => !d.entrance);
     // Room rules may lock doors; that is covered by rules.spec.ts, so open them here.
@@ -66,7 +66,7 @@ test('walk through generated rooms', async ({ page }) => {
     await page.evaluate(() => (window as any).__WHACK__.interact());
     await waitForRoom(page, i + 1);
     const now = await W(page);
-    if (process.env.EXPECT_MODEL) expect(now.source, `room ${i + 1} source`).toBe('model');
+    if (process.env.EXPECT_MODEL) expect(now.source, `room ${i + 1} source`).toBe(now.room.archetype === 'choice_room' ? 'template' : 'model');
     await page.screenshot({ path: `artifacts/p3-room${i + 1}-${now.room.archetype}.png` });
   }
 

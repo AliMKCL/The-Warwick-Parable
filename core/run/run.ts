@@ -2,12 +2,12 @@ import { describeVisit } from '../director/summary';
 import { generateRoomContent } from '../director/content';
 import { LlmError, type LlmClient } from '../llm/client';
 import { OPPOSITE } from '../room/geometry';
-import { ARCHETYPES, generateLayout, type Archetype } from '../room/layouts';
+import { ARCHETYPES, CHOICE_ROOM, generateLayout, type Archetype } from '../room/layouts';
 import { placeAssignments } from '../room/place';
 import { applyRoomVariant } from '../room/variants';
 import { templateAssignments } from '../room/templates';
 import type { Door, GameData, Layout, RoomSpec } from '../room/types';
-import { createRng, deriveSeed, pick } from '../util/random';
+import { createRng, deriveSeed, pick, randInt } from '../util/random';
 import type { GameEvent, ProfileSnapshot, RuleEffect } from '../protocol';
 import { Profile } from '../profile/profile';
 import { chooseRule, RuleRuntime, templateRuleLines, type RoomRule, type RuleId } from '../rules/rules';
@@ -73,6 +73,7 @@ export class Run {
   readonly rooms: RoomSpec[] = [];
   readonly events: GameEvent[] = [];
   private plans: Plan[] = [];
+  private readonly choiceRoomIndex: number;
   private working = false;
   /** False while the player is being observed in a freshly entered room. */
   private observing = false;
@@ -94,6 +95,7 @@ export class Run {
   ) {
     if (!opts.llm) this.modelOff = true;
     this.profile = new Profile(data);
+    this.choiceRoomIndex = randInt(createRng(deriveSeed(seed, CHOICE_ROOM)), 1, this.last);
   }
 
   get current(): RoomSpec | undefined {
@@ -164,7 +166,8 @@ export class Run {
 
   /** Index of the final room. */
   get last(): number {
-    return Math.max(2, (this.opts.runLength ?? RUN_LENGTH) - 1);
+    const length = this.opts.runLength ?? RUN_LENGTH;
+    return Number.isFinite(length) ? Math.max(2, Math.ceil(length) - 1) : RUN_LENGTH - 1;
   }
 
   /** True once the player has reached the last room of the run. */
@@ -203,9 +206,11 @@ export class Run {
     this.rule = undefined;
     const previous = this.current;
     const choice = [...this.events].reverse().find((e) => e.type === 'door_chosen' && e.roomId === previous?.id);
-    applyRoomVariant(room, this.rooms, this.last);
-    if (!room.variant) attachAnomaly(room, this.rooms, this.events, this.data, this.last, this.seed, this.opts.maxAnomalies);
-    if (previous?.anomaly?.id === 'blue_door' && choice?.type === 'door_chosen' && choice.doorId === previous.anomaly.doorId) {
+    if (room.layout.archetype !== CHOICE_ROOM) {
+      applyRoomVariant(room, this.rooms, this.last);
+      if (!room.variant) attachAnomaly(room, this.rooms, this.events, this.data, this.last, this.seed, this.opts.maxAnomalies);
+    }
+    if (room.layout.archetype !== CHOICE_ROOM && previous?.anomaly?.id === 'blue_door' && choice?.type === 'door_chosen' && choice.doorId === previous.anomaly.doorId) {
       const callback = `Returned to your file. ${previous.anomaly.record} You may wish to reconsider the wording.`;
       room.narrator.onEnter = room.variant ? `${room.narrator.onEnter} ${callback}` : callback;
       room.fact = [room.fact, previous.anomaly.record].filter(Boolean).join(' ');
@@ -235,7 +240,9 @@ export class Run {
     const index = from.index + 1;
     const seed = deriveSeed(this.seed, `room-${index}-${from.id}-${door.id}`);
     const rng = createRng(seed);
-    const { archetype, exits } = this.dials(from, rng);
+    const { archetype, exits } = index === this.choiceRoomIndex
+      ? { archetype: CHOICE_ROOM, exits: 2 } as const
+      : this.dials(from, rng);
     const layout = generateLayout({
       archetype,
       entranceSide: OPPOSITE[door.side],
@@ -255,7 +262,9 @@ export class Run {
    */
   private dials(from: RoomSpec, rng: ReturnType<typeof createRng>): { archetype: Archetype; exits: number } {
     const t = this.profile.traits;
-    const w: Record<Archetype, number> = { waiting_room: 1, corridor: 1, open_office: 1, hub: 1 };
+    const w: Record<(typeof ARCHETYPES)[number], number> = {
+      waiting_room: 1, corridor: 1, open_office: 1, hub: 1, l_gallery: 0.65, u_gallery: 0.65,
+    };
     if (t.hesitation > 0.6) { w.corridor += 1.5; w.hub += 1; }
     if (t.curiosity > 0.6) { w.open_office += 1.5; w.hub += 0.5; }
     if (t.impulsivity > 0.6) { w.corridor += 1; w.waiting_room += 0.5; }
@@ -267,7 +276,7 @@ export class Run {
     let exits = 1 + Math.floor(rng() * 3);
     if (t.hesitation > 0.62) exits = 3;
     else if (t.impulsivity > 0.62) exits = Math.min(exits, 2);
-    if (from.index + 1 >= this.last) exits = 1; // the last room has one way on
+    if (from.index + 1 >= this.last) exits = 1;
     return { archetype, exits };
   }
 
@@ -293,9 +302,10 @@ export class Run {
     plan.status = 'generating';
     this.emitStatus();
     const rng = createRng(plan.seed);
-    const rule = plan.index >= this.last ? undefined : chooseRule(this.profile, createRng(deriveSeed(plan.seed, 'pick-rule')), plan.index, this.current?.rule?.id as RuleId | undefined);
+    const isChoice = plan.layout.archetype === CHOICE_ROOM;
+    const rule = isChoice || plan.index >= this.last ? undefined : chooseRule(this.profile, createRng(deriveSeed(plan.seed, 'pick-rule')), plan.index, this.current?.rule?.id as RuleId | undefined);
     let spec: RoomSpec;
-    if (this.modelOff) {
+    if (isChoice || this.modelOff) {
       spec = this.templateSpec(plan, rng, { rule });
     } else {
       spec = await this.modelSpec(plan, rng, rule).catch((err: unknown) => {
@@ -380,6 +390,7 @@ export class Run {
   ): RoomSpec {
     const { layout } = plan;
     const t = this.data.templates;
+    const isChoice = layout.archetype === CHOICE_ROOM;
     const assignments = templateAssignments(layout, this.data, rng, { index: plan.index, forceCenter: o.first ? 'button_pedestal' : undefined });
     const { props } = placeAssignments(layout, assignments, this.data);
     const spec: RoomSpec = {
@@ -388,13 +399,13 @@ export class Run {
       seed: plan.seed,
       layout: { ...layout, doors: layout.doors.map((d) => (d.entrance ? { ...d, label: plan.entranceLabel } : d)) },
       props,
-      ambience: o.ambience ?? pick(rng, Object.keys(this.data.ambience)),
+      ambience: isChoice ? 'cold' : o.ambience ?? pick(rng, Object.keys(this.data.ambience)),
       narrator: {
         onEnter: o.first ? pick(rng, t.narratorFirst) : pick(rng, t.narratorEnter[layout.archetype] ?? t.narratorFirst),
-        doors: Object.fromEntries(layout.doors.filter((d) => !d.entrance).map((d) => [d.id, pick(rng, t.narratorDoor)])),
+        doors: isChoice ? {} : Object.fromEntries(layout.doors.filter((d) => !d.entrance).map((d) => [d.id, pick(rng, t.narratorDoor)])),
       },
       source: 'template',
-      title: o.first ? 'The waiting room' : layout.archetype.replace('_', ' '),
+      title: o.first ? 'The waiting room' : isChoice ? 'Choice Room' : layout.archetype.replaceAll('_', ' '),
       provenance: o.first ? undefined : { behaviour: this.behaviourLog(), profile: this.profile.readout(), story: this.story(), error: (plan as Partial<Plan>).error },
     };
     if (o.rule) {

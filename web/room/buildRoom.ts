@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
+import { CHOICE_ROOM } from '../../core/room/layouts';
 import { DIR, footprintRect, isFloor, OPPOSITE, yawForFacing } from '../../core/room/geometry';
 import type { Door, GameData, RoomSpec, Side } from '../../core/room/types';
 import { buildProp, type InteractInfo } from './buildProp';
@@ -84,7 +85,7 @@ export function buildRoom(spec: RoomSpec, data: GameData, materials: MaterialLib
         if (isFloor(layout, cx + dx, cz + dz)) continue;
         const frame = wallFrame(cx, cz, side);
         const door = doorAt.get(`${cx},${cz},${side}`);
-        if (door) {
+        if (door && !(layout.archetype === CHOICE_ROOM && door.entrance)) {
           // Wall above the door, then the door itself.
           wallQuads.push(place(quad(1, H - DOOR_H - 0.06).translate(0, (H + DOOR_H + 0.06) / 2, 0), frame));
           wallQuads.push(place(quad(0.05, DOOR_H + 0.06).translate(-0.475, (DOOR_H + 0.06) / 2, 0), frame));
@@ -345,8 +346,14 @@ export function buildRoom(spec: RoomSpec, data: GameData, materials: MaterialLib
       const plaqueGeo = new THREE.PlaneGeometry(0.56, 0.17);
       owned.push(plaqueGeo);
       const plaque = new THREE.Mesh(plaqueGeo, mat);
-      plaque.position.set(0, DOOR_H + 0.25, 0.006);
-      root.add(plaque);
+      if (layout.archetype === CHOICE_ROOM) {
+        plaque.position.set(DOOR_W / 2, 1.56, 0.024);
+        plaque.scale.set(1.35, 2.3, 1);
+        pivot.add(plaque);
+      } else {
+        plaque.position.set(0, DOOR_H + 0.25, 0.006);
+        root.add(plaque);
+      }
     }
 
     let indicator: THREE.MeshStandardMaterial | undefined;

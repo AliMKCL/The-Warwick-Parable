@@ -3,8 +3,15 @@ import { placeInSlot } from './geometry';
 import type { Assignment } from './place';
 import type { GameData, Layout, PropRecipe, Slot, TextStyle } from './types';
 
+const GALLERY_PROPS: Partial<Record<Slot['kind'], string[]>> = {
+  wall: ['bench_waiting', 'plant_potted', 'coat_rack', 'filing_cabinet', 'box_stack', 'water_cooler'],
+  wall_mounted: ['poster_wall', 'memo_board', 'clock_wall', 'sign_wall'],
+};
+
 /** Which props suit which archetype, by slot kind. The template filler and the model prompt both use this. */
 export const PREFERRED: Record<string, Partial<Record<Slot['kind'] | 'desk' | 'partition', string[]>>> = {
+  l_gallery: GALLERY_PROPS,
+  u_gallery: GALLERY_PROPS,
   waiting_room: {
     wall: ['bench_waiting', 'plant_potted', 'water_cooler', 'coat_rack', 'trash_bin', 'plant_dead', 'vending_machine'],
     wall_mounted: ['sign_wall', 'poster_wall', 'clock_wall', 'memo_board'],

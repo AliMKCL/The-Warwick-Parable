@@ -8,8 +8,9 @@ import type { Door, Layout, Side, Slot } from './types';
  * rotated so the entrance lines up with the door the player came through.
  */
 
-export const ARCHETYPES = ['waiting_room', 'corridor', 'open_office', 'hub'] as const;
-export type Archetype = (typeof ARCHETYPES)[number];
+export const ARCHETYPES = ['waiting_room', 'corridor', 'open_office', 'hub', 'l_gallery', 'u_gallery'] as const;
+export const CHOICE_ROOM = 'choice_room';
+export type Archetype = (typeof ARCHETYPES)[number] | typeof CHOICE_ROOM;
 
 export interface LayoutOptions {
   archetype: Archetype;
@@ -89,6 +90,47 @@ const BUILDERS: Record<Archetype, (o: LayoutOptions) => Layout> = {
     b.spawnAt(ex);
     return b.done();
   },
+
+  l_gallery(o) {
+    const w = randInt(o.rng, 9, 11), d = randInt(o.rng, 8, 10);
+    const b = new Builder('l_gallery', w, d, 3.0, o);
+    for (let z = 0; z < d - 4; z++) {
+      for (let x = 4; x < w; x++) b.solid(x, z);
+    }
+    const entrance = b.entrance(w - 2);
+    b.door('n', randInt(o.rng, 1, 2));
+    if (o.exits >= 2) b.door('e', d - 3);
+    if (o.exits >= 3) b.door('w', d - 3);
+    b.wallSlots();
+    b.spawnAt(entrance, Math.PI * 0.42);
+    return b.done();
+  },
+
+  u_gallery(o) {
+    const w = randInt(o.rng, 10, 12), d = randInt(o.rng, 8, 10);
+    const b = new Builder('u_gallery', w, d, 3.0, o);
+    for (let z = 0; z < d - 5; z++) {
+      for (let x = 3; x < w - 3; x++) b.solid(x, z);
+    }
+    const entrance = b.entrance(Math.floor(w / 2));
+    const [first, second] = o.rng() < 0.5 ? [1, w - 2] : [w - 2, 1];
+    b.door('n', first);
+    if (o.exits >= 2) b.door('n', second);
+    if (o.exits >= 3) b.door('e', d - 3);
+    b.wallSlots();
+    b.spawnAt(entrance);
+    return b.done();
+  },
+
+  [CHOICE_ROOM](o) {
+    const b = new Builder(CHOICE_ROOM, 7, 6, 3.0, o);
+    const entrance = b.entrance(3);
+    b.door('n', 1, { label: 'A', color: '#1e62b6' });
+    b.door('n', 5, { label: 'B', color: '#c46119' });
+    b.wallSlots(['wall_mounted']);
+    b.spawnAt(entrance);
+    return b.done();
+  },
 };
 
 // ---------- builder ----------
@@ -122,11 +164,11 @@ class Builder {
     return cx;
   }
 
-  door(side: Side, index: number) {
+  door(side: Side, index: number, marking?: Pick<Door, 'label' | 'color'>) {
     const [cx, cz] = this.edgeCell(side, index);
     const n = this.doors.filter((x) => !x.entrance).length + 1;
-    const label = this.labels.length ? this.labels.splice(Math.floor(this.o.rng() * this.labels.length), 1)[0]! : String(n);
-    this.doors.push({ id: `d${n}`, cx, cz, side, label, entrance: false });
+    const label = marking?.label ?? (this.labels.length ? this.labels.splice(Math.floor(this.o.rng() * this.labels.length), 1)[0]! : String(n));
+    this.doors.push({ id: `d${n}`, cx, cz, side, label, entrance: false, ...marking });
   }
 
   exits(count: number, sides: Side[]) {
@@ -171,8 +213,8 @@ class Builder {
     }
   }
 
-  spawnAt(entranceX: number) {
-    this.spawn = { x: entranceX + 0.5, z: this.d - 0.75, yaw: 0 };
+  spawnAt(entranceX: number, yaw = 0) {
+    this.spawn = { x: entranceX + 0.5, z: this.d - 0.75, yaw };
   }
 
   done(): Layout {

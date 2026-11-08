@@ -11,7 +11,7 @@ const tick = (ms = 0) => new Promise((r) => setTimeout(r, ms));
 describe('model-generated rooms', () => {
   it('uses the model content: props, text, door labels, narrator lines, story memory', async () => {
     const calls: { user: string }[] = [];
-    const run = new Run(5, gameData, { llm: fakeLlm({ calls }), observeMs: 0, maxAnomalies: 0 });
+    const run = new Run(4, gameData, { llm: fakeLlm({ calls }), observeMs: 0, maxAnomalies: 0 });
     const first = run.start();
     run.record({ type: 'room_entered', roomId: first.id, t: 0 });
     run.record({ type: 'inspected', roomId: first.id, objectId: first.props[0]!.id, t: 12 });
@@ -49,7 +49,7 @@ describe('model-generated rooms', () => {
   });
 
   it('does not keep the player waiting: slow generation falls back after waitMs', async () => {
-    const run = new Run(9, gameData, { llm: fakeLlm({ delayMs: 400 }), observeMs: 0, waitMs: 50 });
+    const run = new Run(12, gameData, { llm: fakeLlm({ delayMs: 400 }), observeMs: 0, waitMs: 50 });
     run.start();
     const t0 = Date.now();
     const room = await run.next('d1');
