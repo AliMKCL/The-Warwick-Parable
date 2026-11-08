@@ -120,7 +120,5 @@ export function buildDossier(run: Run, verdict: Verdict, source: 'model' | 'temp
       stoodStill: Math.round(ev.reduce((a, e) => a + (e.type === 'idle' ? e.seconds : 0), 0)),
       doorsTried: ev.filter((e) => e.type === 'door_tried').length,
     },
-    tasks: run.finalTaskResults(),
-    baseline: { ...(run.baseline() ?? {}) },
   };
 }

@@ -29,8 +29,6 @@ function styleFor(style: TextStyle, text: string): Style {
     case 'screen': return { bg: '#0b1311', fg: '#a9f0c0', font: MONO, weight: '500', align: 'left', upper: false, pad: 0.08, emissive: true };
     case 'paper': return { bg: '#f5f2e8', fg: '#2c2c2a', font: MONO, weight: '500', align: 'left', upper: false, pad: 0.1, emissive: false };
     case 'whiteboard': return { bg: '#fbfbf9', fg: '#24438a', font: MARKER, weight: '500', align: 'left', upper: false, pad: 0.07, emissive: false };
-    case 'led': return { bg: '#120904', fg: '#ffae42', font: MONO, weight: '700', align: 'center', upper: true, pad: 0.12, emissive: true };
-    case 'sticky': return { bg: '#f4dd5c', fg: '#28323f', font: MARKER, weight: '600', align: 'center', upper: false, pad: 0.1, emissive: false };
   }
 }
 

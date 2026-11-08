@@ -11,4 +11,3 @@ Filled in during Phases 2 to 4:
 | `themes/` | World bible and narrator voice guide |
 | `prompts/` | Prompt templates with {placeholders} |
 | `schemas/` | JSON Schemas for what the model returns |
-| `tasks.json` | The office tasks' fixed wording: narrator instructions, door labels, desk items, the colleague's and workers' lines. Safe to edit, but every player should hear the same measured instruction, so change it between test sessions, not during one |

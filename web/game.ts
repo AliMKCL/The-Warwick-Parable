@@ -19,7 +19,6 @@ import type { Act } from './telemetry/recorder';
 
 export interface GameOptions {
   seed: number;
-  maxAnomalies?: number;
   post: boolean;
   maxDpr: number;
   debug: boolean;
@@ -30,12 +29,7 @@ export interface GameOptions {
   mute?: boolean;
   /** Rooms per run, counting the first (default 7). */
   runLength?: number;
-  /** Stage the office tasks in rooms 1 to 5 (default on; ?tasks=0 turns them off). */
-  tasks?: boolean;
 }
-
-/** Position samples per second for the office-task log. */
-const SAMPLE_HZ = 10;
 
 const REACH = 2.6;
 const CENTER = new THREE.Vector2(0, 0);
@@ -61,19 +55,11 @@ export class Game {
   private startedAt = 0;
   private busy = false;
   private raycaster = new THREE.Raycaster();
-  hovered?: { info: InteractInfo; object: THREE.Object3D; since: number; doorHoverSent: boolean; gazeReportAt?: number };
+  hovered?: { info: InteractInfo; object: THREE.Object3D; since: number; doorHoverSent: boolean };
   private wasIdle = false;
   private frames = 0;
   private fpsTime = 0;
   private fps = 0;
-  /** Paused time (pointer lock lost) is left out of the run clock, so it never counts in a timing metric. */
-  private pausedAt = 0;
-  private pausedTotal = 0;
-  private sampleAcc = 0;
-  /** The inspect card on screen, and when it opened. */
-  private reading?: { id: string; since: number };
-  /** A hold-to-use action in progress. */
-  holding?: { id: string; since: number; need: number; verb: string };
   /** Telemetry listens here: events sent to core, messages back, and clicks. It never changes the game. */
   tap?: { event(e: GameEvent): void; message(m: CoreMessage): void; act(a: Act): void };
 
@@ -90,7 +76,6 @@ export class Game {
       if (el) { el.textContent = `Voice problem: ${msg}`; el.className = 'status bad'; }
     };
     this.hud.onTimerSecond = (left) => left <= 10 && this.sound.tick(left <= 5);
-    this.hud.onShown = (lineId) => this.startedAt && this.send({ type: 'narrator_shown', lineId, t: this.time });
     this.renderer = createRenderer(canvas);
     this.renderer.info.autoReset = false;
     if (opts.post) this.post = createPost(this.renderer, this.scene, this.player.camera);
@@ -99,43 +84,14 @@ export class Game {
     addEventListener('resize', () => this.resize());
   }
 
-  /** Seconds since the run started, not counting time spent paused. */
   get time() {
-    const now = this.pausedAt || performance.now();
-    return (now - this.startedAt - this.pausedTotal) / 1000;
-  }
-
-  /** The pause screen is up (or not). */
-  setPaused(paused: boolean) {
-    if (paused && !this.pausedAt) {
-      this.pausedAt = performance.now();
-      this.release();
-    } else if (!paused && this.pausedAt) {
-      this.pausedTotal += performance.now() - this.pausedAt;
-      this.pausedAt = 0;
-    }
-    this.hud.pauseTimer(paused);
-  }
-
-  /** A key or mouse button went down while playing (WASD included): the raw input stream for the task log. */
-  input(key: string) {
-    if (!this.room || this.busy || this.ended || this.pausedAt) return;
-    this.send({ type: 'input', roomId: this.room.spec.id, key, target: this.hovered?.info.id, t: round3(this.time) });
-  }
-
-  /** E or the mouse button came back up: ends a hold-to-use action early. */
-  release() {
-    const h = this.holding;
-    if (!h || !this.room) return;
-    this.holding = undefined;
-    this.hud.progress(null);
-    this.send({ type: 'hold_end', roomId: this.room.spec.id, objectId: h.id, seconds: round(this.time - h.since), completed: false, t: this.time });
+    return (performance.now() - this.startedAt) / 1000;
   }
 
   /** Start a run. With no model (or an unreachable one), rooms are filled from templates. */
   begin(llm?: LlmClient) {
     this.sound.start();
-    this.core = createCore(gameData, { llm, observeMs: this.opts.observeMs, runLength: this.opts.runLength, maxAnomalies: this.opts.maxAnomalies, tasks: this.opts.tasks });
+    this.core = createCore(gameData, { llm, observeMs: this.opts.observeMs, runLength: this.opts.runLength });
     this.core.onMessage((m) => this.handle(m));
     this.startedAt = performance.now();
     this.send({ type: 'run_started', seed: this.opts.seed, t: 0 });
@@ -150,42 +106,24 @@ export class Game {
   interact() {
     if (this.hud.inspecting) {
       this.hud.hideInspect();
-      this.player.eyeHeight = 1.62;
       this.player.enabled = true;
-      const r = this.reading;
-      this.reading = undefined;
-      if (r && this.room) this.send({ type: 'inspect_closed', roomId: this.room.spec.id, objectId: r.id, seconds: round(this.time - r.since), t: this.time });
       return;
     }
-    if (this.holding) return;
     const h = this.hovered;
     if (!h || this.busy || !this.room) return;
     const roomId = this.room.spec.id;
     const t = this.time;
     this.tap?.act({ kind: h.info.kind, id: h.info.id, locked: h.info.kind === 'door' ? !!this.room.doors.find((d) => d.door.id === h.info.id)?.locked : undefined });
     switch (h.info.kind) {
-      case 'anomaly':
-        if (this.room.spec.anomaly) {
-          this.sound.button();
-          this.send({ type: 'anomaly_action', roomId, anomalyId: this.room.spec.anomaly.id, action: h.info.action ?? 'use', t });
-        }
-        break;
       case 'inspect':
         this.sound.rustle();
         this.hud.showInspect(h.info.name, h.info.text ?? '');
         this.player.enabled = false;
-        this.reading = { id: h.info.id, since: t };
         this.send({ type: 'inspected', roomId, objectId: h.info.id, t });
-        break;
-      case 'hold':
-        this.holding = { id: h.info.id, since: t, need: h.info.holdSeconds ?? 5, verb: h.info.verb ?? 'Hold' };
-        this.hud.progress(0, this.holding.verb);
-        this.send({ type: 'hold_start', roomId, objectId: h.info.id, t });
         break;
       case 'button': {
         const knob = h.object.children.find((c) => (c as THREE.Mesh).material && ((c as THREE.Mesh).material as THREE.Material).name === 'red_button');
-        if (h.info.verb?.startsWith('Pick up')) this.sound.pickup();
-        else if (!h.info.verb?.startsWith('Talk')) this.sound.button();
+        this.sound.button();
         if (knob) {
           knob.position.y -= 0.025;
           setTimeout(() => (knob.position.y += 0.025), 220);
@@ -227,15 +165,6 @@ export class Game {
       this.hud.narrate(m.lineId, m.text, m.final);
       if (m.final) this.voice.speak(m.text);
     }
-    else if (m.type === 'anomaly_effect') {
-      if (m.effect.roomId === this.room?.spec.id) {
-        this.room.anomaly?.apply(m.effect);
-        if (this.room.spec.anomaly?.id === 'reflection' && m.effect.stage === 1) this.player.eyeHeight = 1.08;
-        if (this.room.spec.anomaly?.id === 'false_exit' && m.effect.stage > 0) this.room.setLights(0.12, 0.7);
-        this.hud.showInspect('Building notice', m.effect.text);
-        this.player.enabled = false;
-      }
-    }
     else if (m.type === 'rule_effect') this.applyEffect(m.effect);
     else if (m.type === 'profile') this.profile = m.profile;
     else if (m.type === 'run_ended') void this.endRun(m.dossier);
@@ -265,11 +194,6 @@ export class Game {
     if (e.kind === 'lights') room.setLights(e.level, e.seconds);
     else if (e.kind === 'doors') room.setLocked(e.locked);
     else if (e.kind === 'timer') this.hud.timer(e.seconds, e.label);
-    else if (e.kind === 'smoke') room.smoke(e.from, e.level, e.seconds);
-    else if (e.kind === 'display') room.setPropText(e.prop, e.text);
-    else if (e.kind === 'glance') room.glance(e.prop, e.at, e.seconds);
-    else if (e.kind === 'hide') room.hideProp(e.prop);
-    else if (e.kind === 'alarm') this.sound.alarm(e.on);
   }
 
   private async loadRoom(spec: RoomSpec) {
@@ -278,9 +202,6 @@ export class Game {
     if (spec.rule?.line) this.voice.prefetch(spec.rule.line);
     this.busy = true;
     await this.hud.fade(true);
-    this.holding = undefined;
-    this.hud.progress(null);
-    this.sound.alarm(false);
     if (this.room) {
       this.scene.remove(this.room.group);
       this.room.dispose();
@@ -295,7 +216,6 @@ export class Game {
     if (view.grade) this.post?.setGrade(view.grade);
     this.sound.setAmbience(view.sound);
     this.sound.setLightLevel(1);
-    this.player.eyeHeight = 1.62;
     const s = spec.layout.spawn;
     this.player.placeAt(s.x, s.z, s.yaw);
     this.hovered = undefined;
@@ -313,16 +233,12 @@ export class Game {
     if (room) {
       this.player.update(dt, room.isWalkable, room.colliders);
       room.update(dt, t);
-      const erased = room.anomaly?.update(dt, t, this.player.position, this.hovered?.info.id);
-      if (erased && room.spec.anomaly) this.send({ type: 'anomaly_action', roomId: room.spec.id, anomalyId: room.spec.anomaly.id, action: 'erase', t: this.time });
       if (this.player.stepped) this.sound.footstep();
       if (room.consumeFlicker()) this.sound.buzz();
       this.sound.setLightLevel(room.lightLevel());
       this.updateHover(room);
       this.trackIdle(room);
       this.trackMotion(room);
-      this.trackHold(room);
-      this.sample(room, dt);
     }
     this.frames++;
     if (t - this.fpsTime >= 1) {
@@ -339,31 +255,6 @@ export class Game {
     else this.renderer.render(this.scene, this.player.camera);
   }
 
-  /** Position at 10 Hz for the office-task log; nothing while paused or between rooms. */
-  private sample(room: RoomView, dt: number) {
-    if (this.busy || this.pausedAt || this.ended || !this.startedAt) return;
-    this.sampleAcc += dt;
-    if (this.sampleAcc < 1 / SAMPLE_HZ) return;
-    this.sampleAcc %= 1 / SAMPLE_HZ;
-    const p = this.player.position;
-    this.send({ type: 'move', roomId: room.spec.id, x: round3(p.x), z: round3(p.z), t: round3(this.time) });
-  }
-
-  /** A hold-to-use action: completes after its time, and stops if the player looks away. */
-  private trackHold(room: RoomView) {
-    const h = this.holding;
-    if (!h) return;
-    if (this.hovered?.info.id !== h.id) return this.release();
-    const done = (this.time - h.since) / h.need;
-    this.hud.progress(done, h.verb);
-    if (done >= 1) {
-      this.holding = undefined;
-      this.hud.progress(null);
-      this.sound.button();
-      this.send({ type: 'hold_end', roomId: room.spec.id, objectId: h.id, seconds: round(this.time - h.since), completed: true, t: this.time });
-    }
-  }
-
   private updateHover(room: RoomView) {
     this.raycaster.setFromCamera(CENTER, this.player.camera);
     const hits = this.raycaster.intersectObject(room.group, true);
@@ -374,9 +265,6 @@ export class Game {
       if (o) found = { info: o.userData.interact as InteractInfo, object: o };
       break; // only the nearest surface counts, so walls hide what's behind them
     }
-    // Some things can only be used up close (no glowing highlights: finding them is up to the player).
-    const reach = found?.info.reach, at = found?.info.at;
-    if (reach && at && Math.hypot(this.player.position.x - at[0], this.player.position.z - at[1]) > reach) found = undefined;
     const prev = this.hovered;
     const t = this.time;
     if (prev && prev.info.id !== found?.info.id) {
@@ -388,23 +276,15 @@ export class Game {
       this.hovered = undefined;
     } else if (!prev || prev.info.id !== found.info.id) {
       this.hovered = { ...found, since: t, doorHoverSent: false };
-      // An interaction prompt just appeared: the start of a reaction time.
-      if (found.info.kind !== 'locked' && !this.busy && !this.hud.inspecting) this.send({ type: 'prompt', roomId: room.spec.id, objectId: found.info.id, t });
     }
     const h = this.hovered;
-    if (h && h.info.kind === 'anomaly' && t - h.since >= 3 && (h.gazeReportAt === undefined || (room.spec.anomaly?.id === 'borrowed_clock' && t - h.gazeReportAt >= 1))) {
-      h.gazeReportAt = t;
-      this.send({ type: 'looked_at', roomId: room.spec.id, objectId: h.info.id, seconds: round(t - h.since), t });
-    }
     if (h && h.info.kind === 'door' && !h.doorHoverSent && t - h.since >= 1.5) {
       h.doorHoverSent = true;
       this.send({ type: 'door_hovered', roomId: room.spec.id, doorId: h.info.id, seconds: round(t - h.since), t });
     }
     if (this.busy || this.hud.inspecting || !h) this.hud.setPrompt(null);
-    else if (h.info.kind === 'anomaly') this.hud.setPrompt('E', h.info.name);
     else if (h.info.kind === 'inspect') this.hud.setPrompt('E', `Inspect ${h.info.name.toLowerCase()}`);
-    else if (h.info.kind === 'button') this.hud.setPrompt('E', h.info.verb ?? 'Press');
-    else if (h.info.kind === 'hold') this.hud.setPrompt(this.holding ? null : 'E', this.holding ? '' : h.info.verb ?? 'Hold');
+    else if (h.info.kind === 'button') this.hud.setPrompt('E', 'Press');
     else if (h.info.kind === 'door')
       room.doors.find((d) => d.door.id === h.info.id)?.locked
         ? this.hud.setPrompt('E', `${h.info.name[0]!.toUpperCase()}${h.info.name.slice(1)} is locked`)
@@ -470,7 +350,4 @@ function wait(ms: number) {
 }
 function round(n: number) {
   return Math.round(n * 10) / 10;
-}
-function round3(n: number) {
-  return Math.round(n * 1000) / 1000;
 }

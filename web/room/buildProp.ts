@@ -23,18 +23,10 @@ function partGeometry(part: PropPart): THREE.BufferGeometry {
 }
 
 export interface InteractInfo {
-  kind: 'inspect' | 'button' | 'hold' | 'door' | 'locked' | 'anomaly';
-  action?: 'use' | 'stay';
+  kind: 'inspect' | 'button' | 'door' | 'locked';
   id: string;
   name: string;
   text?: string;
-  /** Prompt wording for buttons and hold props. */
-  verb?: string;
-  /** Only usable within this horizontal distance of `at` (the prop's position). */
-  reach?: number;
-  at?: [number, number];
-  /** Hold props: seconds of holding needed. */
-  holdSeconds?: number;
 }
 
 /**
@@ -56,8 +48,6 @@ export function buildProp(
     if (part.rot) mesh.rotation.set(part.rot[0] * DEG, part.rot[1] * DEG, part.rot[2] * DEG);
     mesh.castShadow = !isWallMounted;
     mesh.receiveShadow = true;
-    // An invisible, larger target for small props: never drawn, but the aim ray still hits it.
-    if (part.mat === 'hitbox') mesh.visible = false;
     group.add(mesh);
   }
 
@@ -66,7 +56,6 @@ export function buildProp(
     const plane = new THREE.Mesh(new THREE.PlaneGeometry(...recipe.text.size), mat);
     plane.position.set(...recipe.text.pos);
     group.add(plane);
-    group.userData.textPlane = plane;
     owned.push(mat.map!, mat, plane.geometry);
   }
 
@@ -76,13 +65,10 @@ export function buildProp(
 
   if (recipe.inspectable || recipe.interact) {
     const info: InteractInfo = {
-      kind: recipe.interact ?? 'inspect',
+      kind: recipe.interact === 'button' ? 'button' : 'inspect',
       id: placed.id,
       name: recipe.name,
       text: placed.inspectText ?? placed.surfaceText,
-      ...(recipe.verb ? { verb: recipe.verb } : {}),
-      ...(placed.reach ? { reach: placed.reach, at: [placed.x, placed.z] as [number, number] } : {}),
-      ...(recipe.interact === 'hold' ? { holdSeconds: placed.holdSeconds ?? 5 } : {}),
     };
     group.userData.interact = info;
   }

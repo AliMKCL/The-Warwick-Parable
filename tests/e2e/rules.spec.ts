@@ -12,8 +12,7 @@ test('room rules change the world', async ({ page }) => {
   const errors: string[] = [];
   page.on('pageerror', (e) => errors.push(e.message));
   await page.setViewportSize({ width: 960, height: 540 });
-  // Rules run in ordinary rooms; the office tasks (on by default) take rooms 1 to 5.
-  await page.goto('/?seed=99&debug=1&dpr=1&observe=0&post=0&tasks=0');
+  await page.goto('/?seed=99&debug=1&dpr=1&observe=0&post=0');
   await page.evaluate(() => (window as any).__WHACK__.begin());
   await waitForRoom(page, 0);
 

@@ -7,7 +7,6 @@ const EYE = 1.62, RADIUS = 0.28, SPEED = 2.7, SENS = 0.0022;
 export class Player {
   readonly camera: THREE.PerspectiveCamera;
   readonly position = new THREE.Vector3();
-  eyeHeight = EYE;
   yaw = 0;
   pitch = 0;
   private keys = new Set<string>();
@@ -77,7 +76,7 @@ export class Player {
   }
 
   private sync() {
-    this.camera.position.set(this.position.x, this.eyeHeight + Math.sin(this.bob) * 0.025, this.position.z);
+    this.camera.position.set(this.position.x, EYE + Math.sin(this.bob) * 0.025, this.position.z);
     this.camera.rotation.set(this.pitch, this.yaw, 0);
   }
 

@@ -46,13 +46,7 @@ export class Profile {
     };
 
     switch (e.type) {
-      case 'anomaly_action':
-        if (e.anomalyId === room.anomaly?.id && mine.filter((x) => x.type === 'anomaly_action').length === 1)
-          this.adjust('curiosity', 0.07, `investigated ${e.anomalyId.replaceAll('_', ' ')}`, room, e.t, 0.25);
-        break;
       case 'pressed': {
-        // In an office task room (a lift button, a fire alarm) the task scores presses itself.
-        if (room.task) break;
         const nth = mine.filter((x) => x.type === 'pressed').length;
         if (nth === 1) {
           if (since < 5) this.adjust('impulsivity', 0.25, `pressed the button ${Math.round(since)} s after arriving`, room, e.t);
@@ -80,7 +74,7 @@ export class Profile {
         if (since < 8) this.adjust('impulsivity', 0.1, `left the room after ${Math.round(since)} s`, room, e.t);
         else if (since > 45) this.adjust('hesitation', 0.1, `took ${Math.round(since)} s to leave the room`, room, e.t);
         const inspectable = room.props.filter((p) => this.data.props.find((r) => r.id === p.recipe)?.inspectable).length;
-        if (inspectable >= 3 && !mine.some((x) => x.type === 'inspected' || x.type === 'anomaly_action')) this.adjust('curiosity', -0.1, 'left without inspecting anything', room, e.t);
+        if (inspectable >= 3 && !mine.some((x) => x.type === 'inspected')) this.adjust('curiosity', -0.1, 'left without inspecting anything', room, e.t);
         if (room.index === 0 && !mine.some((x) => x.type === 'pressed')) {
           this.adjust('compliance', -0.15, 'never pressed the button it was clearly meant to press', room, e.t);
           this.adjust('hesitation', 0.08, 'avoided the button entirely', room, e.t);

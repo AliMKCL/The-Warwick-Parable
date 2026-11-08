@@ -90,16 +90,10 @@ export class RuleRuntime {
     const exits = ctx.room.layout.doors.filter((d) => !d.entrance).map((d) => d.id);
     switch (rule.id) {
       case 'inspect_to_unlock': {
-        const inspectable = ctx.room.props.filter((p) => ctx.data.props.find((r) => r.id === p.recipe)?.inspectable).length + (ctx.room.anomaly ? 1 : 0);
+        const inspectable = ctx.room.props.filter((p) => ctx.data.props.find((r) => r.id === p.recipe)?.inspectable).length;
         this.state.need = Math.min(Number(rule.params.count), inspectable);
-        this.state.seen = new Set(history.flatMap((e) => {
-          if (!('roomId' in e) || e.roomId !== ctx.room.id) return [];
-          if (e.type === 'inspected') return [e.objectId];
-          if (e.type === 'anomaly_action' && e.action === 'use' && e.anomalyId === ctx.room.anomaly?.id) return [`anomaly:${e.anomalyId}`];
-          return [];
-        }));
-        this.state.open = (this.state.seen as Set<string>).size >= Number(this.state.need);
-        if (Number(this.state.need) > 0 && !this.state.open) {
+        this.state.seen = new Set<string>();
+        if (Number(this.state.need) > 0) {
           ctx.emit({ kind: 'doors', locked: exits });
           ctx.say(rule.line);
         }
@@ -151,8 +145,8 @@ export class RuleRuntime {
         break;
       case 'inspect_to_unlock': {
         const seen = this.state.seen as Set<string>;
-        if ((e.type === 'inspected' || (e.type === 'anomaly_action' && e.action === 'use' && e.anomalyId === room.anomaly?.id)) && !this.state.open) {
-          seen.add(e.type === 'inspected' ? e.objectId : `anomaly:${e.anomalyId}`);
+        if (e.type === 'inspected' && !this.state.open) {
+          seen.add(e.objectId);
           if (seen.size >= Number(this.state.need)) {
             this.state.open = true;
             ctx.emit({ kind: 'doors', locked: [] });
@@ -185,18 +179,6 @@ export class RuleRuntime {
     }
   }
 
-  borrowTime(t: number, seconds: number): boolean {
-    if (this.stopped || this.rule.id !== 'exit_timer' || this.state.expired || this.state.borrowed || this.state.startedAt === undefined) return false;
-    const remaining = Number(this.state.startedAt) + Number(this.rule.params.seconds) - t;
-    if (remaining <= 0) return false;
-    this.state.borrowed = true;
-    this.state.borrowedSeconds = seconds;
-    timers.clearTimeout(this.timer);
-    this.timer = timers.setTimeout(() => this.expire(), (remaining + seconds) * 1000);
-    this.ctx.emit({ kind: 'timer', seconds: remaining + seconds, label: 'Doors close in' });
-    return true;
-  }
-
   private expire() {
     if (this.stopped) return;
     const { ctx } = this;
@@ -207,7 +189,7 @@ export class RuleRuntime {
     const keep = exits.find((id) => !hovered[id]) ?? exits[0]!;
     ctx.emit({ kind: 'timer', seconds: null, label: '' });
     ctx.emit({ kind: 'doors', locked: exits.filter((id) => id !== keep) });
-    ctx.profile.adjust('hesitation', 0.14, 'let the countdown run out', ctx.room, Number(this.state.startedAt ?? 0) + Number(this.rule.params.seconds) + Number(this.state.borrowedSeconds ?? 0));
+    ctx.profile.adjust('hesitation', 0.14, 'let the countdown run out', ctx.room, Number(this.state.startedAt ?? 0) + Number(this.rule.params.seconds));
     ctx.say(this.rule.doneLine);
   }
 

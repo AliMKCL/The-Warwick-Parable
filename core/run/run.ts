@@ -2,23 +2,15 @@ import { describeVisit } from '../director/summary';
 import { generateRoomContent } from '../director/content';
 import { LlmError, type LlmClient } from '../llm/client';
 import { OPPOSITE } from '../room/geometry';
-import { ARCHETYPES, CHOICE_ROOM, generateLayout, type Archetype } from '../room/layouts';
+import { ARCHETYPES, generateLayout, type Archetype } from '../room/layouts';
 import { placeAssignments } from '../room/place';
-import { applyRoomVariant } from '../room/variants';
 import { templateAssignments } from '../room/templates';
 import type { Door, GameData, Layout, RoomSpec } from '../room/types';
-import { createRng, deriveSeed, pick, randInt } from '../util/random';
-import type { GameEvent, ProfileSnapshot, RuleEffect, TaskEvent, TaskResult } from '../protocol';
+import { createRng, deriveSeed, pick } from '../util/random';
+import type { GameEvent, ProfileSnapshot, RuleEffect } from '../protocol';
 import { Profile } from '../profile/profile';
 import { chooseRule, RuleRuntime, templateRuleLines, type RoomRule, type RuleId } from '../rules/rules';
-import { attachAnomaly, AnomalyRuntime } from '../anomalies/anomalies';
-import type { AnomalyEffect } from '../protocol';
 import { RUN_LENGTH } from '../director/prompts';
-import { buildTaskLayout } from '../tasks/layouts';
-import { TaskLog } from '../tasks/log';
-import { computeBaseline, scoreTask, type Baseline } from '../tasks/metrics';
-import { sessionParams, taskFor, type TaskId, type TaskParams } from '../tasks/params';
-import { TaskRuntime } from '../tasks/runtime';
 
 const timers = globalThis as unknown as {
   setTimeout(fn: () => void, ms: number): unknown;
@@ -40,15 +32,11 @@ interface Plan {
   resolve: (s: RoomSpec) => void;
   abort?: { abort(): void };
   error?: string;
-  /** The office task staged in this room, if any. */
-  task?: { id: TaskId; params: TaskParams };
 }
 
 type RuleSpec = NonNullable<RoomSpec['rule']>;
 
 export interface RunOptions {
-  maxAnomalies?: number;
-  onAnomaly?: (effect: AnomalyEffect) => void;
   llm?: LlmClient;
   /** How long a door waits for an unfinished room before falling back to templates. */
   waitMs?: number;
@@ -61,16 +49,12 @@ export interface RunOptions {
   onStatus?: (plans: { door: string; status: GenStatus; ms?: number; error?: string }[]) => void;
   /** A room rule changed the world. */
   onEffect?: (effect: RuleEffect) => void;
-  /** A room rule or office task wants the narrator to speak; tasks pass a line id to time it. */
-  onSay?: (text: string, lineId?: string) => void;
+  /** A room rule wants the narrator to speak. */
+  onSay?: (text: string) => void;
   /** The hidden profile changed. */
   onProfile?: (profile: ProfileSnapshot) => void;
-  /** An office task finished. */
-  onTaskResult?: (result: TaskResult, log: TaskEvent[]) => void;
   /** Rooms in the run, counting the first (default 7). */
   runLength?: number;
-  /** Stage the office tasks (core/tasks) in rooms 1 to 5, with room 0 as the baseline. */
-  tasks?: boolean;
   now?: () => number;
 }
 
@@ -84,7 +68,6 @@ export class Run {
   readonly rooms: RoomSpec[] = [];
   readonly events: GameEvent[] = [];
   private plans: Plan[] = [];
-  private readonly choiceRoomIndex: number;
   private working = false;
   /** False while the player is being observed in a freshly entered room. */
   private observing = false;
@@ -95,15 +78,8 @@ export class Run {
   /** Story threads the model has planted, and whether a later room paid them off. */
   readonly threads: { id: string; text: string; room: number; resolvedIn?: number }[] = [];
   private rule?: RuleRuntime;
-  private anomaly?: AnomalyRuntime;
   /** Trait scores at the moment the player entered each room. */
   readonly traitHistory: Record<'hesitation' | 'curiosity' | 'compliance' | 'impulsivity', number>[] = [];
-  /** The shared office-task event log, and what each finished task measured. */
-  readonly taskLog = new TaskLog();
-  readonly taskResults: TaskResult[] = [];
-  private taskRuntime?: TaskRuntime;
-  private readonly taskParams: Record<TaskId, TaskParams>;
-  private baselineCache?: Baseline;
 
   constructor(
     readonly seed: number,
@@ -112,17 +88,6 @@ export class Run {
   ) {
     if (!opts.llm) this.modelOff = true;
     this.profile = new Profile(data);
-    // With the office tasks on, the Two Doors is the run's door choice, so there is no separate choice room.
-    this.choiceRoomIndex = opts.tasks ? -1 : randInt(createRng(deriveSeed(seed, CHOICE_ROOM)), 1, this.last);
-    this.taskParams = sessionParams(seed);
-  }
-
-  /** The player's own normal, from the first room (null until they have left it). */
-  baseline(): Baseline | null {
-    if (this.baselineCache) return this.baselineCache;
-    const events = this.taskLog.slice('baseline');
-    if (!events.some((e) => e.type === 'task_end')) return null;
-    return (this.baselineCache = computeBaseline(events));
   }
 
   get current(): RoomSpec | undefined {
@@ -140,23 +105,10 @@ export class Run {
   }
 
   record(event: GameEvent): void {
-    if ('roomId' in event && event.roomId !== this.current?.id) return;
-    // Position samples, raw key presses and narrator timing feed the task log only.
-    if (event.type === 'move' || event.type === 'input' || event.type === 'narrator_shown') {
-      this.taskRuntime?.onEvent(event);
-      return;
-    }
-    if (event.type === 'room_entered' && event.roomId === this.current?.id) this.taskRuntime?.begin(event.t);
     this.events.push(event);
     const before = this.profile.evidence.length;
     this.profile.observe(event, this.current, this.events);
     this.rule?.onEvent(event);
-    this.anomaly?.onEvent(event);
-    const task = this.taskRuntime;
-    if (task) {
-      task.onEvent(event);
-      if (task.result && !this.taskResults.includes(task.result)) this.taskDone(task);
-    }
     if (this.profile.evidence.length !== before) this.opts.onProfile?.(this.profile.snapshot());
     if (event.type === 'door_hovered') {
       this.prioritise(event.doorId);
@@ -190,32 +142,21 @@ export class Run {
   describe(room: RoomSpec): string[] {
     const noticed = [...new Set(this.profile.evidence.filter((e) => e.room === room.index).map((e) => e.reason))];
     const lines = describeVisit(room, this.events, this.data);
-    const task = this.taskResults.find((r) => r.room === room.index);
-    if (task) lines.push(...task.notes);
     if (noticed.length) lines.push(`Noticed: ${noticed.join('; ')}.`);
     return lines;
-  }
-
-  /** Every finished task, rescored from the whole log so metrics that look ahead (the desk note) are complete. */
-  finalTaskResults(): TaskResult[] {
-    return this.taskResults.map((r) => {
-      const { metrics, notes } = scoreTask(r.task as TaskId, this.taskLog.slice(r.task), { params: r.params, baseline: this.baseline(), all: this.taskLog.events });
-      return { ...r, metrics, notes };
-    });
   }
 
   /** One line per earlier room, for the story memory. */
   story(): string[] {
     return this.rooms.map((r) => {
       const resolved = r.thread?.resolves ? this.threads.find((t) => t.id === r.thread!.resolves) : undefined;
-      return `Room ${r.index} "${r.title}"${r.anomaly ? ` (contained ${r.anomaly.id})` : ''}${r.fact ? `: ${r.fact}` : ''}${resolved ? ` (paid off thread: ${resolved.text})` : ''}`;
+      return `Room ${r.index} "${r.title}"${r.fact ? `: ${r.fact}` : ''}${resolved ? ` (paid off thread: ${resolved.text})` : ''}`;
     });
   }
 
   /** Index of the final room. */
   get last(): number {
-    const length = this.opts.runLength ?? RUN_LENGTH;
-    return Number.isFinite(length) ? Math.max(2, Math.ceil(length) - 1) : RUN_LENGTH - 1;
+    return Math.max(2, (this.opts.runLength ?? RUN_LENGTH) - 1);
   }
 
   /** True once the player has reached the last room of the run. */
@@ -252,27 +193,6 @@ export class Run {
   private enter(room: RoomSpec) {
     this.rule?.stop();
     this.rule = undefined;
-    const previous = this.current;
-    const choice = [...this.events].reverse().find((e) => e.type === 'door_chosen' && e.roomId === previous?.id);
-    if (room.layout.archetype !== CHOICE_ROOM) {
-      applyRoomVariant(room, this.rooms, this.last);
-      if (!room.variant) attachAnomaly(room, this.rooms, this.events, this.data, this.last, this.seed, this.opts.maxAnomalies);
-    }
-    if (room.layout.archetype !== CHOICE_ROOM && previous?.anomaly?.id === 'blue_door' && choice?.type === 'door_chosen' && choice.doorId === previous.anomaly.doorId) {
-      const callback = `Returned to your file. ${previous.anomaly.record} You may wish to reconsider the wording.`;
-      room.narrator.onEnter = room.variant ? `${room.narrator.onEnter} ${callback}` : callback;
-      room.fact = [room.fact, previous.anomaly.record].filter(Boolean).join(' ');
-    }
-    this.anomaly = new AnomalyRuntime(room, this.events, (e) => this.opts.onAnomaly?.(e),
-      (line) => this.opts.onSay?.(line), (t) => this.rule?.borrowTime(t, 8) ?? false);
-    // Normally a task finishes on its door; this covers anything else that moves the run on.
-    const prev = this.taskRuntime;
-    if (prev?.finish('left') && prev.result) this.taskDone(prev);
-    this.taskRuntime = undefined;
-    if (this.opts.tasks) {
-      if (room.index === 0) this.taskRuntime = new TaskRuntime('baseline', room, this.taskContext());
-      else if (room.task) this.taskRuntime = new TaskRuntime(room.task.id as TaskId, room, this.taskContext());
-    }
     this.rooms.push(room);
     this.traitHistory.push({ ...this.profile.traits });
     if (room.thread?.plant) this.threads.push({ id: `t${this.threads.length + 1}`, text: room.thread.plant, room: room.index });
@@ -296,18 +216,7 @@ export class Run {
     const index = from.index + 1;
     const seed = deriveSeed(this.seed, `room-${index}-${from.id}-${door.id}`);
     const rng = createRng(seed);
-    let resolve!: (s: RoomSpec) => void;
-    const done = new Promise<RoomSpec>((r) => (resolve = r));
-    const base = { doorId: door.id, index, seed, entranceLabel: door.label, status: 'queued' as GenStatus, done, resolve };
-    const taskId = this.opts.tasks ? taskFor(index, this.last) : undefined;
-    if (taskId) {
-      // An office task: its own seeded layout, whichever door led here.
-      const built = buildTaskLayout(taskId, this.taskParams[taskId], OPPOSITE[door.side], rng, this.data);
-      return { ...base, layout: built.layout, task: { id: taskId, params: built.params } };
-    }
-    const { archetype, exits } = index === this.choiceRoomIndex
-      ? { archetype: CHOICE_ROOM, exits: 2 } as const
-      : this.dials(from, rng);
+    const { archetype, exits } = this.dials(from, rng);
     const layout = generateLayout({
       archetype,
       entranceSide: OPPOSITE[door.side],
@@ -315,42 +224,9 @@ export class Run {
       rng,
       doorLabels: this.data.templates.doorLabels,
     });
-    return { ...base, layout };
-  }
-
-  private taskContext() {
-    return {
-      log: this.taskLog,
-      data: this.data,
-      profile: this.profile,
-      emit: (e: RuleEffect) => this.opts.onEffect?.(e),
-      say: (text: string, lineId: string) => text && this.opts.onSay?.(text, lineId),
-      baseline: () => this.baseline(),
-    };
-  }
-
-  private taskDone(task: TaskRuntime) {
-    if (!task.result || this.taskResults.includes(task.result)) return;
-    this.taskResults.push(task.result);
-    this.opts.onTaskResult?.(task.result, task.events());
-    this.opts.onProfile?.(this.profile.snapshot());
-  }
-
-  /**
-   * A task room keeps the model's (or template's) title, mood and decoration,
-   * but its measured lines, door labels and timing are fixed so every player
-   * gets the same test: no entry line (the task speaks), no door lines, no rule.
-   */
-  private withTask(spec: RoomSpec, plan: Pick<Plan, 'task' | 'layout' | 'entranceLabel'>): RoomSpec {
-    if (!plan.task) return spec;
-    return {
-      ...spec,
-      layout: { ...spec.layout, doors: plan.layout.doors.map((d) => (d.entrance ? { ...d, label: plan.entranceLabel } : d)) },
-      narrator: { onEnter: '', doors: {} },
-      rule: undefined,
-      task: plan.task,
-      title: spec.source === 'template' ? this.data.tasks[plan.task.id].title : spec.title,
-    };
+    let resolve!: (s: RoomSpec) => void;
+    const done = new Promise<RoomSpec>((r) => (resolve = r));
+    return { doorId: door.id, index, seed, layout, entranceLabel: door.label, status: 'queued', done, resolve };
   }
 
   /**
@@ -360,9 +236,7 @@ export class Run {
    */
   private dials(from: RoomSpec, rng: ReturnType<typeof createRng>): { archetype: Archetype; exits: number } {
     const t = this.profile.traits;
-    const w: Record<(typeof ARCHETYPES)[number], number> = {
-      waiting_room: 1, corridor: 1, open_office: 1, hub: 1, l_gallery: 0.65, u_gallery: 0.65,
-    };
+    const w: Record<Archetype, number> = { waiting_room: 1, corridor: 1, open_office: 1, hub: 1 };
     if (t.hesitation > 0.6) { w.corridor += 1.5; w.hub += 1; }
     if (t.curiosity > 0.6) { w.open_office += 1.5; w.hub += 0.5; }
     if (t.impulsivity > 0.6) { w.corridor += 1; w.waiting_room += 0.5; }
@@ -374,7 +248,7 @@ export class Run {
     let exits = 1 + Math.floor(rng() * 3);
     if (t.hesitation > 0.62) exits = 3;
     else if (t.impulsivity > 0.62) exits = Math.min(exits, 2);
-    if (from.index + 1 >= this.last) exits = 1;
+    if (from.index + 1 >= this.last) exits = 1; // the last room has one way on
     return { archetype, exits };
   }
 
@@ -400,10 +274,9 @@ export class Run {
     plan.status = 'generating';
     this.emitStatus();
     const rng = createRng(plan.seed);
-    const isChoice = plan.layout.archetype === CHOICE_ROOM;
-    const rule = isChoice || plan.task || plan.index >= this.last ? undefined : chooseRule(this.profile, createRng(deriveSeed(plan.seed, 'pick-rule')), plan.index, this.current?.rule?.id as RuleId | undefined);
+    const rule = plan.index >= this.last ? undefined : chooseRule(this.profile, createRng(deriveSeed(plan.seed, 'pick-rule')), plan.index, this.current?.rule?.id as RuleId | undefined);
     let spec: RoomSpec;
-    if (isChoice || this.modelOff) {
+    if (this.modelOff) {
       spec = this.templateSpec(plan, rng, { rule });
     } else {
       spec = await this.modelSpec(plan, rng, rule).catch((err: unknown) => {
@@ -443,7 +316,6 @@ export class Run {
         threads: this.threads.filter((t) => t.resolvedIn === undefined).map(({ id, text }) => ({ id, text })),
         runLength: this.last + 1,
         data: this.data,
-        task: plan.task ? this.data.tasks[plan.task.id].brief : undefined,
       },
       rng,
       controller?.signal,
@@ -453,7 +325,7 @@ export class Run {
     const { props } = placeAssignments(plan.layout, [...gen.assignments, ...furniture], this.data);
     const labels = new Map(c.doors.map((d) => [d.door, d.label.toUpperCase().slice(0, 16)]));
     const layout: Layout = { ...plan.layout, doors: plan.layout.doors.map((d) => (labels.has(d.id) ? { ...d, label: labels.get(d.id)! } : { ...d, label: d.entrance ? plan.entranceLabel : d.label })) };
-    return this.withTask({
+    return {
       id: `room-${plan.index}-${plan.seed.toString(36)}`,
       index: plan.index,
       seed: plan.seed,
@@ -479,17 +351,16 @@ export class Run {
         plant: c.thread_plant?.trim() || undefined,
         resolves: c.thread_resolve && c.thread_resolve !== 'none' ? c.thread_resolve : undefined,
       },
-    }, plan);
+    };
   }
 
   private templateSpec(
-    plan: Pick<Plan, 'index' | 'seed' | 'layout' | 'entranceLabel' | 'task'>,
+    plan: Pick<Plan, 'index' | 'seed' | 'layout' | 'entranceLabel'>,
     rng: ReturnType<typeof createRng>,
     o: { first?: boolean; ambience?: string; rule?: Omit<RoomRule, 'line' | 'doneLine'> } = {},
   ): RoomSpec {
     const { layout } = plan;
     const t = this.data.templates;
-    const isChoice = layout.archetype === CHOICE_ROOM;
     const assignments = templateAssignments(layout, this.data, rng, { index: plan.index, forceCenter: o.first ? 'button_pedestal' : undefined });
     const { props } = placeAssignments(layout, assignments, this.data);
     const spec: RoomSpec = {
@@ -498,13 +369,13 @@ export class Run {
       seed: plan.seed,
       layout: { ...layout, doors: layout.doors.map((d) => (d.entrance ? { ...d, label: plan.entranceLabel } : d)) },
       props,
-      ambience: isChoice ? 'cold' : o.ambience ?? pick(rng, Object.keys(this.data.ambience)),
+      ambience: o.ambience ?? pick(rng, Object.keys(this.data.ambience)),
       narrator: {
         onEnter: o.first ? pick(rng, t.narratorFirst) : pick(rng, t.narratorEnter[layout.archetype] ?? t.narratorFirst),
-        doors: isChoice ? {} : Object.fromEntries(layout.doors.filter((d) => !d.entrance).map((d) => [d.id, pick(rng, t.narratorDoor)])),
+        doors: Object.fromEntries(layout.doors.filter((d) => !d.entrance).map((d) => [d.id, pick(rng, t.narratorDoor)])),
       },
       source: 'template',
-      title: o.first ? 'The waiting room' : isChoice ? 'Choice Room' : layout.archetype.replaceAll('_', ' '),
+      title: o.first ? 'The waiting room' : layout.archetype.replace('_', ' '),
       provenance: o.first ? undefined : { behaviour: this.behaviourLog(), profile: this.profile.readout(), story: this.story(), error: (plan as Partial<Plan>).error },
     };
     if (o.rule) {
@@ -513,7 +384,7 @@ export class Run {
       const rule = { ...o.rule, params };
       spec.rule = { ...rule, ...templateRuleLines(rule, spec, this.data, rng) } as RuleSpec;
     }
-    return this.withTask(spec, plan);
+    return spec;
   }
 
   /** Behaviour across the whole run so far, room by room. */

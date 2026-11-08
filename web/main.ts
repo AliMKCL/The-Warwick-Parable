@@ -16,7 +16,6 @@ import { endSession, logEvent, startSession, telemetryConfigured, type SelfRatin
  *   ?ambience=warm  draw every room in one mood (cold, warm, sickly, dim)
  *   ?mute=1     start with sound off (M toggles it)
  *   ?rooms=5    rooms per run, counting the first (default 7)
- *   ?tasks=0    no office tasks: every room after the first is generated with a rule, as before
  */
 const params = new URLSearchParams(location.search);
 const seed = Number(params.get('seed')) || Math.floor(Math.random() * 1e9);
@@ -30,7 +29,6 @@ const game = new Game(canvas, {
   forceAmbience: params.get('ambience') ?? undefined,
   runLength: Number(params.get('rooms')) || undefined,
   mute: params.get('mute') === '1',
-  tasks: params.get('tasks') !== '0',
 });
 
 const loop = new Loop(
@@ -56,28 +54,17 @@ document.addEventListener('pointerlockchange', () => {
   }
   game.player.enabled = locked && !game.hud.inspecting && !game.ended;
   game.hud.start.hidden = locked || game.ended;
-  if (started && !testMode) game.setPaused(!locked && !game.ended);
   startButton.textContent = 'Click to continue';
 });
 document.addEventListener('mousemove', (e) => {
   if (document.pointerLockElement === canvas) game.player.look(e.movementX, e.movementY);
 });
 document.addEventListener('mousedown', (e) => {
-  if (document.pointerLockElement !== canvas) return;
-  game.input(`Mouse${e.button}`);
-  if (e.button === 0) game.interact();
-});
-document.addEventListener('mouseup', (e) => {
-  if (e.button === 0) game.release();
+  if (document.pointerLockElement === canvas && e.button === 0) game.interact();
 });
 addEventListener('keydown', (e) => {
-  const playing = document.pointerLockElement === canvas || testMode;
-  if (playing && !e.repeat) game.input(e.code);
-  if (e.code === 'KeyE' && playing && !e.repeat) game.interact();
+  if (e.code === 'KeyE' && (document.pointerLockElement === canvas || testMode)) game.interact();
   if (e.code === 'KeyM') game.voice.setMuted(game.sound.toggleMute());
-});
-addEventListener('keyup', (e) => {
-  if (e.code === 'KeyE') game.release();
 });
 
 // ---- research data (only offered when Supabase is configured; nothing is sent without consent) ----
@@ -161,15 +148,8 @@ Object.assign(window, {
       return {
         room: r && {
           id: r.id, index: r.index, archetype: r.layout.archetype, doors: r.layout.doors,
-          anomaly: r.anomaly, variant: r.variant,
-          props: r.props.map((p) => ({ id: p.id, recipe: p.recipe, x: p.x, y: p.y, z: p.z, rotY: p.rotY })),
-          zones: r.layout.zones ?? [],
+          props: r.props.map((p) => ({ id: p.id, recipe: p.recipe, x: p.x, z: p.z })),
         },
-        task: r?.task,
-        taskResults: game.core.run()?.taskResults ?? [],
-        taskLog: game.core.run()?.taskLog.events.length ?? 0,
-        holding: !!game.holding,
-        smoke: game.room?.smokeLevel() ?? 0,
         player: { x: game.player.position.x, z: game.player.position.z, yaw: game.player.yaw },
         hovered: game.hovered?.info,
         events: game.core.run()?.events.map((e) => e.type) ?? [],
@@ -193,10 +173,6 @@ Object.assign(window, {
       game.player.pitch = Math.atan2(ty - 1.62, Math.hypot(tx - x, tz - z));
     },
     interact: () => game.interact(),
-    /** Let go of E (ends a hold-to-use action early). */
-    release: () => game.release(),
-    /** The office-task log so far (for checks). */
-    taskLog: () => game.core.run()?.taskLog.events ?? [],
     /** Play every sound once; returns the audio state. */
     soundCheck() {
       const s = game.sound;
