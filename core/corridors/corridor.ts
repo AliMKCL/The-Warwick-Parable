@@ -107,8 +107,11 @@ export function createCorridor(room: RoomSpec, door: Door, story: CorridorStory,
     spawn: { x: 2.5, z: depth - 0.8, yaw: 0 },
     fixtures: [{ id: 'interlock', recipe: 'sign_wall', x: 0.03, y: 1.6, z: 2.5, face: 'e', surfaceText: 'TRANSFER INTERLOCK\nRELEASES WHEN READY', inspectText: 'The next department opens when the transfer is complete. You may explore this corridor in the meantime.' }],
   };
-  // Draw without replacement from every interactable recipe that fits safely beside the route.
-  const pool = data.props.filter((p) => (p.inspectable || p.interact) && p.size[0] <= 2 && p.size[2] <= 1.2 && p.size[1] <= 2.6);
+  // Ordinary interactables only: test equipment and people belong in their rooms.
+  // Draw without replacement, keeping the existing clearance beside the route.
+  const pool = data.props.filter((p) => (p.inspectable || p.interact)
+    && !p.tags.includes('task') && !p.tags.includes('person')
+    && p.size[0] <= 2 && p.size[2] <= 1.2 && p.size[1] <= 2.6);
   const count = Math.min(randInt(rng, 3, 5), pool.length);
   const anchors: { z: number; side: 'w' | 'e' }[] = [];
   for (let z = 2; z < depth - 3; z += 2) for (const side of ['w', 'e'] as const) {

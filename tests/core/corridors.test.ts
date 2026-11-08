@@ -33,7 +33,7 @@ describe('playable passages', () => {
     }
   });
 
-  it('replays seeded selections and includes all event types as well as quiet corridors', () => {
+  it('replays seeded selections, includes all events, and draws only ordinary non-human interactables', () => {
     const events = new Set<string>(), recipes = new Set<string>();
     for (let seed = 1; seed <= 200; seed++) {
       const room = new Run(seed, gameData).start(), door = room.layout.doors.find((d) => !d.entrance)!;
@@ -44,7 +44,11 @@ describe('playable passages', () => {
       spec.props.forEach((p) => recipes.add(p.recipe));
     }
     expect([...events].sort()).toEqual(['breaking_window', 'falling_art', 'none', 'paper_gust']);
-    for (const recipe of gameData.props.filter((p) => p.inspectable || p.interact)) expect(recipes.has(recipe.id), recipe.id).toBe(true);
+    expect([...recipes].sort()).toEqual([
+      'desk_office', 'terminal_desk', 'filing_cabinet', 'water_cooler', 'plant_dead',
+      'sign_wall', 'poster_wall', 'whiteboard', 'clock_wall', 'copier', 'trash_bin',
+      'vending_machine', 'box_stack', 'table_round', 'bookshelf', 'memo_board',
+    ].sort());
   });
 
   it('uses the selected door and observed actions, without inventing inspection or button presses', () => {

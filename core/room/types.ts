@@ -40,6 +40,7 @@ export type SlotKind = 'floor' | 'wall' | 'wall_mounted' | 'center' | 'fixture';
 export interface PropRecipe {
   id: string;
   name: string;
+  /** Use 'task' for test equipment and 'person' for humans; neither appears in transfer corridors. */
   tags: string[];
   /** Which slot kinds this prop may be placed in. */
   fits: SlotKind[];
