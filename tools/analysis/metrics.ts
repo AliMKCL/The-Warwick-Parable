@@ -15,6 +15,8 @@ export interface SessionRow {
   created_at: string;
   self_ratings: Partial<Record<Trait, number | null>> | null;
   completed: boolean | null;
+  /** The end-of-run profile (with `scoring`), when selected. */
+  profile?: unknown;
 }
 
 export interface EventRow {
