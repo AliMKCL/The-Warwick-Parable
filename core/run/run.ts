@@ -7,9 +7,9 @@ import { placeAssignments } from '../room/place';
 import { templateAssignments } from '../room/templates';
 import type { Door, GameData, Layout, RoomSpec } from '../room/types';
 import { createRng, deriveSeed, pick } from '../util/random';
-import type { GameEvent, ProfileSnapshot, RuleEffect } from '../protocol';
+import type { GameEvent, ProfileSnapshot, RuleEffect, SelfRatings } from '../protocol';
 import { Profile } from '../profile/profile';
-import { chooseRule, RuleRuntime, templateRuleLines, type RoomRule, type RuleId } from '../rules/rules';
+import { chooseRule, gambleRule, GAMBLE_LABELS, RuleRuntime, templateRuleLines, type RoomRule, type RuleId } from '../rules/rules';
 import { RUN_LENGTH } from '../director/prompts';
 
 const timers = globalThis as unknown as {
@@ -32,6 +32,37 @@ interface Plan {
   resolve: (s: RoomSpec) => void;
   abort?: { abort(): void };
   error?: string;
+  /** The rule this room will run, once chosen (gamble rooms know theirs from the start). */
+  rule?: Omit<RoomRule, 'line' | 'doneLine'>;
+  /** Chosen yet? (`rule` may legitimately be undefined.) */
+  ruled?: boolean;
+}
+
+/** One gamble the player faced, for the dossier and the said/did comparison. */
+export interface GambleRecord {
+  room: number;
+  choice: 'safe' | 'risky';
+  /** What happened: the certain room, or what the coin decided. */
+  outcome: 'certain' | 'shortcut' | 'setback';
+  timed: boolean;
+  /** The clock ran out before they chose (so the 50/50 door was locked). */
+  expired: boolean;
+}
+
+/**
+ * Which rooms hold a gamble: up to three, spread through the run, never two
+ * in a row (so the room behind a gamble is always an ordinary room) and none
+ * in the first or last room. The middle one is on a clock. Runs shorter than
+ * five rooms have none.
+ */
+export function gamblePlan(last: number): Map<number, { timed: boolean }> {
+  const n = last - 1; // rooms 1 .. last-1 can hold one
+  const out = new Map<number, { timed: boolean }>();
+  if (n < 3) return out;
+  const k = Math.min(3, Math.ceil(n / 2));
+  const at = Array.from({ length: k }, (_, j) => Math.round(1 + (j * (n - 1)) / (k - 1)));
+  at.forEach((i, j) => out.set(i, { timed: j === 1 }));
+  return out;
 }
 
 type RuleSpec = NonNullable<RoomSpec['rule']>;
@@ -78,6 +109,16 @@ export class Run {
   /** Story threads the model has planted, and whether a later room paid them off. */
   readonly threads: { id: string; text: string; room: number; resolvedIn?: number }[] = [];
   private rule?: RuleRuntime;
+  /** Room index -> gamble, fixed at the start from the run's length. */
+  readonly gambleRooms: Map<number, { timed: boolean }>;
+  /** Every gamble the player has faced, in order. */
+  readonly gambles: GambleRecord[] = [];
+  /** Extra rooms added by lost gambles. */
+  private detours = 0;
+  /** The player's own ratings from the start screen, if given. */
+  selfRatings?: SelfRatings;
+  /** Run clock when each room's rule started, by room id. */
+  readonly ruleStarts = new Map<string, number>();
   /** Trait scores at the moment the player entered each room. */
   readonly traitHistory: Record<'hesitation' | 'curiosity' | 'compliance' | 'impulsivity', number>[] = [];
 
@@ -88,6 +129,7 @@ export class Run {
   ) {
     if (!opts.llm) this.modelOff = true;
     this.profile = new Profile(data);
+    this.gambleRooms = gamblePlan(this.baseLast);
   }
 
   get current(): RoomSpec | undefined {
@@ -130,12 +172,55 @@ export class Run {
     let spec: RoomSpec;
     if (result === 'timeout') {
       this.cancel(plan);
-      spec = this.templateSpec(plan, createRng(plan.seed));
+      spec = this.templateSpec(plan, createRng(plan.seed), { rule: plan.ruled ? plan.rule : undefined });
     } else {
       spec = result;
     }
+    spec = this.settleGamble(doorId, spec);
     this.enter(spec);
     return spec;
+  }
+
+  /**
+   * True when `doorId` is a won gamble right before the last room: the
+   * shortcut skips that room and the run ends here. Records the gamble.
+   */
+  leavesEarly(doorId: string): boolean {
+    const room = this.current, rule = room?.rule;
+    if (!room || rule?.id !== 'gamble' || room.index + 1 < this.last) return false;
+    if (doorId !== rule.params.risky || rule.params.risky === rule.params.safe || rule.params.outcome !== 'shortcut') return false;
+    for (const p of this.plans) this.cancel(p);
+    this.recordGamble(room, doorId);
+    return true;
+  }
+
+  /**
+   * Leaving a gamble room: the certain door gives the room as planned; the
+   * 50/50 door applies the coin toss made when the room was created.
+   * Shortcut: the next room's task is gone. Setback: one more room in the run.
+   */
+  private settleGamble(doorId: string, spec: RoomSpec): RoomSpec {
+    const from = this.current;
+    if (!from || from.rule?.id !== 'gamble') return spec;
+    const outcome = this.recordGamble(from, doorId);
+    if (outcome === 'shortcut') return { ...spec, rule: undefined, gambleResult: 'shortcut' };
+    if (outcome === 'setback') {
+      this.detours++;
+      return { ...spec, gambleResult: 'setback' };
+    }
+    return spec;
+  }
+
+  private recordGamble(from: RoomSpec, doorId: string): GambleRecord['outcome'] {
+    const rule = from.rule!;
+    const risky = doorId === rule.params.risky && rule.params.risky !== rule.params.safe;
+    const started = this.ruleStarts.get(from.id);
+    const chosenAt = [...this.events].reverse().find((e) => e.type === 'door_chosen' && e.roomId === from.id)?.t;
+    const seconds = Number(rule.params.seconds);
+    const expired = seconds > 0 && started !== undefined && chosenAt !== undefined && chosenAt - started >= seconds;
+    const outcome: GambleRecord['outcome'] = risky ? (rule.params.outcome === 'shortcut' ? 'shortcut' : 'setback') : 'certain';
+    this.gambles.push({ room: from.index, choice: risky ? 'risky' : 'safe', outcome, timed: seconds > 0, expired });
+    return outcome;
   }
 
   /** What the player did in a room, as sentences, plus what the profile noticed there. */
@@ -154,8 +239,13 @@ export class Run {
     });
   }
 
-  /** Index of the final room. */
+  /** Index of the final room, including any detours added by lost gambles. */
   get last(): number {
+    return this.baseLast + this.detours;
+  }
+
+  /** Index of the final room as planned at the start. */
+  private get baseLast(): number {
     return Math.max(2, (this.opts.runLength ?? RUN_LENGTH) - 1);
   }
 
@@ -173,6 +263,7 @@ export class Run {
     this.rule = undefined;
     const room = this.current;
     if (!room?.rule) return;
+    this.ruleStarts.set(room.id, t);
     this.rule = new RuleRuntime(room.rule as RoomRule, {
       room,
       profile: this.profile,
@@ -226,7 +317,16 @@ export class Run {
     });
     let resolve!: (s: RoomSpec) => void;
     const done = new Promise<RoomSpec>((r) => (resolve = r));
-    return { doorId: door.id, index, seed, layout, entranceLabel: door.label, status: 'queued', done, resolve };
+    const p: Plan = { doorId: door.id, index, seed, layout, entranceLabel: door.label, status: 'queued', done, resolve };
+    const gamble = this.gambleRooms.get(index);
+    if (gamble && index < this.last) {
+      const exits = layout.doors.filter((d) => !d.entrance).map((d) => d.id);
+      if (exits.length >= 2) {
+        p.rule = gambleRule(exits, createRng(deriveSeed(seed, 'gamble')), gamble.timed);
+        p.ruled = true;
+      }
+    }
+    return p;
   }
 
   /**
@@ -249,6 +349,7 @@ export class Run {
     if (t.hesitation > 0.62) exits = 3;
     else if (t.impulsivity > 0.62) exits = Math.min(exits, 2);
     if (from.index + 1 >= this.last) exits = 1; // the last room has one way on
+    else if (this.gambleRooms.has(from.index + 1)) exits = 2; // a gamble: certain or 50/50
     return { archetype, exits };
   }
 
@@ -274,7 +375,14 @@ export class Run {
     plan.status = 'generating';
     this.emitStatus();
     const rng = createRng(plan.seed);
-    const rule = plan.index >= this.last ? undefined : chooseRule(this.profile, createRng(deriveSeed(plan.seed, 'pick-rule')), plan.index, this.current?.rule?.id as RuleId | undefined);
+    // Behind a gamble the room always has a task, so the shortcut has something to skip.
+    // (The last room never has one: there the shortcut skips the room itself.)
+    const afterGamble = this.current?.rule?.id === 'gamble';
+    if (!plan.ruled) {
+      plan.rule = plan.index >= this.last ? undefined : chooseRule(this.profile, createRng(deriveSeed(plan.seed, 'pick-rule')), plan.index, this.current?.rule?.id as RuleId | undefined, afterGamble);
+      plan.ruled = true;
+    }
+    const rule = plan.rule;
     let spec: RoomSpec;
     if (this.modelOff) {
       spec = this.templateSpec(plan, rng, { rule });
@@ -325,7 +433,7 @@ export class Run {
     const { props } = placeAssignments(plan.layout, [...gen.assignments, ...furniture], this.data);
     const labels = new Map(c.doors.map((d) => [d.door, d.label.toUpperCase().slice(0, 16)]));
     const layout: Layout = { ...plan.layout, doors: plan.layout.doors.map((d) => (labels.has(d.id) ? { ...d, label: labels.get(d.id)! } : { ...d, label: d.entrance ? plan.entranceLabel : d.label })) };
-    return {
+    return this.dressGamble({
       id: `room-${plan.index}-${plan.seed.toString(36)}`,
       index: plan.index,
       seed: plan.seed,
@@ -351,7 +459,7 @@ export class Run {
         plant: c.thread_plant?.trim() || undefined,
         resolves: c.thread_resolve && c.thread_resolve !== 'none' ? c.thread_resolve : undefined,
       },
-    };
+    });
   }
 
   private templateSpec(
@@ -384,7 +492,28 @@ export class Run {
       const rule = { ...o.rule, params };
       spec.rule = { ...rule, ...templateRuleLines(rule, spec, this.data, rng) } as RuleSpec;
     }
-    return spec;
+    return this.dressGamble(spec);
+  }
+
+  /**
+   * A gamble room states its stakes plainly, whoever wrote the rest: the two
+   * door labels are tagged CERTAIN and 50/50, looking at either says what it
+   * does, and the stakes line comes from templates so it can never be vague.
+   */
+  private dressGamble(spec: RoomSpec): RoomSpec {
+    const rule = spec.rule;
+    if (rule?.id !== 'gamble') return spec;
+    const rng = createRng(deriveSeed(spec.seed, 'gamble-lines'));
+    const g = this.data.templates.gamble;
+    const safe = String(rule.params.safe), risky = String(rule.params.risky);
+    const { line: stakes } = templateRuleLines(rule, spec, this.data, rng);
+    const tag = (label: string, t: string) => `${label.slice(0, 16 - t.length - 3).trim()} · ${t}`.replace(/^ · /, '');
+    return {
+      ...spec,
+      layout: { ...spec.layout, doors: spec.layout.doors.map((d) => (d.id === safe ? { ...d, label: tag(d.label, GAMBLE_LABELS.safe) } : d.id === risky ? { ...d, label: tag(d.label, GAMBLE_LABELS.risky) } : d)) },
+      narrator: { ...spec.narrator, doors: { ...spec.narrator.doors, [safe]: pick(rng, g.safeDoor), [risky]: pick(rng, g.riskyDoor) } },
+      rule: { ...rule, params: { ...rule.params, stakes } },
+    };
   }
 
   /** Behaviour across the whole run so far, room by room. */

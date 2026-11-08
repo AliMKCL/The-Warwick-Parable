@@ -200,6 +200,41 @@
       "done": [
         ""
       ]
+    },
+    "gamble": {
+      "line": [
+        "Two doors. CERTAIN is exactly what it says: the next room, as planned. 50/50 might save you time... or cost you more. A real coin toss: it either skips the next room's task, or adds a detour room.",
+        "A choice with stakes. The door marked CERTAIN gives you the next room, no surprises. The one marked 50/50 is a coin toss: heads, you skip the next task; tails, you take a detour. Your call."
+      ],
+      "done": [
+        "Time's up. The 50/50 door is closed. Certain it is.",
+        "Too late to gamble. Only the certain door is left."
+      ]
     }
+  },
+  "gamble": {
+    "timedLine": [
+      "Two doors, and {seconds} seconds. CERTAIN is the next room, as planned. 50/50 might save you time... or cost you more: it skips the next task, or adds a detour room. After {seconds} seconds the gamble is off the table.",
+      "Quickly, then. CERTAIN: the next room, no surprises. 50/50: a coin toss between skipping the next task and a detour room. The 50/50 door locks in {seconds} seconds."
+    ],
+    "safeDoor": [
+      "Certain. The next room, exactly as planned.",
+      "No surprises behind this one."
+    ],
+    "riskyDoor": [
+      "Fifty-fifty. A shortcut, or a detour.",
+      "Heads you skip ahead. Tails you go the long way."
+    ],
+    "shortcut": [
+      "The coin landed your way. Shortcut: this room asks nothing of you. The doors are open.",
+      "Lucky. Nothing to do in here; walk straight on."
+    ],
+    "setback": [
+      "The coin landed against you. Detour: one more room before the way out.",
+      "Unlucky. The building has added a room to your journey."
+    ],
+    "shortcutEnd": [
+      "The coin landed your way. Shortcut: you skip the last room and go straight to your file."
+    ]
   }
 }

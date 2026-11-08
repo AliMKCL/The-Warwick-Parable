@@ -4,6 +4,7 @@ import type { Dossier, Evidence, TraitName, Verdict } from '../protocol';
 import type { GameData } from '../room/types';
 import type { Run } from '../run/run';
 import { fill } from './prompts';
+import { compareSelf, findPatterns, measure } from './selfcheck';
 
 const VERDICT_SCHEMA = {
   type: 'object',
@@ -35,7 +36,9 @@ export async function writeVerdict(run: Run, data: GameData, llm?: LlmClient, ti
   const moments = topMoments(run.profile.evidence, 5);
   const user = fill(p.dossierUser, {
     rooms: run.rooms.map((r) => `- Room ${r.index} "${r.title}" (${r.layout.archetype.replace('_', ' ')}, ${r.ambience}${r.rule ? `, rule: ${r.rule.id.replaceAll('_', ' ')}` : ''})`).join('\n'),
-    traits: TRAITS.map((t) => `## ${t}: ${run.profile.traits[t].toFixed(2)}\n${moments[t].map((e) => `- room ${e.room}: ${e.reason} (${e.delta > 0 ? '+' : ''}${e.delta})`).join('\n') || '- no evidence'}`).join('\n'),
+    traits:
+      TRAITS.map((t) => `## ${t}: ${run.profile.traits[t].toFixed(2)}\n${moments[t].map((e) => `- room ${e.room}: ${e.reason} (${e.delta > 0 ? '+' : ''}${e.delta})`).join('\n') || '- no evidence'}`).join('\n') +
+      findPatterns(run).map((p) => `\n## ${p.traits.join(' and ')} are both high. Do not call the player both; the pattern is: ${p.sentence}`).join(''),
     threads: run.threads.map((t) => `- ${t.text}${t.resolvedIn !== undefined ? ` (explained in room ${t.resolvedIn})` : ' (never explained)'}`).join('\n') || '- none',
     minutes: Math.max(1, Math.round((run.events.at(-1)?.t ?? 0) / 60)),
     inspected: run.events.filter((e) => e.type === 'inspected').length,
@@ -70,7 +73,9 @@ const NAMES: Record<TraitName, [low: string, high: string]> = {
 export function templateVerdict(run: Run): Verdict {
   const ranked = run.profile.ranked();
   const top = ranked[0]!;
-  const name = NAMES[top.trait][top.value >= 0.5 ? 1 : 0];
+  // Two opposite traits both high: name the pattern, not one side of it.
+  const pattern = findPatterns(run).find((p) => p.traits.includes(top.trait));
+  const name = pattern ? 'The Contradiction' : NAMES[top.trait][top.value >= 0.5 ? 1 : 0];
   const moments = topMoments(run.profile.evidence, 1);
   const line = (t: TraitName) => {
     const m = moments[t][0];
@@ -80,7 +85,7 @@ export function templateVerdict(run: Run): Verdict {
   const strongest = run.profile.evidence.slice().sort((a, b) => Math.abs(b.delta) - Math.abs(a.delta))[0];
   return {
     name,
-    summary: `${top.words[0]!.toUpperCase()}${top.words.slice(1).split(':')[0]}, by every measure we have.${strongest ? ` The clearest sign: you ${strongest.reason}.` : ''} The building has adjusted itself accordingly.`,
+    summary: `${pattern ? pattern.sentence : `${top.words[0]!.toUpperCase()}${top.words.slice(1).split(':')[0]}, by every measure we have.`}${strongest ? ` The clearest sign: you ${strongest.reason}.` : ''} The building has adjusted itself accordingly.`,
     hesitation: line('hesitation'),
     curiosity: line('curiosity'),
     compliance: line('compliance'),
@@ -89,9 +94,14 @@ export function templateVerdict(run: Run): Verdict {
   };
 }
 
-export function buildDossier(run: Run, verdict: Verdict, source: 'model' | 'template'): Dossier {
+export function buildDossier(run: Run, verdict: Verdict, source: 'model' | 'template', data: GameData): Dossier {
   const ev = run.events;
+  const measured = measure(run, data);
   return {
+    measured,
+    saidDid: run.selfRatings && Object.values(run.selfRatings).some((v) => v !== null) ? compareSelf(measured, run.selfRatings) : undefined,
+    patterns: findPatterns(run),
+    gambles: run.gambles.map((g) => ({ ...g })),
     seed: run.seed,
     seconds: Math.round(ev.at(-1)?.t ?? 0),
     verdict,

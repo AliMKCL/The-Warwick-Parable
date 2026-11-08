@@ -82,6 +82,7 @@ export function createCore(data: GameData, opts: CoreOptions = {}): CorePort & {
     send(event: GameEvent) {
       if (event.type === 'run_started') {
         run = new Run(event.seed, data, runOpts());
+        run.selfRatings = event.selfRatings;
         run.record(event);
         const room = run.start();
         emit({ type: 'load_room', spec: room });
@@ -100,11 +101,12 @@ export function createCore(data: GameData, opts: CoreOptions = {}): CorePort & {
             if (r.current?.id === roomId) r.startRule(event.t + (now() - received) / 1000);
           }, 900),
         );
-      } else if (event.type === 'door_chosen' && r.finished) {
-        // The final exit: write the player's file.
+      } else if (event.type === 'door_chosen' && (r.finished || r.leavesEarly(event.doorId))) {
+        // The final exit (or a won gamble that skips the last room): write the player's file.
+        if (!r.finished) say(data.templates.gamble.shortcutEnd[0]!);
         void (async () => {
           const { verdict, source } = await writeVerdict(r, data, opts.llm);
-          emit({ type: 'run_ended', dossier: buildDossier(r, verdict, source) });
+          emit({ type: 'run_ended', dossier: buildDossier(r, verdict, source, data) });
         })();
       } else if (event.type === 'door_chosen') {
         let markIntroduced!: () => void;
@@ -117,9 +119,13 @@ export function createCore(data: GameData, opts: CoreOptions = {}): CorePort & {
           const room = await r.next(event.doorId);
           emit({ type: 'load_room', spec: room });
           await Promise.race([reaction, new Promise<void>((res) => setTimeout(() => res(), 7000))]);
+          // Arrived through a 50/50 door: say what the coin decided before anything else.
+          const g = data.templates.gamble;
+          const outcome = room.gambleResult ? g[room.gambleResult][r.gambles.length % g[room.gambleResult].length]! : '';
+          if (outcome) say(outcome);
           say(room.narrator.onEnter);
           // Give the entry line time to be read before the rule speaks.
-          setTimeout(() => markIntroduced(), Math.min(6000, 1200 + room.narrator.onEnter.length * 35));
+          setTimeout(() => markIntroduced(), Math.min(9000, 1200 + (outcome.length + room.narrator.onEnter.length) * 35));
         })();
       } else if (event.type === 'pressed') {
         const lines = data.templates.narratorPress;

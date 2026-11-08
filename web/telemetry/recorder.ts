@@ -72,6 +72,11 @@ export class Recorder {
           },
         });
         if (this.isButtonRoom(spec)) this.log({ type: 'task_start', choice: 'press_button', meta: { task: 'press_button' } });
+        if (spec.gambleResult) this.log({ type: 'gamble_result', choice: spec.gambleResult, meta: { outcome: spec.gambleResult } });
+        if (spec.rule?.id === 'gamble') {
+          const g = spec.rule.params;
+          this.log({ type: 'gamble_offer', meta: { safe: g.safe, risky: g.risky, timed: Number(g.seconds) > 0, seconds: Number(g.seconds) || null } });
+        }
         break;
       }
       case 'inspected':
@@ -124,7 +129,8 @@ export class Recorder {
       this.log({ type: 'choice', choice: 'ignore_button', trait: 'social', trait_value: 'independent', latency_ms: now - r.optionsAt, meta: { kind: 'button' } });
       this.log({ type: 'task_skipped', choice: 'press_button', meta: { task: 'press_button', duration_ms: Math.round(now - r.enteredAt), reason: 'left_without_pressing' } });
     }
-    if (r.timer && !r.timer.expired) this.log({ type: 'task_done', choice: 'beat_timer', meta: { task: 'beat_timer', duration_ms: Math.round(now - r.timer.startedAt), seconds: r.timer.seconds } });
+    const gamble = spec.rule?.id === 'gamble' ? spec.rule.params : undefined;
+    if (r.timer && !r.timer.expired && !gamble) this.log({ type: 'task_done', choice: 'beat_timer', meta: { task: 'beat_timer', duration_ms: Math.round(now - r.timer.startedAt), seconds: r.timer.seconds } });
     const tag = this.tagDoor(r, a.id);
     const exits = spec.layout.doors.filter((d) => !d.entrance);
     this.log({
@@ -142,6 +148,15 @@ export class Recorder {
         suggested: spec.rule?.id === 'narrator_suggests' ? spec.rule.params.door : undefined,
         narrator_lie: spec.rule?.id === 'narrator_suggests' ? Number(spec.rule.params.lie) === 1 : undefined,
         timer_left_s: r.timer && !r.timer.expired ? Math.max(0, r.timer.seconds - (now - r.timer.startedAt) / 1000) : undefined,
+        // A gamble: which door was which, whether it was on a clock, and what actually happened.
+        gamble: gamble && {
+          safe: gamble.safe,
+          risky: gamble.risky,
+          timed: Number(gamble.seconds) > 0,
+          seconds: Number(gamble.seconds) || null,
+          expired: !!r.timer?.expired,
+          outcome: a.id === gamble.risky ? gamble.outcome : 'certain',
+        },
         inspected: r.inspected.size,
         inspectable: this.inspectableIds(spec).length,
         since_enter_ms: Math.round(now - r.enteredAt),
@@ -171,10 +186,16 @@ export class Recorder {
         if (!r || r.left) return;
         const e = m.effect;
         const now = this.deps.now();
+        const gamble = r.spec.rule?.id === 'gamble';
         if (e.kind === 'timer' && e.seconds !== null) {
           r.timer = { startedAt: now, seconds: e.seconds, expired: false };
-          this.log({ type: 'pressure_start', meta: { source: 'timer', seconds: e.seconds } });
-          this.log({ type: 'task_start', choice: 'beat_timer', meta: { task: 'beat_timer', seconds: e.seconds } });
+          this.log({ type: 'pressure_start', meta: { source: 'timer', seconds: e.seconds, gamble } });
+          if (!gamble) this.log({ type: 'task_start', choice: 'beat_timer', meta: { task: 'beat_timer', seconds: e.seconds } });
+        } else if (e.kind === 'timer' && r.timer && !r.timer.expired && gamble) {
+          // The timed gamble ran out: the 50/50 door is now locked.
+          r.timer.expired = true;
+          this.log({ type: 'gamble_expired', meta: { seconds: r.timer.seconds } });
+          this.log({ type: 'pressure_end', meta: { source: 'timer', gamble } });
         } else if (e.kind === 'timer' && r.timer && !r.timer.expired) {
           r.timer.expired = true;
           this.log({ type: 'task_skipped', choice: 'beat_timer', meta: { task: 'beat_timer', duration_ms: Math.round(now - r.timer.startedAt), seconds: r.timer.seconds, reason: 'expired' } });
@@ -196,7 +217,7 @@ export class Recorder {
       }
       case 'run_ended':
         this.log({ type: 'run_end', meta: { seconds: m.dossier.seconds, rooms: m.dossier.rooms.length } });
-        this.deps.end(this.profile ?? { traits: m.dossier.traits, evidence: [] }, predictions(m.dossier));
+        this.deps.end(sessionProfile(this.profile ?? { traits: m.dossier.traits, evidence: [] }, m.dossier), predictions(m.dossier));
         break;
     }
   }
@@ -206,10 +227,12 @@ export class Recorder {
    * - narrator_suggests: social, took the recommended door (follow) or not (independent);
    * - exit_timer: patience, left while the countdown ran (now) or after it ran out (wait);
    * - no rule / lights_dim_on_idle: exploration, inspected anything here first (explore) or nothing (skip);
-   * - inspect_to_unlock: null, since inspecting was forced.
+   * - inspect_to_unlock: null, since inspecting was forced;
+   * - gamble: risk, the 50/50 door (risky) or the certain one (safe).
    */
   private tagDoor(r: RoomState, doorId: string): { trait: Trait; value: TraitValue } | null {
     const rule = r.spec.rule;
+    if (rule?.id === 'gamble') return { trait: 'risk', value: doorId === rule.params.risky ? 'risky' : 'safe' };
     if (rule?.id === 'narrator_suggests') {
       const suggested = String(rule.params.door ?? '');
       if (!suggested || !r.spec.layout.doors.some((d) => d.id === suggested)) return null;
@@ -245,14 +268,33 @@ export class Recorder {
   }
 }
 
+/**
+ * The session's profile column: the hidden profile with its evidence, plus the
+ * said/did comparison (self-ratings next to measured behaviour, 1–5), the
+ * measured scores, the gambles and any resolved contradictions.
+ */
+function sessionProfile(p: ProfileSnapshot, d: Dossier) {
+  return {
+    ...p,
+    said_did: d.saidDid ?? null,
+    measured: d.measured ?? null,
+    gambles: d.gambles ?? [],
+    patterns: d.patterns ?? [],
+  };
+}
+
 /** What the game concluded about the player, as shown on the dossier. */
 function predictions(d: Dossier) {
   const label = (v: number) => (v >= 0.62 ? 'high' : v <= 0.38 ? 'low' : 'neutral');
+  // Traits caught in a contradiction are shown as one pattern, not two labels.
+  const mixed = new Set((d.patterns ?? []).flatMap((p) => p.traits));
   return {
     verdict: d.verdict,
     verdict_source: d.verdictSource,
     traits: d.traits,
-    labels: Object.fromEntries(Object.entries(d.traits).map(([k, v]) => [k, label(v)])) as Record<TraitName, string>,
+    labels: Object.fromEntries(Object.entries(d.traits).map(([k, v]) => [k, mixed.has(k as TraitName) ? 'mixed' : label(v)])) as Record<TraitName, string>,
+    patterns: (d.patterns ?? []).map((p) => p.sentence),
+    said_did_headline: d.saidDid?.headline ?? null,
     seconds: d.seconds,
     rooms: d.rooms.map((r) => ({ index: r.index, archetype: r.archetype, rule: r.rule ?? null, source: r.source })),
     stats: d.stats,

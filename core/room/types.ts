@@ -163,7 +163,9 @@ export interface RoomSpec {
   /** How long generation took, for the debug overlay. */
   genMs?: number;
   /** The mechanic running in this room, if any (see core/rules). */
-  rule?: { id: 'lights_dim_on_idle' | 'inspect_to_unlock' | 'exit_timer' | 'narrator_suggests'; params: Record<string, number | string>; line: string; doneLine: string };
+  rule?: { id: 'lights_dim_on_idle' | 'inspect_to_unlock' | 'exit_timer' | 'narrator_suggests' | 'gamble'; params: Record<string, number | string>; line: string; doneLine: string };
+  /** Set when the player arrived through a gamble's 50/50 door: what the coin decided. */
+  gambleResult?: 'shortcut' | 'setback';
   /** A story thread this room opens, and the id of one it pays off. */
   thread?: { plant?: string; resolves?: string };
   /** What the model was given to write this room, for the "how this world was built" view. */
@@ -202,5 +204,7 @@ export interface TextTemplates {
   narratorEnter: Record<string, string[]>;
   narratorDoor: string[];
   narratorPress: string[];
-  rules: Record<'lights_dim_on_idle' | 'inspect_to_unlock' | 'exit_timer' | 'narrator_suggests', { line: string[]; done: string[]; tried?: string[] }>;
+  rules: Record<'lights_dim_on_idle' | 'inspect_to_unlock' | 'exit_timer' | 'narrator_suggests' | 'gamble', { line: string[]; done: string[]; tried?: string[] }>;
+  /** Gamble rooms: the stakes said before the choice, and what the coin decided. */
+  gamble: { timedLine: string[]; safeDoor: string[]; riskyDoor: string[]; shortcut: string[]; setback: string[]; shortcutEnd: string[] };
 }

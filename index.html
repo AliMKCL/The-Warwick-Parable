@@ -24,15 +24,16 @@
       <section id="start">
         <h1>whack</h1>
         <p>No room exists until you reach it.</p>
-        <form id="research" hidden>
-          <label class="consent"><input type="checkbox" id="consent" /> Share anonymous play data for research (what you do in the game; nothing about who you are)</label>
-          <fieldset id="self-ratings" disabled>
-            <legend>Optional: how much is each true of you? 1 not at all, 5 very</legend>
+        <form id="research">
+          <fieldset id="self-ratings">
+            <legend>Before you start: how true is each of these of you? <span>1 not at all · 5 very</span></legend>
             <div class="rate" data-trait="risk"><span>I take risks</span></div>
             <div class="rate" data-trait="patience"><span>I am patient</span></div>
-            <div class="rate" data-trait="social"><span>I do what I am told</span></div>
+            <div class="rate" data-trait="social"><span>I do what I'm told</span></div>
             <div class="rate" data-trait="exploration"><span>I explore everything</span></div>
           </fieldset>
+          <label class="consent" id="consent-row" hidden><input type="checkbox" id="consent" /> Share anonymous play data for research (what you do in the game; nothing about who you are)</label>
+          <small id="research-hint" aria-live="polite"></small>
         </form>
         <button id="start-button" type="button">Click to begin</button>
         <small>WASD to move · mouse to look · E to interact · M for sound · Esc to pause</small>

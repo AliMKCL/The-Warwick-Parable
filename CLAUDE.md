@@ -22,7 +22,7 @@ npm install
 npm run check:llm               # model reachable, JSON output, speed
 npm run try:room                # scripted player + real model: prints the next room, rule, profile, narrator lines
 npm run dev                     # http://127.0.0.1:5188  (?debug=1 ?seed= ?rooms=5 ?post=0 ?ambience= ?mute=1 ?observe=)
-npm test                        # vitest: core + telemetry (36 tests)
+npm test                        # vitest: core + telemetry (50 tests)
 npm run typecheck               # tsc for web + core, plus core purity check
 npm run test:e2e                # Playwright; see "Working from Claude's sandbox" below
 npm run mock:llm                # fake Ollama + fake ElevenLabs on :11999
@@ -58,13 +58,22 @@ npm run analyze                 # Supabase play data → per-player metrics + po
 - `core/run/core.ts`: the CorePort. Streams a live narrator reaction on door choice (only when the next room
   is already ready), says the entry line, starts the room's rule after the entry line has been read, and on
   the final door writes the verdict and emits `run_ended`.
+- `core/director/selfcheck.ts`: `measure` (risk from gambles, patience from countdowns or time per room, social from
+  the button and narrator recommendations, exploration from share inspected; 1–5 with one evidence line; `estimated`
+  when there was no test), `compareSelf` (said vs did, headline = biggest gap of 2+ on measured traits, else
+  "You know yourself well."), `findPatterns` (hesitant+impulsive or curious+impulsive → one sentence).
 - `core/director/`: `content.ts` (picks up to 8 slots for the model, builds messages, schema-constrained call,
   one repair round), `schema.ts` (per-room JSON Schema: enums of real slot/prop/door/thread ids), `summary.ts`
   (events → plain sentences), `prompts.ts` (fill, story stages, RUN_LENGTH=7), `dossier.ts` (verdict + Dossier).
 - `core/profile/profile.ts`: traits hesitation/curiosity/compliance/impulsivity, start 0.5, moved only by
   evidence with per-room caps; every change logged with a reason (shown in the dossier and sent to the model).
-- `core/rules/rules.ts`: lights_dim_on_idle, inspect_to_unlock, exit_timer, narrator_suggests (may lie).
+- `core/rules/rules.ts`: lights_dim_on_idle, inspect_to_unlock, exit_timer, narrator_suggests (may lie), gamble.
   Chosen against the player's tendencies, never repeated back to back, none in the first or last room.
+  Gambles are placed by `gamblePlan` in `run.ts`, not chosen: 3 rooms in a 7-room run (1, 3, 5; never adjacent;
+  none in runs of 4 rooms or fewer), the middle one on a 15 s clock that then locks the 50/50 door. Two exits, labels
+  tagged "· CERTAIN" / "· 50/50", stakes always from templates (`params.stakes`). The coin is tossed from the seed when
+  the room is planned. Certain = next room as planned (always has a task); 50/50 = shortcut (next room's task removed;
+  before the last room, skips it and ends the run) or setback (a detour room: `run.last` grows by one).
   `RuleRuntime.start(t, history)` picks up current state (e.g. already standing still).
 - `core/llm/client.ts`: Ollama native API (`format` = schema, `think:false`, `keep_alive`) or OpenAI-compatible
   (`response_format: json_schema`); `completeJson`, `streamText`, `ping`. Errors are typed: unreachable / http /
@@ -90,8 +99,10 @@ npm run analyze                 # Supabase play data → per-player metrics + po
   batched, never throws, warns and does nothing when `VITE_SUPABASE_*` is unset or unreachable) and `recorder.ts`, which
   listens through `Game.tap` (events to core, messages from core, clicks) and logs raw rows. Choices carry trait/trait_value
   (risk, patience, social, exploration); pressure (timer or narrator recommendation) is in `meta`. Only with the start
-  screen consent box ticked; optional 1–5 self-ratings. Analysis in `tools/analyze.ts` + `tools/analysis/metrics.ts`.
-- `window.__WHACK__` test hooks: begin (`{ telemetry: selfRatings }` to record), state, lookFrom, useDoor, interact, effect, soundCheck.
+  screen consent box ticked. The four 1–5 self-rating sliders are required to begin (consent too, when Supabase
+  is configured) and travel to core in `run_started.selfRatings`. Gamble choices are tagged risk safe|risky with
+  `meta.gamble` {timed, expired, outcome}. The session `profile` column holds `said_did`, `measured`, `gambles`, `patterns`. Analysis in `tools/analyze.ts` + `tools/analysis/metrics.ts`.
+- `window.__WHACK__` test hooks: begin (`{ telemetry: selfRatings }` to record, `{ selfRatings }` for the dossier only), state, lookFrom, useDoor, interact, effect, soundCheck.
 
 ## Working from Claude's sandbox (cloud sessions)
 - The device shell (`mcp__remote-devices__device_bash`) is a **Linux VM** on Ali's Mac, not macOS: it can't
