@@ -18,7 +18,7 @@ vi.mock('../../web/room/materials', async (original) => {
 vi.mock('../../web/room/textTexture', () => ({ textMaterial: () => new THREE.MeshStandardMaterial({ map: new THREE.Texture() }) }));
 vi.mock('../../web/audio/sound', () => ({ Sound: class {
   start() {} doorOpen() {} rattle() {} button() {} rustle() {} footstep() {} buzz() {} tick() {} duck() {}
-  setAmbience() {} setLightLevel() {}
+  setAmbience() {} setLightLevel() {} play() {}
 } }));
 vi.mock('../../web/audio/voice', () => ({ Voice: class { prefetch() {} speak() {} stop() {} setMuted() {} } }));
 vi.mock('../../web/ui/dossier', () => ({ showDossier: vi.fn() }));
@@ -99,8 +99,8 @@ it.each([1, 7, 19, 20261107])('walks a full run with sealed return paths (seed %
     const back = doorPoint(entry), [bx, bz] = DIR[entry.side];
     expect((g.player.position.x - back.x - c.x) * bx + (g.player.position.z - back.z - c.z) * bz).toBeLessThan(-0.27);
 
-    for (const id of ['receipt', 'archive', 'acknowledge']) {
-      const prop = c.props.find((p) => p.id === id)!;
+    for (const prop of c.props.filter((p) => ['receipt', 'archive', 'acknowledge'].includes(p.id))) {
+      const id = prop.id;
       const x = c.x + prop.x, z = c.z + prop.z;
       aim(g, x + Math.sin(prop.rotY) * 1.2, z + Math.cos(prop.rotY) * 1.2, x, id === 'acknowledge' ? 1.03 : 1.5, z);
       expect(g.hovered?.info.id).toBe(id);

@@ -1,8 +1,8 @@
 import type { GameEvent } from '../protocol';
-import { DIR, OPPOSITE, yawForFacing } from '../room/geometry';
+import { DIR, OPPOSITE, ROTATE_CW, yawForFacing } from '../room/geometry';
 import { rotateCW } from '../room/layouts';
-import type { Door, GameData, Layout, RoomSpec } from '../room/types';
-import { createRng, deriveSeed, pick } from '../util/random';
+import type { Door, GameData, Layout, RoomSpec, Side } from '../room/types';
+import { createRng, deriveSeed, pick, randInt } from '../util/random';
 
 /** Observe briefly before speculating on the next rooms. Door focus can start sooner. */
 export const ROOM_OBSERVE_MS = 3000;
@@ -75,33 +75,67 @@ export function corridorStory(room: RoomSpec, door: Door, events: GameEvent[], d
   };
 }
 
-/** A dogleg with two bends. Narrow necks join precisely one doorway cell at each end. */
-export function createCorridor(room: RoomSpec, door: Door, story: CorridorStory): RoomSpec {
+export const CORRIDOR_EVENTS = ['breaking_window', 'falling_art', 'paper_gust'] as const;
+export type CorridorEventKind = typeof CORRIDOR_EVENTS[number];
+export interface CorridorDetails {
+  windows: { cx: number; cz: number; side: Side }[];
+  event?: { kind: CorridorEventKind; cx: number; cz: number; side: Side };
+}
+
+/** Straight, seeded passage. A narrow neck at either end joins just the doorway. */
+export function createCorridor(room: RoomSpec, door: Door, story: CorridorStory, data: GameData): RoomSpec {
   const seed = deriveSeed(room.seed, `passage-${door.id}`);
-  const depth = 18 + (seed % 3) * 2;
-  const cells = Array.from({ length: depth }, (_, z) => Array.from({ length: 9 }, (_, x) => {
-    const floor = z < 2 ? x === 7 : z < 8 ? x >= 6 : z <= 10 ? true : z < depth - 2 ? x <= 2 : x === 1;
-    return floor ? '.' : '#';
-  }).join(''));
+  const rng = createRng(seed), depth = randInt(rng, 18, 24);
+  const cells = Array.from({ length: depth }, (_, z) => z < 2 || z >= depth - 2 ? '##.##' : '.....');
+  const eventKind = rng() < 0.55 ? pick(rng, CORRIDOR_EVENTS) : undefined;
+  const eventZ = Math.floor(depth / 2), eventSide: Side = rng() < 0.5 ? 'w' : 'e';
+  const corridor: CorridorDetails = { windows: [] };
+  if (eventKind) corridor.event = { kind: eventKind, cx: eventSide === 'w' ? 0 : 4, cz: eventZ, side: eventSide };
+  for (let z = 4; z < depth - 3; z += 4) {
+    for (const side of ['w', 'e'] as const) {
+      if (eventKind && Math.abs(z - eventZ) < 2) continue;
+      corridor.windows.push({ cx: side === 'w' ? 0 : 4, cz: z, side });
+    }
+  }
+  if (eventKind === 'breaking_window') corridor.windows.push({ cx: eventSide === 'w' ? 0 : 4, cz: eventZ, side: eventSide });
   let layout: Layout = {
-    archetype: 'transfer_corridor', width: 9, depth, ceiling: 2.8, cells, slots: [],
+    archetype: 'transfer_corridor', width: 5, depth, ceiling: 2.8, cells, slots: [],
     doors: [
-      { id: 'in', cx: 1, cz: depth - 1, side: 's', entrance: true, label: '' },
-      { id: 'onward', cx: 7, cz: 0, side: 'n', entrance: false, label: 'NEXT DEPARTMENT', fixedLabel: true },
+      { id: 'in', cx: 2, cz: depth - 1, side: 's', entrance: true, label: '' },
+      { id: 'onward', cx: 2, cz: 0, side: 'n', entrance: false, label: 'NEXT DEPARTMENT', fixedLabel: true },
     ],
-    spawn: { x: 1.5, z: depth - 0.8, yaw: 0 },
-    fixtures: [
-      { id: 'receipt', recipe: 'memo_board', x: 0.03, y: 1.5, z: depth - 4, face: 'e', surfaceText: 'ROUTE RECEIPT\nYOUR DECISION IS ON FILE', inspectText: story.receipt },
-      { id: 'archive', recipe: 'memo_board', x: 4.5, y: 1.5, z: 10.97, face: 'n', surfaceText: 'RECORDS\nNO SIGNATURE REQUIRED', inspectText: story.archive },
-      { id: 'acknowledge', recipe: 'button_pedestal', x: 8.45, y: 0, z: 4.8, face: 'w', surfaceText: 'ACKNOWLEDGE', inspectText: 'Acknowledge your record' },
-      { id: 'interlock', recipe: 'sign_wall', x: 6.03, y: 1.6, z: 2.8, face: 'e', surfaceText: 'TRANSFER INTERLOCK\nRELEASES WHEN READY', inspectText: 'The next department opens when the transfer is complete. You may explore this corridor in the meantime.' },
-      { id: 'direction', recipe: 'sign_wall', x: 6.03, y: 1.8, z: 5.8, face: 'e', surfaceText: 'ACKNOWLEDGEMENT\nOPTIONAL' },
-      { id: 'cabinet', recipe: 'filing_cabinet', x: 0.45, y: 0, z: 11.8, face: 'e', inspectText: 'These files have no names. Each is indexed by a door someone chose.' },
-    ],
+    spawn: { x: 2.5, z: depth - 0.8, yaw: 0 },
+    fixtures: [{ id: 'interlock', recipe: 'sign_wall', x: 0.03, y: 1.6, z: 2.5, face: 'e', surfaceText: 'TRANSFER INTERLOCK\nRELEASES WHEN READY', inspectText: 'The next department opens when the transfer is complete. You may explore this corridor in the meantime.' }],
   };
-  while (layout.doors[0]!.side !== OPPOSITE[door.side]) layout = rotateCW(layout);
+  // Draw without replacement from every interactable recipe that fits safely beside the route.
+  const pool = data.props.filter((p) => (p.inspectable || p.interact) && p.size[0] <= 2 && p.size[2] <= 1.2 && p.size[1] <= 2.6);
+  const count = Math.min(randInt(rng, 3, 5), pool.length);
+  const anchors: { z: number; side: 'w' | 'e' }[] = [];
+  for (let z = 2; z < depth - 3; z += 2) for (const side of ['w', 'e'] as const) {
+    if (z < 4 && side === 'w') continue;
+    if (eventKind && Math.abs(z + 0.5 - (eventZ + 0.5)) < 2) continue;
+    if (corridor.windows.some((w) => w.side === side && Math.abs(z + 0.5 - (w.cz + 0.5)) < 1.5)) continue;
+    anchors.push({ z: z + 0.5, side });
+  }
+  for (let i = 0; i < count && anchors.length; i++) {
+    const recipe = pool.splice(randInt(rng, 0, pool.length - 1), 1)[0]!;
+    const a = anchors.splice(randInt(rng, 0, anchors.length - 1), 1)[0]!;
+    const mounted = recipe.fits.every((f) => f === 'wall_mounted') || ['lift_call', 'intercom', 'buzzer_button'].includes(recipe.id);
+    const offset = recipe.size[2] / 2 + 0.04;
+    const id = recipe.id === 'memo_board' ? (rng() < 0.5 ? 'receipt' : 'archive') : recipe.id === 'button_pedestal' ? 'acknowledge' : `corridor-prop-${i}`;
+    layout.fixtures!.push({ id, recipe: recipe.id, x: a.side === 'w' ? offset : 5 - offset, y: mounted ? recipe.mountHeight ?? 1.35 : 0, z: a.z, face: a.side === 'w' ? 'e' : 'w',
+      surfaceText: id === 'receipt' ? 'ROUTE RECEIPT' : id === 'archive' ? 'RECORDS TRANSFER' : id === 'acknowledge' ? 'ACKNOWLEDGE' : 'TRANSFER DEPARTMENT',
+      inspectText: id === 'receipt' ? story.receipt : id === 'archive' ? story.archive : `${recipe.name}. Assigned to the transfer department. The inventory lists it as “temporarily here”.`,
+    });
+  }
+  while (layout.doors[0]!.side !== OPPOSITE[door.side]) {
+    const rotate = (p: { cx: number; cz: number; side: Side }) => ({ cx: layout.depth - 1 - p.cz, cz: p.cx, side: ROTATE_CW[p.side] });
+    corridor.windows = corridor.windows.map(rotate);
+    if (corridor.event) corridor.event = { ...corridor.event, ...rotate(corridor.event) };
+    layout = rotateCW(layout);
+  }
   return {
-    id: `passage-${room.id}-${door.id}`, index: room.index, seed, layout,
+    id: `passage-${room.id}-${door.id}`, index: room.index, seed, layout, corridor,
     title: 'Records transfer', ambience: seed % 2 ? 'warm' : 'cold', source: 'template',
     narrator: { onEnter: story.entry, doors: {} },
     props: layout.fixtures!.map((f) => ({ ...f, slot: 'fixture', rotY: yawForFacing(f.face), featured: false })),

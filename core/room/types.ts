@@ -185,6 +185,7 @@ export interface PlacedProp {
 }
 
 export interface RoomSpec {
+  corridor?: import('../corridors/corridor').CorridorDetails;
   variant?: 'messy' | 'ceiling';
   anomaly?: import('../anomalies/anomalies').AnomalySpec;
   id: string;

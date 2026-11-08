@@ -44,8 +44,13 @@ A run ends in the final room: its single door leads to the player's file. Demo n
 
 Ordinary exits open into playable transfer corridors. Press **E** to open a
 door, then walk through it; crossing commits the choice and seals the door
-behind you. The corridor has two bends, light-filled windows, a route receipt,
-an archive notice and an optional acknowledgement button. The narrator refers
+behind you. Each corridor is straight, with light-filled windows on both sides and
+3–5 distinct interactable types selected from the available prop recipes. The
+interlock notice remains at the exit. Furniture stays beside the central path.
+A separate seeded corridor-event pool gives each passage a 55% chance of one
+encounter: a breaking window, a falling framed picture or a gust scattering
+papers. Otherwise it remains quiet. Events trigger once on approach; debris
+never blocks progress. Selections replay with the same seed and chosen door. The narrator refers
 to the chosen door and actions recorded in the previous room. These authored
 callbacks work immediately, including when the model is offline.
 

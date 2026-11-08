@@ -262,7 +262,7 @@ export class Game {
         this.passage.door.passage.visible = true;
         this.removeView(this.passage.view);
       }
-      const spec = createCorridor(this.room.spec, view.door, corridorStory(this.room.spec, view.door, this.core.run()!.events, gameData));
+      const spec = createCorridor(this.room.spec, view.door, corridorStory(this.room.spec, view.door, this.core.run()!.events, gameData), gameData);
       const corridor = buildRoom(spec, gameData, this.materials);
       const entrance = corridor.doors.find((d) => d.door.entrance)!;
       const exit = corridor.doors.find((d) => !d.door.entrance)!;
@@ -529,6 +529,10 @@ export class Game {
       this.updatePassage();
     }
     const room = this.passage?.entered ? this.passage.view : this.room;
+    if (this.passage?.entered && room?.corridorEvent) {
+      const event = room.corridorEvent.update(dt, { x: this.player.position.x - room.group.position.x, z: this.player.position.z - room.group.position.z });
+      if (event) this.sound.play(event === 'paper_gust' ? 'paper' : event === 'falling_art' ? 'clunk' : 'pop');
+    }
     if (room) {
       this.player.update(dt, room.isWalkable, room.colliders);
       if (this.shakeLeft > 0) {
