@@ -15,6 +15,8 @@ export default defineConfig(({ mode }) => {
   const ttsBase = env.ELEVENLABS_BASE_URL || 'https://api.elevenlabs.io';
 
   return {
+    // GitHub Pages serves the site under /<repo name>/ (set by .github/workflows/pages.yml); everything else at /.
+    base: process.env.PAGES_BASE || '/',
     plugins: [
       {
         name: 'whack-model-banner',

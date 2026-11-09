@@ -23,6 +23,13 @@ Read this first when picking up the work. Newest entries at the top.
 
 ## Log
 
+### Playable online: GitHub Pages and players' own keys (9 Nov)
+- `.github/workflows/pages.yml` builds and publishes to https://alimkcl.github.io/The-Warwick-Parable/ on every push to `main` (tests first). Base path from the repo name, so a rename follows.
+- Start screen: "Use your own AI keys" (optional). Rooms via OpenRouter (key + model), Ollama or LM Studio on the player's computer; narrator voice via ElevenLabs (key + voice ID). Saved in the browser only; "Forget my keys" clears them. The page reloads to apply them.
+- Without keys the game is unchanged except the writing: template rooms, subtitles. With `npm run dev` and no saved keys, the `.env.local` proxy works exactly as before.
+- Checked on a static build served under the Pages path, with the real services' URLs redirected to `npm run mock:llm` (which now answers browser requests): no keys → no outside calls; OpenRouter key → `/api/v1/models`, `/api/v1/key`, `/api/v1/chat/completions` with the key, rooms written; ElevenLabs key → narrator line spoken; Ollama on the computer → rooms written.
+- Not checked from here: the real OpenRouter and ElevenLabs answering browser calls (the sandbox can't reach them). OpenRouter is known to; if a service blocks the page, the start screen says so and the game carries on without it.
+
 ### Task scoring connected to the report (PR #7, 8 Nov)
 - Merged Abhinav's task scoring layer (`core/director/taskscore.ts`, `docs/scoring.md`). It was written before the office tasks were ported, so it was waiting for results that now arrive: each office task's `TaskResult` becomes 0–1 scores on the start-screen traits (risk, patience, obedience, curiosity) and on measured-only traits (learning, trust, calibration…), with a weight and an evidence line each. "You said / you did" averages them with the ordinary signals; the dossier lists task evidence per trait and an "Also measured" section; telemetry logs one `task_measure` row per measurement.
 - Merge fixes: duplicate `TaskResult`/`TaskEvent`/`Run.taskResults` declarations removed; the telemetry recorder had two `case 'task_result'` branches (the second, PR #7's, never ran), now one; the no-tasks golden fixture re-captured on today's run (verified identical with and without the layer).

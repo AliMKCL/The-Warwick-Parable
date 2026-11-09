@@ -5,6 +5,24 @@ generated from how you have played so far: how long you hesitate, what you
 inspect, whether you do what the narrator says. A local language model writes
 the room's contents and the narrator's lines; seeded code builds the space.
 
+## Play online
+
+**https://alimkcl.github.io/The-Warwick-Parable/**
+
+It plays fully in the browser with nothing installed: rooms are then built from
+templates and the narrator speaks in subtitles. To have the rooms written live
+and the narrator speak, open **Use your own AI keys** on the start screen:
+
+- **Rooms:** an [OpenRouter](https://openrouter.ai/keys) key (the default model,
+  `qwen/qwen3.6-35b-a3b`, supports the structured output the game needs), or a
+  model on your own computer: Ollama started with
+  `OLLAMA_ORIGINS=https://alimkcl.github.io ollama serve`, or LM Studio with CORS on.
+- **Narrator voice:** an ElevenLabs key (optional; uses your credits).
+
+Keys are saved in your browser only and sent only to the service they belong
+to. The site is published by `.github/workflows/pages.yml` on every push to
+`main` (one-time setup: Settings → Pages → Source: GitHub Actions).
+
 ## Run it (macOS)
 
 You need **Node 22.12 or newer** (`node -v`) and **Ollama 0.30 or newer**.

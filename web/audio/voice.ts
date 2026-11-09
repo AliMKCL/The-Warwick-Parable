@@ -1,6 +1,7 @@
 /**
- * The narrator's spoken voice, via ElevenLabs through the dev server's /tts
- * proxy (which adds the API key). Lines are spoken one after another, cached
+ * The narrator's spoken voice, via ElevenLabs: through the dev server's /tts
+ * proxy (which adds the API key), or straight from the browser with a key the
+ * player entered on the start screen (web/settings/keys.ts). Lines are spoken one after another, cached
  * by text so repeats cost nothing, and capped per page load to protect credits.
  */
 /** ElevenLabs' built-in "George" (British storyteller): works on every plan, used if the chosen voice is refused. */
@@ -23,7 +24,7 @@ export class Voice {
   onSpeaking?: (speaking: boolean) => void;
   lastError?: string;
 
-  constructor(private cfg: { enabled: boolean; voice: string; model: string; maxChars: number }) {
+  constructor(private cfg: { enabled: boolean; voice: string; model: string; maxChars: number; direct?: { baseUrl: string; apiKey: string } }) {
     this.voiceId = cfg.voice;
   }
 
@@ -61,9 +62,13 @@ export class Voice {
   }
 
   private request(text: string, voice: string) {
-    return fetch(`/tts/${voice}`, {
+    const direct = this.cfg.direct;
+    const url = direct
+      ? `${direct.baseUrl.replace(/\/$/, '')}/v1/text-to-speech/${encodeURIComponent(voice)}/stream?output_format=mp3_44100_128`
+      : `/tts/${voice}`;
+    return fetch(url, {
       method: 'POST',
-      headers: { 'content-type': 'application/json', accept: 'audio/mpeg' },
+      headers: { 'content-type': 'application/json', accept: 'audio/mpeg', ...(direct ? { 'xi-api-key': direct.apiKey } : {}) },
       body: JSON.stringify({
         text,
         model_id: this.cfg.model,
@@ -130,7 +135,8 @@ export class Voice {
         return await ctx.decodeAudioData(await res.arrayBuffer());
       })
       .catch((err) => {
-        this.fail(String(err));
+        // A direct call that the browser blocks or that never arrives shows up as a TypeError with no status.
+        this.fail(this.cfg.direct && err instanceof TypeError ? `couldn't reach ElevenLabs from this page (${err.message})` : String(err));
         return null;
       });
     this.cache.set(text, p);

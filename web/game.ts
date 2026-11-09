@@ -17,6 +17,7 @@ import { MaterialLibrary } from './room/materials';
 import { Hud } from './ui/hud';
 import { Sound } from './audio/sound';
 import { Voice } from './audio/voice';
+import { voiceSettings } from './settings/keys';
 import { showDossier } from './ui/dossier';
 import type { Dossier } from '../core/protocol';
 import type { Act } from './telemetry/recorder';
@@ -69,7 +70,7 @@ export class Game {
   readonly player = new Player();
   readonly hud = new Hud();
   readonly sound: Sound;
-  readonly voice = new Voice(__TTS__);
+  readonly voice = new Voice(voiceSettings());
   core: ReturnType<typeof createCore> = createCore(gameData);
   private genStatus = '';
   private lastTransfer = '';

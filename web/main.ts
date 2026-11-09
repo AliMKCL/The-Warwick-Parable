@@ -7,6 +7,8 @@ import { ARCHETYPES, CHOICE_ROOM, type Archetype } from '../core/room/layouts';
 import type { LayoutInput } from '../core/testrooms/config';
 import { Recorder } from './telemetry/recorder';
 import { endSession, logEvent, startSession, telemetryConfigured, type SelfRatings, type Trait } from './telemetry/telemetry';
+import { roomsSource, voiceSettings } from './settings/keys';
+import { mountKeysPanel } from './ui/keys';
 
 /**
  * Entry point. URL options:
@@ -25,6 +27,8 @@ import { endSession, logEvent, startSession, telemetryConfigured, type SelfRatin
  *   ?focus=8    adaptive: lean harder towards the most informative test (0 = off, default from data/layout.json)
  */
 const params = new URLSearchParams(location.search);
+/** Who writes the rooms: the player's own key, the dev server's model, or nobody (templates). */
+const rooms = roomsSource();
 const seed = Number(params.get('seed')) || Math.floor(Math.random() * 1e9);
 const canvas = document.querySelector<HTMLCanvasElement>('#game-canvas')!;
 const game = new Game(canvas, {
@@ -37,7 +41,7 @@ const game = new Game(canvas, {
   runLength: Number(params.get('rooms')) || undefined,
   forceArchetypes: parseLayouts(params.get('layout')),
   layout: parseRunLayout(params),
-  concurrency: __LLM_PARALLEL__,
+  concurrency: rooms?.config.parallel ?? 1,
   mute: params.get('mute') === '1',
 });
 
@@ -63,6 +67,7 @@ document.addEventListener('pointerlockchange', () => {
     if (telemetryConfigured && consent.checked) record(ratings);
     research.hidden = true;
     void modelReady.then((ok) => game.begin(ok ? llm : undefined, ratings));
+    keysPanel.hidden = true;
   }
   game.player.enabled = locked && !game.hud.inspecting && !game.ended && !game.asking;
   game.hud.start.hidden = locked || game.ended;
@@ -81,6 +86,8 @@ document.addEventListener('wheel', (e) => {
   if (game.asking) game.askAdjust(e.deltaY < 0 ? 1 : -1);
 });
 addEventListener('keydown', (e) => {
+  // Typing a key or a model name on the start screen is not playing.
+  if (e.target instanceof HTMLInputElement && e.target.type !== 'range' && e.target.type !== 'checkbox') return;
   const playing = document.pointerLockElement === canvas || testMode;
   if (playing && !e.repeat) game.input(e.code);
   if (playing && game.asking) {
@@ -156,33 +163,65 @@ function record(selfRatings: SelfRatings | null) {
 
 // ---- narrator voice status ----
 const voiceStatus = document.getElementById('status-voice')!;
-voiceStatus.textContent = __TTS__.enabled ? `Voice: ElevenLabs (${__TTS__.model})` : 'Voice: off (subtitles only)';
-voiceStatus.className = `status ${__TTS__.enabled ? 'ok' : ''}`;
+const voice = voiceSettings();
+voiceStatus.textContent = !voice.enabled
+  ? 'Voice: off (subtitles only)'
+  : `Voice: ElevenLabs (${voice.model}${voice.via === 'player' ? ', your key' : ''})`;
+voiceStatus.className = `status ${voice.enabled ? 'ok' : ''}`;
 
-// ---- model server status on the start screen ----
-const llm = createLlmClient(
-  { provider: __LLM_PROVIDER__, baseUrl: '/llm', model: __LLM_MODEL__, noThinking: __LLM_NO_THINKING__, extraBody: __LLM_EXTRA__ },
-  { fetch: (url, init) => fetch(url, init as RequestInit), now: () => performance.now() },
-);
+// ---- your own keys (optional): saved in this browser only ----
+const keysPanel = mountKeysPanel(document.getElementById('ai-keys') as HTMLDetailsElement, { rooms, voice });
+
+// ---- model status on the start screen ----
 const status = document.getElementById('status-llm')!;
-modelReady = llm.ping().then((r) => {
-  // Say exactly what is wrong: otherwise the game quietly falls back to template rooms.
-  status.textContent = __LLM_PROBLEM__
-    ? `Rooms: ${__LLM_LABEL__}. ${__LLM_PROBLEM__}, so rooms will use templates.`
-    : !r.ok
-      ? `Rooms: ${__LLM_LABEL__} not reachable (${(r.error ?? 'no answer').replace(/:\s*$/, '').slice(0, 110)}; details in the npm run dev terminal), so rooms will use templates.`
-      : r.hasModel
-        ? `Rooms: ${__LLM_LABEL__} ready`
-        : `Rooms: ${__LLM_LABEL__}: server up but this model isn't available there, so rooms will use templates.`;
-  if (__LLM_PROBLEM__) return false;
-  status.className = `status ${r.ok && r.hasModel ? 'ok' : 'bad'}`;
-  if (r.ok && r.hasModel) warmUp();
-  return r.ok && r.hasModel;
-});
+const llm = rooms && createLlmClient(rooms.config, { fetch: (url, init) => fetch(url, init as RequestInit), now: () => performance.now() });
+const label = rooms?.config.label ?? '';
+modelReady = !llm || !rooms
+  ? Promise.resolve(false)
+  : rooms.config.problem
+    ? Promise.resolve(false)
+    : llm.ping().then(async (r) => {
+      const keyProblem = r.ok && r.hasModel ? await checkKey(rooms.config) : undefined;
+      const ok = r.ok && r.hasModel && !keyProblem;
+      const where = rooms.via === 'dev' ? 'details in the npm run dev terminal' : 'check your settings under "Use your own AI keys"';
+      status.textContent = keyProblem
+        ? `Rooms: ${label}: ${keyProblem}, so rooms will use templates.`
+        : !r.ok
+          ? `Rooms: ${label} not reachable (${(r.error ?? 'no answer').replace(/:\s*$/, '').slice(0, 110)}; ${where}), so rooms will use templates.`
+          : r.hasModel
+            ? `Rooms: ${label} ready${rooms.via !== 'player' ? '' : rooms.config.backend === 'openrouter' ? ' (your key)' : ' (on your computer)'}`
+            : `Rooms: ${label}: the server is up but doesn't have this model, so rooms will use templates.`;
+      status.className = `status ${ok ? 'ok' : 'bad'}`;
+      // Local models are loaded into memory while the start screen is up; a cloud model needs no warming.
+      if (ok && rooms.config.backend !== 'openrouter') warmUp();
+      return ok;
+    });
+if (!rooms) {
+  status.textContent = 'Rooms: written from templates. To have them written live as you play, add a model key below.';
+  status.className = 'status';
+} else if (rooms.config.problem) {
+  status.textContent = `Rooms: ${label}. ${rooms.config.problem}, so rooms will use templates.`;
+  status.className = 'status bad';
+}
 
 /** Load the model into memory while the start screen is up, so the first room isn't slowed by it. */
 function warmUp() {
-  void llm.streamText({ messages: [{ role: 'user', content: 'Say OK.' }], maxTokens: 2 }, () => {}).catch(() => {});
+  void llm?.streamText({ messages: [{ role: 'user', content: 'Say OK.' }], maxTokens: 2 }, () => {}).catch(() => {});
+}
+
+/**
+ * OpenRouter lists its models without a key, so the ping alone can't tell a
+ * wrong key. Ask OpenRouter about the key itself; only a clear refusal counts.
+ */
+async function checkKey(config: NonNullable<typeof rooms>['config']): Promise<string | undefined> {
+  if (config.backend !== 'openrouter' || !config.apiKey) return undefined;
+  try {
+    const res = await fetch(`${config.baseUrl.replace(/\/$/, '')}/v1/key`, { headers: { authorization: `Bearer ${config.apiKey}` } });
+    if (res.status === 401 || res.status === 403) return 'OpenRouter refused the key';
+  } catch {
+    // Can't tell from here; the first room will show it.
+  }
+  return undefined;
 }
 
 // ---- test hooks: let automated checks drive the game without a mouse ----
@@ -201,13 +240,14 @@ Object.assign(window, {
       if (opts.telemetry !== undefined) record(opts.telemetry);
       game.hud.start.hidden = true;
       game.begin((await modelReady) ? llm : undefined, opts.selfRatings ?? opts.telemetry ?? undefined);
+      keysPanel.hidden = true;
       game.player.enabled = true;
     },
     state() {
       const r = game.room?.spec;
       return {
         room: r && {
-          id: r.id, index: r.index, archetype: r.layout.archetype, doors: r.layout.doors,
+          id: r.id, index: r.index, archetype: r.layout.archetype, doors: r.layout.doors, source: r.source,
           anomaly: r.anomaly, variant: r.variant,
           props: r.props.map((p) => ({ id: p.id, recipe: p.recipe, x: p.x, y: p.y, z: p.z, rotY: p.rotY })),
         },

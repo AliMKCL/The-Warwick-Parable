@@ -116,6 +116,10 @@ npm run bench                   # distance fields / path analysis cost + adaptiv
   `web/audio/sound.ts` (everything synthesised with Web Audio, no files); `web/ui/hud.ts` (subtitle queue with
   streaming, timer, waiting text), `web/ui/dossier.ts` (ending + "How this world was built").
 - The browser reaches the model through the Vite proxy `/llm` → `LLM_BASE_URL` (no CORS issues, no keys in the bundle).
+- Published on GitHub Pages (`.github/workflows/pages.yml`, `base` = `/<repo>/` via `PAGES_BASE`). The static site has
+  no proxy: players may enter their own keys under "Use your own AI keys" (`web/ui/keys.ts`, stored in localStorage by
+  `web/settings/keys.ts`) and the browser then calls OpenRouter / Ollama / LM Studio and ElevenLabs directly.
+  Without keys: template rooms, subtitles only. Order: player keys → dev proxy (`npm run dev`) → none.
 - Narrator voice: `web/audio/voice.ts` posts final narrator lines to `/tts`; the Vite proxy rewrites to
   ElevenLabs `/v1/text-to-speech/{ELEVENLABS_VOICE_ID}/stream` and adds `xi-api-key` server-side. Off when
   `ELEVENLABS_API_KEY` is empty. Cached by text, queued (max 2 waiting), capped by `ELEVENLABS_MAX_CHARS`,

@@ -41,6 +41,11 @@ http.createServer((req, res) => {
   req.on('data', (c) => (body += c));
   req.on('end', async () => {
     res.setHeader('content-type', 'application/json');
+    // Like the real services, accept calls from a web page (players' own keys on the published site).
+    res.setHeader('access-control-allow-origin', '*');
+    res.setHeader('access-control-allow-headers', 'content-type, authorization, xi-api-key, accept');
+    res.setHeader('access-control-allow-methods', 'GET, POST, OPTIONS');
+    if (req.method === 'OPTIONS') { res.statusCode = 204; return res.end(); }
     if (req.url.startsWith('/v1/text-to-speech/')) {
       // Fake ElevenLabs: half a second of silence as WAV, and a check that the key arrived.
       if (!req.headers['xi-api-key']) { res.statusCode = 401; return res.end('{"detail":"missing key"}'); }
